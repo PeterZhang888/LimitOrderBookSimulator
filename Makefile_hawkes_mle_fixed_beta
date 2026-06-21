@@ -1,0 +1,13 @@
+CXX = mpicxx
+CXXFLAGS = -O3 -std=c++17 -Wall -Wextra
+TARGET = hawkes_mle_fixed_beta
+SRC = HawkesMLEFixedBeta.cpp
+
+all: $(TARGET)
+
+$(TARGET): $(SRC)
+	$(CXX) $(CXXFLAGS) -o $(TARGET) $(SRC)
+
+clean:
+	rm -f $(TARGET)
+

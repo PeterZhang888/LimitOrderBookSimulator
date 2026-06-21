@@ -1,0 +1,15 @@
+CXX = mpicxx
+CXXFLAGS = -O3 -std=c++17 -Wall -Wextra
+LDFLAGS = -lstdc++fs
+
+TARGET = m0_fitted_hawkes
+SOURCES = M0_fitted_hawkes.cpp LimitOrderBook.cpp EmpiricalDistribution.cpp
+
+all: $(TARGET)
+
+$(TARGET): $(SOURCES)
+	$(CXX) $(CXXFLAGS) -o $(TARGET) $(SOURCES) $(LDFLAGS)
+
+clean:
+	rm -f $(TARGET) *.o
+
