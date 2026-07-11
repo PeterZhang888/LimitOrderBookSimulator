@@ -1,5 +1,4 @@
-#ifndef MOMENTUM_AGENT_HPP
-#define MOMENTUM_AGENT_HPP
+#pragma once
 
 #include "LimitOrderBook.hpp"
 
@@ -7,50 +6,39 @@
 #include <deque>
 
 class MomentumAgent {
-private:
-    static int number_of_agents_;
-
-    int agent_index_;
-
-    struct MidRecord {
-        std::int64_t time_ns;
-        double mid_price;
-    };
-
-    std::deque<MidRecord> mid_history_;
-
-    std::int64_t lookback_ns_;
-    int order_quantity_;
-    double threshold_ticks_;
-    int tick_size_;
-
 public:
     MomentumAgent(
         std::int64_t lookback_ns,
         int order_quantity,
         double threshold_ticks,
-        int tick_size
+        int tick_size,
+        double order_flow_imbalance_threshold,
+        double depth_imbalance_threshold,
+        double strong_depth_imbalance_threshold
     );
 
-    MomentumAgent(const MomentumAgent&) = delete;
-    MomentumAgent& operator=(const MomentumAgent&) = delete;
+    void record_mid_price(const LimitOrderBook& book, std::int64_t current_time_ns);
+    int wake_up(LimitOrderBook& book, std::int64_t current_time_ns);
 
-    MomentumAgent(MomentumAgent&&)= default;
-    MomentumAgent& operator=(MomentumAgent&&)= default;
+private:
+    struct MarketRecord {
+        std::int64_t time_ns = 0;
+        double mid_price = 0.0;
+        std::uint64_t aggressive_buy_quantity = 0;
+        std::uint64_t aggressive_sell_quantity = 0;
+        int best_bid_depth = 0;
+        int best_ask_depth = 0;
+    };
 
-    void record_mid_price(
-        const LimitOrderBook& book,
-        std::int64_t current_time_ns
-    );
+    int agent_index_ = 0;
+    std::int64_t lookback_ns_ = 0;
+    int order_quantity_ = 0;
+    double threshold_ticks_ = 0.0;
+    int tick_size_ = 100;
+    double order_flow_imbalance_threshold_ = 0.20;
+    double depth_imbalance_threshold_ = 0.35;
+    double strong_depth_imbalance_threshold_ = 0.55;
+    std::deque<MarketRecord> history_;
 
-    void wake_up(
-        LimitOrderBook& book,
-        std::int64_t current_time_ns
-    );
-
-    int agent_index() const;
-
-    static int number_of_agents();
+    static int number_of_agents_;
 };
-
-#endif

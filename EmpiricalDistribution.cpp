@@ -1,164 +1,70 @@
 #include "EmpiricalDistribution.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <sstream>
-#include <stdexcept>
 
-EmpiricalDistribution::EmpiricalDistribution() {}
-
-std::size_t EmpiricalDistribution::size() const {
-    return values_.size();
+namespace {
+std::string trim(std::string value) {
+    while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) value.pop_back();
+    std::size_t start = 0;
+    while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start]))) ++start;
+    if (start > 0) value.erase(0, start);
+    return value;
 }
 
-void EmpiricalDistribution::load_from_csv(
-    const std::string& file_path,
-    const std::string& value_column
-) {
-    values_.clear();
-    cumulative_probabilities_.clear();
-
-    std::ifstream file(file_path);
-
-    if (!file.is_open()) {
-        throw std::runtime_error(
-            "EmpiricalDistribution: cannot open file: " + file_path
-        );
-    }
-
-    // =========================
-    // 1. Read header
-    // =========================
-
-    std::string header_line;
-
-    if (!std::getline(file, header_line)) {
-        throw std::runtime_error(
-            "EmpiricalDistribution: empty file: " + file_path
-        );
-    }
-
-    std::vector<std::string> headers;
-    std::stringstream header_stream(header_line);
+std::vector<std::string> split_csv_line(const std::string& line) {
+    std::vector<std::string> fields;
+    std::stringstream ss(line);
     std::string cell;
+    while (std::getline(ss, cell, ',')) fields.push_back(trim(cell));
+    return fields;
+}
+}
 
-    while (std::getline(header_stream, cell, ',')) {
-        headers.push_back(cell);
-    }
+void EmpiricalDistribution::set_fallback(int lower, int upper) {
+    fallback_lower_ = std::max(1, lower);
+    fallback_upper_ = std::max(fallback_lower_, upper);
+}
 
-    int value_col_index = -1;
-    int cumulative_col_index = -1;
+bool EmpiricalDistribution::load_from_csv(const std::string& filename, const std::string& column_name) {
+    values_.clear();
+    std::ifstream input(filename);
+    if (!input.is_open()) return false;
 
-    for (int i = 0; i < static_cast<int>(headers.size()); ++i) {
-        if (headers[i] == value_column) {
-            value_col_index = i;
+    std::string header;
+    if (!std::getline(input, header)) return false;
+    std::vector<std::string> headers = split_csv_line(header);
+    int column = -1;
+    for (std::size_t i = 0; i < headers.size(); ++i) {
+        if (headers[i] == column_name) {
+            column = static_cast<int>(i);
+            break;
         }
-
-        if (headers[i] == "cumulative_probability") {
-            cumulative_col_index = i;
-        }
     }
-
-    if (value_col_index == -1) {
-        throw std::runtime_error(
-            "EmpiricalDistribution: value column not found: " + value_column
-        );
-    }
-
-    if (cumulative_col_index == -1) {
-        throw std::runtime_error(
-            "EmpiricalDistribution: cumulative_probability column not found in: "
-            + file_path
-        );
-    }
-
-    // =========================
-    // 2. Read rows
-    // =========================
+    if (column < 0) column = 0;
 
     std::string line;
-
-    while (std::getline(file, line)) {
-        if (line.empty()) {
+    while (std::getline(input, line)) {
+        if (line.empty()) continue;
+        std::vector<std::string> fields = split_csv_line(line);
+        if (column >= static_cast<int>(fields.size())) continue;
+        try {
+            const int value = static_cast<int>(std::llround(std::stod(fields[column])));
+            if (value > 0) values_.push_back(value);
+        } catch (...) {
             continue;
         }
-
-        std::vector<std::string> fields;
-        std::stringstream line_stream(line);
-        std::string field;
-
-        while (std::getline(line_stream, field, ',')) {
-            fields.push_back(field);
-        }
-
-        if (
-            value_col_index >= static_cast<int>(fields.size()) ||
-            cumulative_col_index >= static_cast<int>(fields.size())
-        ) {
-            continue;
-        }
-
-        int value = std::stoi(fields[value_col_index]);
-        double cumulative_probability =
-            std::stod(fields[cumulative_col_index]);
-
-        values_.push_back(value);
-        cumulative_probabilities_.push_back(cumulative_probability);
     }
-
-    if (values_.empty()) {
-        throw std::runtime_error(
-            "EmpiricalDistribution: no data loaded from file: " + file_path
-        );
-    }
-
-    // =========================
-    // 3. Basic safety checks
-    // =========================
-
-    for (std::size_t i = 1; i < cumulative_probabilities_.size(); ++i) {
-        if (cumulative_probabilities_[i] < cumulative_probabilities_[i - 1]) {
-            throw std::runtime_error(
-                "EmpiricalDistribution: cumulative_probability is not increasing in: "
-                + file_path
-            );
-        }
-    }
-
-    // Force last cumulative probability to 1.0 to avoid rounding issues.
-    cumulative_probabilities_.back() = 1.0;
+    return !values_.empty();
 }
 
 int EmpiricalDistribution::sample(std::mt19937_64& rng) const {
-    if (values_.empty()) {
-        throw std::runtime_error(
-            "EmpiricalDistribution: cannot sample from empty distribution."
-        );
+    if (!values_.empty()) {
+        std::uniform_int_distribution<std::size_t> dist(0, values_.size() - 1);
+        return std::max(1, values_[dist(rng)]);
     }
-
-    // =========================
-    // Your method:
-    // 1. Generate u ~ Uniform(0, 1)
-    // 2. Find first cumulative_probability >= u
-    // 3. Return corresponding value
-    // =========================
-
-    std::uniform_real_distribution<double> uniform(0.0, 1.0);
-    double u = uniform(rng);
-
-    auto it = std::lower_bound(
-        cumulative_probabilities_.begin(),
-        cumulative_probabilities_.end(),
-        u
-    );
-
-    if (it == cumulative_probabilities_.end()) {
-        return values_.back();
-    }
-
-    std::size_t index = static_cast<std::size_t>(
-        std::distance(cumulative_probabilities_.begin(), it)
-    );
-
-    return values_[index];
+    std::uniform_int_distribution<int> dist(fallback_lower_, fallback_upper_);
+    return std::max(1, dist(rng));
 }

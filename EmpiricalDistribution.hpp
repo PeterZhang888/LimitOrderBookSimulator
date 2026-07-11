@@ -1,28 +1,18 @@
-#ifndef EMPIRICAL_DISTRIBUTION_HPP
-#define EMPIRICAL_DISTRIBUTION_HPP
+#pragma once
 
-#include <cstddef>
-#include <cstdint>
 #include <random>
 #include <string>
 #include <vector>
 
 class EmpiricalDistribution {
 public:
-    EmpiricalDistribution();
-
-    void load_from_csv(
-        const std::string& file_path,
-        const std::string& value_column
-    );
-
+    bool load_from_csv(const std::string& filename, const std::string& column_name);
     int sample(std::mt19937_64& rng) const;
-
-    std::size_t size() const;
+    bool empty() const { return values_.empty(); }
+    void set_fallback(int lower, int upper);
 
 private:
     std::vector<int> values_;
-    std::vector<double> cumulative_probabilities_;
+    int fallback_lower_ = 1;
+    int fallback_upper_ = 100;
 };
-
-#endif

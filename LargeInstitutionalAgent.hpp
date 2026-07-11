@@ -1,52 +1,37 @@
-#ifndef LARGE_INSTITUTIONAL_AGENT_HPP
-#define LARGE_INSTITUTIONAL_AGENT_HPP
+#pragma once
 
 #include "LimitOrderBook.hpp"
-#include "Order.hpp"
 
 #include <cstdint>
+#include <random>
 
 class LargeInstitutionalAgent {
-private:
-    static int number_of_agents_;
-
-    int agent_index_;
-
-    Side side_;
-    int parent_quantity_;
-    int remaining_quantity_;
-    int child_quantity_;
-    std::int64_t start_time_ns_;
-    std::int64_t end_time_ns_;
-    bool active_;
-
 public:
     LargeInstitutionalAgent(
         Side side,
         int parent_quantity,
         int child_quantity,
+        double participation_cap,
         std::int64_t start_time_ns,
-        std::int64_t end_time_ns
+        std::int64_t end_time_ns,
+        std::uint64_t seed
     );
 
-    LargeInstitutionalAgent(const LargeInstitutionalAgent&) = delete;
-    LargeInstitutionalAgent& operator=(const LargeInstitutionalAgent&) = delete;
-
-    LargeInstitutionalAgent(LargeInstitutionalAgent&&) = default;
-    LargeInstitutionalAgent& operator=(LargeInstitutionalAgent&&) = default;
-
-    void wake_up(
-        LimitOrderBook& book,
-        std::int64_t current_time_ns
-    );
-
+    int wake_up(LimitOrderBook& book, std::int64_t current_time_ns);
     bool is_finished() const;
-
     int remaining_quantity() const;
 
-    int agent_index() const;
+private:
+    int agent_index_ = 0;
+    Side side_ = Side::Buy;
+    int parent_quantity_ = 0;
+    int remaining_quantity_ = 0;
+    int child_quantity_ = 0;
+    double participation_cap_ = 0.2;
+    std::int64_t start_time_ns_ = 0;
+    std::int64_t end_time_ns_ = 0;
+    bool active_ = true;
+    std::mt19937_64 rng_;
 
-    static int number_of_agents();
+    static int number_of_agents_;
 };
-
-#endif

@@ -1,52 +1,60 @@
-#ifndef ORDER_HPP
-#define ORDER_HPP
+#pragma once
 
 #include <cstdint>
 
-enum class OrderType {
-    Limit,
-    Market
+// Six event types used by the Hawkes background agent.
+enum class EventType : int {
+    LimitBuy = 0,
+    LimitSell = 1,
+    MarketBuy = 2,
+    MarketSell = 3,
+    CancelBid = 4,
+    CancelAsk = 5
 };
 
-enum class Side {
-    Buy,
-    Sell
+constexpr int NUM_EVENT_TYPES = 6;
+
+inline const char* event_type_to_string(EventType type) {
+    switch (type) {
+        case EventType::LimitBuy: return "limit_buy";
+        case EventType::LimitSell: return "limit_sell";
+        case EventType::MarketBuy: return "market_buy";
+        case EventType::MarketSell: return "market_sell";
+        case EventType::CancelBid: return "cancel_bid";
+        case EventType::CancelAsk: return "cancel_ask";
+        default: return "unknown";
+    }
+}
+
+enum class Side : int {
+    Buy = 1,
+    Sell = -1
+};
+
+enum class OrderType : int {
+    Limit = 0,
+    Market = 1
 };
 
 struct Order {
-    std::uint64_t id = 0;
+    std::uint64_t order_id = 0;
     std::int64_t timestamp_ns = 0;
-
     OrderType type = OrderType::Limit;
     Side side = Side::Buy;
-
     int quantity = 0;
     int price_ticks = 0;
-
-    // -1 means background market flow or untracked order.
-    // Non-negative values identify agent-owned orders.
-    int owner_id = -1;
+    int owner_id = 0; // zero is background/non-strategic ownership.
 };
 
 struct ExecutionReport {
-    std::int64_t timestamp_ns = 0;
-
-    // Owner of the executed order. Reports are created only
-    // for orders with owner_id >= 0.
-    int owner_id = -1;
-
-    // Side of the owner-owned order that was executed.
-    // If side == Buy, the owner bought and inventory increases.
-    // If side == Sell, the owner sold and inventory decreases.
-    Side side = Side::Buy;
-
+    std::uint64_t order_id = 0;
+    Side side = Side::Buy;       // side of the resting owner that received the fill
     int quantity = 0;
     int price_ticks = 0;
-
-    // True when the owner's resting order was hit.
-    // False when the owner's incoming marketable order executed.
-    bool liquidity_provider = true;
+    std::int64_t timestamp_ns = 0;
 };
 
-#endif
-
+struct HawkesEvent {
+    std::int64_t time_ns = 0;
+    EventType type = EventType::LimitBuy;
+};
