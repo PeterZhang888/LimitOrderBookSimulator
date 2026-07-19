@@ -1,5 +1,4 @@
 #include "common/PerformanceMetrics.hpp"
-
 #include <algorithm>
 #include <fstream>
 #include <iomanip>
@@ -7,21 +6,17 @@
 #include <numeric>
 #include <stdexcept>
 #include <type_traits>
-
 namespace dlob {
 namespace {
-
 std::size_t index_of(TimingStage stage) {
     return static_cast<std::size_t>(stage);
 }
-
 const char* role_name(const RankProfile& profile) {
     if (profile.is_exchange && profile.is_worker) return "exchange+worker";
     if (profile.is_exchange) return "exchange";
     if (profile.is_worker) return "worker";
     return "idle";
 }
-
 void ensure_output_dir(const std::filesystem::path& output_dir) {
     std::error_code error;
     std::filesystem::create_directories(output_dir, error);
@@ -30,9 +25,7 @@ void ensure_output_dir(const std::filesystem::path& output_dir) {
                                  + " (" + error.message() + ")");
     }
 }
-
-} // namespace
-
+} 
 const char* timing_stage_name(TimingStage stage) {
     switch (stage) {
         case TimingStage::Initialization: return "initialization";
@@ -56,7 +49,6 @@ const char* timing_stage_name(TimingStage stage) {
     }
     return "unknown";
 }
-
 PerformanceMetrics::PerformanceMetrics(int rank, int world_size, bool is_exchange, bool is_worker) {
     profile_.rank = rank;
     profile_.world_size = world_size;
@@ -119,31 +111,23 @@ void PerformanceMetrics::write_rank_csv(const std::filesystem::path& output_dir)
     }
 }
 
-std::vector<RankProfile> gather_rank_profiles(const RankProfile& local,
-                                              int rank,
-                                              int world_size) {
+std::vector<RankProfile> gather_rank_profiles(const RankProfile& local,int rank,int world_size) {
     static_assert(std::is_trivially_copyable_v<RankProfile>);
     if (sizeof(RankProfile) > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
         throw std::runtime_error("RankProfile is too large for MPI_Gather byte count");
     }
-
     std::vector<RankProfile> profiles;
     if (rank == 0) profiles.resize(static_cast<std::size_t>(world_size));
     const int bytes = static_cast<int>(sizeof(RankProfile));
-    const int result = MPI_Gather(&local, bytes, MPI_BYTE,
-                                  rank == 0 ? profiles.data() : nullptr,
-                                  bytes, MPI_BYTE, 0, MPI_COMM_WORLD);
+    const int result = MPI_Gather(&local, bytes, MPI_BYTE, rank == 0 ? profiles.data() : nullptr, bytes, MPI_BYTE, 0, MPI_COMM_WORLD);
     if (result != MPI_SUCCESS) throw std::runtime_error("MPI_Gather failed for rank profiles");
     return profiles;
 }
-
-void write_combined_timing_csv(const std::filesystem::path& output_dir,
-                               const std::vector<RankProfile>& profiles) {
+void write_combined_timing_csv(const std::filesystem::path& output_dir,const std::vector<RankProfile>& profiles) {
     ensure_output_dir(output_dir);
     const std::filesystem::path file = output_dir / "timing_all_ranks.csv";
     std::ofstream output(file);
     if (!output) throw std::runtime_error("Could not open combined timing file: " + file.string());
-
     output << "rank,host,role,stage,total_seconds,calls,mean_seconds\n";
     output << std::setprecision(12);
     for (const RankProfile& profile : profiles) {
@@ -156,14 +140,12 @@ void write_combined_timing_csv(const std::filesystem::path& output_dir,
         }
     }
 }
-
 void write_timing_summary_csv(const std::filesystem::path& output_dir,
                               const std::vector<RankProfile>& profiles) {
     ensure_output_dir(output_dir);
     const std::filesystem::path file = output_dir / "timing_summary.csv";
     std::ofstream output(file);
     if (!output) throw std::runtime_error("Could not open timing summary file: " + file.string());
-
     output << "stage,min_seconds,mean_seconds,max_seconds,sum_seconds,max_rank\n";
     output << std::setprecision(12);
     for (std::size_t i = 0; i < timing_stage_count; ++i) {
@@ -189,14 +171,11 @@ void write_timing_summary_csv(const std::filesystem::path& output_dir,
                << minimum << ',' << mean << ',' << maximum << ',' << sum << ',' << max_rank << '\n';
     }
 }
-
-void write_rank_counters_csv(const std::filesystem::path& output_dir,
-                             const std::vector<RankProfile>& profiles) {
+void write_rank_counters_csv(const std::filesystem::path& output_dir, const std::vector<RankProfile>& profiles) {
     ensure_output_dir(output_dir);
     const std::filesystem::path file = output_dir / "rank_counters.csv";
     std::ofstream output(file);
     if (!output) throw std::runtime_error("Could not open rank counter file: " + file.string());
-
     output << "rank,host,role,local_market_makers,local_momentum,local_informed,local_institutional,"
               "local_total_agents,windows,strategic_orders_generated,strategic_orders_received_exchange,"
               "strategic_orders_processed,background_orders_processed,reports_created,reports_received,"
