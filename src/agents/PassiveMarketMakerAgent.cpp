@@ -1,21 +1,16 @@
 #include "PassiveMarketMakerAgent.hpp"
-
 #include "EmpiricalDistribution.hpp"
 #include "Order.hpp"
-
 #include <algorithm>
 #include <cmath>
 #include <vector>
-
 int PassiveMarketMakerAgent::number_of_agents_ = 0;
-
 namespace {
 constexpr int MARKET_MAKER_OWNER_ID_BASE = 1000000;
 constexpr int MAX_INVENTORY_SKEW_TICKS = 3;
 constexpr int EMPIRICAL_REFERENCE_QUANTITY = 100;
 
 int owner_id_for_agent(int agent_index) { return MARKET_MAKER_OWNER_ID_BASE + agent_index; }
-
 int round_to_tick(double price, int tick_size) {
     return static_cast<int>(std::llround(price / static_cast<double>(tick_size))) * tick_size;
 }
@@ -25,7 +20,6 @@ int floor_to_tick(double price, int tick_size) {
 int ceil_to_tick(double price, int tick_size) {
     return static_cast<int>(std::ceil(price / static_cast<double>(tick_size))) * tick_size;
 }
-
 struct MMDistributions {
     EmpiricalDistribution limit_buy_quantity;
     EmpiricalDistribution limit_sell_quantity;
@@ -36,12 +30,10 @@ struct MMDistributions {
         limit_sell_quantity.load_from_csv("limit_sell_quantity_distribution.txt", "quantity");
     }
 };
-
 MMDistributions& mm_distributions() {
     static MMDistributions d;
     return d;
 }
-
 void update_inventory_from_reports(LimitOrderBook& book, int owner_id, int& inventory, double& cash) {
     std::vector<ExecutionReport> reports = book.get_and_clear_execution_reports(owner_id);
     for (const ExecutionReport& report : reports) {
@@ -55,21 +47,18 @@ void update_inventory_from_reports(LimitOrderBook& book, int owner_id, int& inve
         }
     }
 }
-
 int inventory_skew_ticks(int inventory, int base_quantity) {
     if (base_quantity <= 0) return 0;
     const double units = static_cast<double>(inventory) / static_cast<double>(base_quantity);
     const int skew = static_cast<int>(std::llround(0.25 * units));
     return std::clamp(skew, -MAX_INVENTORY_SKEW_TICKS, MAX_INVENTORY_SKEW_TICKS);
 }
-
 int sample_empirical_quantity(Side side, int base_quantity, int inventory, std::mt19937_64& rng) {
     auto& d = mm_distributions();
     const int empirical = side == Side::Buy ? d.limit_buy_quantity.sample(rng) : d.limit_sell_quantity.sample(rng);
     const double scale = static_cast<double>(std::max(1, base_quantity)) / static_cast<double>(EMPIRICAL_REFERENCE_QUANTITY);
     int quantity = std::max(1, static_cast<int>(std::llround(scale * empirical)));
     quantity = std::min(quantity, std::max(1, base_quantity * 4));
-
     if (inventory != 0) {
         const int units = std::min(std::abs(inventory) / std::max(1, base_quantity), 4);
         if (inventory > 0) {
@@ -83,7 +72,6 @@ int sample_empirical_quantity(Side side, int base_quantity, int inventory, std::
     return std::max(1, quantity);
 }
 }
-
 PassiveMarketMakerAgent::PassiveMarketMakerAgent(
     int tick_size,
     int num_levels,
@@ -94,20 +82,14 @@ PassiveMarketMakerAgent::PassiveMarketMakerAgent(
     double recovery_quote_skip_probability,
     std::uint64_t seed
 )
-    : agent_index_(number_of_agents_++),
-      tick_size_(std::max(1, tick_size)),
-      num_levels_(std::max(1, num_levels)),
-      order_quantity_(std::max(1, order_quantity)),
-      level_spacing_ticks_(std::max(1, level_spacing_ticks)),
-      min_spread_price_(std::max(tick_size_, min_spread_price)),
-      quote_skip_probability_(std::clamp(quote_skip_probability, 0.0, 0.95)),
-      recovery_quote_skip_probability_(std::clamp(recovery_quote_skip_probability, 0.0, 0.95)),
-      rng_(seed + static_cast<std::uint64_t>(agent_index_) * 1009ULL) {}
+    : agent_index_(number_of_agents_++), tick_size_(std::max(1, tick_size)), num_levels_(std::max(1, num_levels)),
+      order_quantity_(std::max(1, order_quantity)), level_spacing_ticks_(std::max(1, level_spacing_ticks)),
+      min_spread_price_(std::max(tick_size_, min_spread_price)), quote_skip_probability_(std::clamp(quote_skip_probability, 0.0, 0.95)),
+      recovery_quote_skip_probability_(std::clamp(recovery_quote_skip_probability, 0.0, 0.95)), rng_(seed + static_cast<std::uint64_t>(agent_index_) * 1009ULL) {}
 
 std::size_t PassiveMarketMakerAgent::wake_up(LimitOrderBook& book, std::uint64_t& next_order_id, std::int64_t current_time_ns) {
     const int owner_id = owner_id_for_agent(agent_index_);
     update_inventory_from_reports(book, owner_id, inventory_, cash_);
-
     const bool has_bid = book.has_bid();
     const bool has_ask = book.has_ask();
     if (!has_bid && !has_ask) return 0;
@@ -161,10 +143,8 @@ std::size_t PassiveMarketMakerAgent::wake_up(LimitOrderBook& book, std::uint64_t
         const int ask_price = primary_ask_price + level * spacing;
         if (bid_price <= 0 || bid_price >= ask_price) continue;
 
-        book.add_limit_order(Order{next_order_id++, current_time_ns, OrderType::Limit, Side::Buy,
-                                   sample_empirical_quantity(Side::Buy, order_quantity_, inventory_, rng_), bid_price, owner_id});
-        book.add_limit_order(Order{next_order_id++, current_time_ns, OrderType::Limit, Side::Sell,
-                                   sample_empirical_quantity(Side::Sell, order_quantity_, inventory_, rng_), ask_price, owner_id});
+        book.add_limit_order(Order{next_order_id++, current_time_ns, OrderType::Limit, Side::Buy, sample_empirical_quantity(Side::Buy, order_quantity_, inventory_, rng_), bid_price, owner_id});
+        book.add_limit_order(Order{next_order_id++, current_time_ns, OrderType::Limit, Side::Sell, sample_empirical_quantity(Side::Sell, order_quantity_, inventory_, rng_), ask_price, owner_id});
     }
     return cancelled;
 }
