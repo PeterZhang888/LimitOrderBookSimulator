@@ -1,19 +1,13 @@
 #include "exchange/DistributedLimitOrderBook.hpp"
-
 #include <algorithm>
 #include <cmath>
-
 namespace dlob {
-
-DistributedLimitOrderBook::DistributedLimitOrderBook(int tick_size)
-    : tick_size_(std::max(1, tick_size)) {}
-
+DistributedLimitOrderBook::DistributedLimitOrderBook(int tick_size): tick_size_(std::max(1, tick_size)) {}
 void DistributedLimitOrderBook::seed_default_book(double depth_scale) {
     const int bid_prices[] = {2203400,2203300,2203200,2203100,2203000,2202900,2202800,2202600,2202500,2202400};
     const int bid_qty[]    = {1623,1723,2100,1100,1200,200,564,500,700,200};
     const int ask_prices[] = {2203700,2203800,2203900,2204000,2204100,2204200,2204300,2204400,2204500,2204600};
     const int ask_qty[]    = {823,823,1823,1923,1923,1223,823,200,823,823};
-
     std::uint64_t id = 1;
     for (int i = 0; i < 10; ++i) {
         const int quantity = std::max(1, static_cast<int>(std::llround(depth_scale * bid_qty[i])));
@@ -24,7 +18,6 @@ void DistributedLimitOrderBook::seed_default_book(double depth_scale) {
         asks_[ask_prices[i]].push_back(RestingOrder{id++, 0, Side::Sell, quantity, ask_prices[i], 0});
     }
 }
-
 bool DistributedLimitOrderBook::has_bid() const { return !bids_.empty(); }
 bool DistributedLimitOrderBook::has_ask() const { return !asks_.empty(); }
 int DistributedLimitOrderBook::best_bid() const { return has_bid() ? bids_.begin()->first : 0; }
@@ -33,14 +26,12 @@ int DistributedLimitOrderBook::best_ask() const { return has_ask() ? asks_.begin
 double DistributedLimitOrderBook::mid_price() const {
     return has_bid() && has_ask() ? 0.5 * static_cast<double>(best_bid() + best_ask()) : 0.0;
 }
-
 int DistributedLimitOrderBook::best_bid_depth() const {
     if (!has_bid()) return 0;
     int total = 0;
     for (const RestingOrder& order : bids_.begin()->second) total += std::max(0, order.quantity);
     return total;
 }
-
 int DistributedLimitOrderBook::best_ask_depth() const {
     if (!has_ask()) return 0;
     int total = 0;
@@ -279,9 +270,7 @@ ApplyResult DistributedLimitOrderBook::apply(const OrderMessage& message) {
     record_order_result(message, result);
     return result;
 }
-
-MarketState DistributedLimitOrderBook::state(std::int64_t time_ns,
-                                             double fundamental_value_ticks) const {
+MarketState DistributedLimitOrderBook::state(std::int64_t time_ns,double fundamental_value_ticks) const {
     MarketState state;
     state.exchange_time_ns = time_ns;
     state.best_bid_ticks = best_bid();
