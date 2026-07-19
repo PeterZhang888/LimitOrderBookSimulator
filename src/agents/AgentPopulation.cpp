@@ -179,4 +179,4 @@ void AgentPopulation::apply_reports(const std::vector<AgentReport>& reports) {
     }
 }
 
-} // namespace dlob
+} 
