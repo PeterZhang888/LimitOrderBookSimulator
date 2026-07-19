@@ -1,10 +1,7 @@
 #include "MomentumAgent.hpp"
-
 #include <algorithm>
 #include <cmath>
-
 int MomentumAgent::number_of_agents_ = 0;
-
 namespace {
 int sign_from_threshold(double value, double threshold) {
     if (value > threshold) return 1;
@@ -12,15 +9,9 @@ int sign_from_threshold(double value, double threshold) {
     return 0;
 }
 }
-
 MomentumAgent::MomentumAgent(
-    std::int64_t lookback_ns,
-    int order_quantity,
-    double threshold_ticks,
-    int tick_size,
-    double order_flow_imbalance_threshold,
-    double depth_imbalance_threshold,
-    double strong_depth_imbalance_threshold
+    std::int64_t lookback_ns,int order_quantity,double threshold_ticks,int tick_size,
+    double order_flow_imbalance_threshold,double depth_imbalance_threshold,double strong_depth_imbalance_threshold
 )
     : agent_index_(number_of_agents_++),
       lookback_ns_(std::max<std::int64_t>(1, lookback_ns)),
@@ -34,12 +25,8 @@ MomentumAgent::MomentumAgent(
 void MomentumAgent::record_mid_price(const LimitOrderBook& book, std::int64_t current_time_ns) {
     if (!book.has_bid() || !book.has_ask()) return;
     history_.push_back(MarketRecord{
-        current_time_ns,
-        book.mid_price(),
-        book.cumulative_aggressive_buy_quantity(),
-        book.cumulative_aggressive_sell_quantity(),
-        book.quantity_at_best_bid(),
-        book.quantity_at_best_ask()
+        current_time_ns, book.mid_price(), book.cumulative_aggressive_buy_quantity(),
+        book.cumulative_aggressive_sell_quantity(), book.quantity_at_best_bid(), book.quantity_at_best_ask()
     });
 
     const std::int64_t keep_after = current_time_ns - 2 * lookback_ns_;
@@ -58,16 +45,13 @@ int MomentumAgent::wake_up(LimitOrderBook& book, std::int64_t current_time_ns) {
         } else break;
     }
     if (!found) return 0;
-
     const double mid_change_ticks = (book.mid_price() - past.mid_price) / static_cast<double>(tick_size_);
     const int mid_signal = sign_from_threshold(mid_change_ticks, threshold_ticks_);
-
     const std::uint64_t current_buy = book.cumulative_aggressive_buy_quantity();
     const std::uint64_t current_sell = book.cumulative_aggressive_sell_quantity();
     const std::uint64_t recent_buy = current_buy >= past.aggressive_buy_quantity ? current_buy - past.aggressive_buy_quantity : 0ULL;
     const std::uint64_t recent_sell = current_sell >= past.aggressive_sell_quantity ? current_sell - past.aggressive_sell_quantity : 0ULL;
     const std::uint64_t recent_total = recent_buy + recent_sell;
-
     int flow_signal = 0;
     if (recent_total >= static_cast<std::uint64_t>(std::max(1, order_quantity_ / 2))) {
         const double flow_imbalance = (static_cast<double>(recent_buy) - static_cast<double>(recent_sell)) / static_cast<double>(recent_total);
