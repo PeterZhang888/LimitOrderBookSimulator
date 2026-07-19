@@ -1,44 +1,47 @@
 #pragma once
 
-#include "LimitOrderBook.hpp"
+#include "common/AgentUtilities.hpp"
 
 #include <cstdint>
-#include <deque>
+#include <vector>
+
+namespace dlob {
+
+struct MomentumAgentConfig {
+    std::int64_t lookback_ns = 1'000'000'000LL;
+    double wake_rate_per_second = 0.20;
+    double threshold_ticks = 0.25;
+    double order_flow_imbalance_threshold = 0.10;
+    double depth_imbalance_threshold = 0.30;
+    double strong_depth_imbalance_threshold = 0.50;
+    int order_quantity = 100;
+    int tick_size = 100;
+};
 
 class MomentumAgent {
 public:
-    MomentumAgent(
-        std::int64_t lookback_ns,
-        int order_quantity,
-        double threshold_ticks,
-        int tick_size,
-        double order_flow_imbalance_threshold,
-        double depth_imbalance_threshold,
-        double strong_depth_imbalance_threshold
-    );
+    MomentumAgent(int owner_id,
+                  const MomentumAgentConfig& config,
+                  std::int64_t simulation_start_ns,
+                  std::uint64_t seed);
 
-    void record_mid_price(const LimitOrderBook& book, std::int64_t current_time_ns);
-    int wake_up(LimitOrderBook& book, std::int64_t current_time_ns);
+    void generate_orders(const MarketState& current,
+                         const MarketState* past,
+                         std::int64_t window_start_ns,
+                         std::int64_t window_end_ns,
+                         OrderMessageBuilder& builder,
+                         std::vector<OrderMessage>& out);
+
+    void apply_report(const AgentReport& report);
+    int owner_id() const { return owner_id_; }
 
 private:
-    struct MarketRecord {
-        std::int64_t time_ns = 0;
-        double mid_price = 0.0;
-        std::uint64_t aggressive_buy_quantity = 0;
-        std::uint64_t aggressive_sell_quantity = 0;
-        int best_bid_depth = 0;
-        int best_ask_depth = 0;
-    };
-
-    int agent_index_ = 0;
-    std::int64_t lookback_ns_ = 0;
-    int order_quantity_ = 0;
-    double threshold_ticks_ = 0.0;
-    int tick_size_ = 100;
-    double order_flow_imbalance_threshold_ = 0.20;
-    double depth_imbalance_threshold_ = 0.35;
-    double strong_depth_imbalance_threshold_ = 0.55;
-    std::deque<MarketRecord> history_;
-
-    static int number_of_agents_;
+    int owner_id_ = 0;
+    MomentumAgentConfig config_{};
+    std::int64_t next_wake_ns_ = 0;
+    FastRng rng_;
+    int inventory_ = 0;
+    double cash_ticks_ = 0.0;
 };
+
+} // namespace dlob
