@@ -1,5 +1,4 @@
 #include "common/RunConfig.hpp"
-
 #include <algorithm>
 #include <charconv>
 #include <cstdlib>
@@ -7,10 +6,8 @@
 #include <limits>
 #include <stdexcept>
 #include <string_view>
-
 namespace dlob {
 namespace {
-
 template <typename Integer>
 Integer parse_integer(std::string_view text, const char* option) {
     Integer value{};
@@ -22,7 +19,6 @@ Integer parse_integer(std::string_view text, const char* option) {
     }
     return value;
 }
-
 void apply_profile(RunConfig& config, const std::string& profile) {
     config.profile = profile;
     if (profile == "debug") {
@@ -62,7 +58,7 @@ std::string require_value(int& index, int argc, char** argv, const char* option)
     return argv[++index];
 }
 
-} // namespace
+}
 
 RunConfig parse_run_config(int argc, char** argv) {
     RunConfig config;
@@ -113,7 +109,6 @@ RunConfig parse_run_config(int argc, char** argv) {
             throw std::invalid_argument("Unknown argument: " + arg);
         }
     }
-
     if (config.duration_seconds <= 0) throw std::invalid_argument("--duration-seconds must be positive");
     if (config.sync_window_us < 100) throw std::invalid_argument("--sync-window-us must be at least 100");
     if (config.population_scale <= 0) throw std::invalid_argument("--population-scale must be positive");
@@ -125,7 +120,6 @@ RunConfig parse_run_config(int argc, char** argv) {
     if (config.output_dir.empty()) throw std::invalid_argument("--output-dir cannot be empty");
     return config;
 }
-
 void print_usage(std::ostream& output, const char* program_name) {
     output << "Usage: " << program_name << " [options]\n\n"
            << "Profiles:\n"
@@ -142,5 +136,4 @@ void print_usage(std::ostream& output, const char* program_name) {
            << "  --seed N\n"
            << "  --output-dir PATH\n";
 }
-
-} // namespace dlob
+}
