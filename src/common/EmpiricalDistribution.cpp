@@ -1,11 +1,9 @@
 #include "common/EmpiricalDistribution.hpp"
-
 #include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <fstream>
 #include <sstream>
-
 namespace dlob {
 namespace {
 std::string trim(std::string value) {
@@ -15,7 +13,6 @@ std::string trim(std::string value) {
     if (start > 0) value.erase(0, start);
     return value;
 }
-
 std::vector<std::string> split_csv_line(const std::string& line) {
     std::vector<std::string> fields;
     std::stringstream stream(line);
@@ -23,18 +20,15 @@ std::vector<std::string> split_csv_line(const std::string& line) {
     while (std::getline(stream, cell, ',')) fields.push_back(trim(cell));
     return fields;
 }
-} // namespace
-
+}
 void EmpiricalDistribution::set_fallback(int lower, int upper) {
     fallback_lower_ = std::max(0, lower);
     fallback_upper_ = std::max(fallback_lower_, upper);
 }
-
 bool EmpiricalDistribution::load_from_csv(const std::string& filename, const std::string& column_name) {
     values_.clear();
     std::ifstream input(filename);
     if (!input.is_open()) return false;
-
     std::string header;
     if (!std::getline(input, header)) return false;
     const std::vector<std::string> headers = split_csv_line(header);
@@ -68,5 +62,4 @@ int EmpiricalDistribution::sample(FastRng& rng) const {
     }
     return std::max(fallback_lower_, rng.uniform_int(fallback_lower_, fallback_upper_));
 }
-
-} // namespace dlob
+} 
