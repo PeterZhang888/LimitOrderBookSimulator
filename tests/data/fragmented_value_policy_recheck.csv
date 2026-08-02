@@ -1,0 +1,5 @@
+symbol,cluster_id,enabled,value_threshold_bps,value_order_quantity,value_trigger_mode,value_maximum_news_rechecks
+QQQ,0,on,0,10,news_impulse,1
+AAPL,1,off,8,50,news_impulse,1
+MSFT,1,on,1000000,25,news_impulse,1
+AMZN,2,on,1000000,25,news_impulse,1

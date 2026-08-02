@@ -1,0 +1,5 @@
+symbol,cluster_id,enabled,value_threshold_bps,value_order_quantity,value_trigger_mode
+QQQ,0,on,0,10,periodic_gap
+AAPL,1,off,8,50,periodic_gap
+MSFT,1,on,1000000,25,periodic_gap
+AMZN,2,on,1000000,25,periodic_gap
