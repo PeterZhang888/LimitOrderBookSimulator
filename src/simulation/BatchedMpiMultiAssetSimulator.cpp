@@ -1,3 +1,4 @@
+// Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 #include "simulation/BatchedMpiMultiAssetSimulator.hpp"
 
 #include "agents/EtfArbitrageAgent.hpp"
@@ -49,9 +50,10 @@ std::int64_t duration_ns(int seconds) {
 int action_priority(OrderAction action) {
     switch (action) {
         case OrderAction::CancelOwner: return 0;
-        case OrderAction::Limit: return 1;
-        case OrderAction::Market: return 2;
-        case OrderAction::CancelAtDistance: return 3;
+        case OrderAction::ConservedLimit: return 1;
+        case OrderAction::Limit: return 2;
+        case OrderAction::Market: return 3;
+        case OrderAction::CancelAtDistance: return 4;
     }
     return 4;
 }
@@ -481,6 +483,10 @@ private:
             hash_integer(hash, state.best_ask_ticks);
             hash_integer(hash, state.best_bid_depth);
             hash_integer(hash, state.best_ask_depth);
+            hash_integer(hash, state.background_best_bid_depth);
+            hash_integer(hash, state.background_best_ask_depth);
+            hash_integer(hash, state.total_background_bid_depth);
+            hash_integer(hash, state.total_background_ask_depth);
             hash_integer(hash, state.last_trade_price_ticks);
             hash_double(hash, state.mid_price_ticks);
             hash_integer(hash, state.cumulative_aggressive_buy);

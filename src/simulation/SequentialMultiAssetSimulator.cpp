@@ -1,3 +1,4 @@
+// Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 #include "simulation/SequentialMultiAssetSimulator.hpp"
 
 #include "agents/EtfArbitrageAgent.hpp"
@@ -734,6 +735,8 @@ void SequentialMultiAssetSimulator::write_summary_csv(
     }
     output << "book_id,symbol,processed_events,submitted_orders,trade_count,trade_hash,"
               "best_bid_ticks,best_ask_ticks,best_bid_depth,best_ask_depth,"
+              "background_best_bid_depth,background_best_ask_depth,"
+              "total_background_bid_depth,total_background_ask_depth,"
               "last_trade_price_ticks,market_maker_inventory,market_maker_cash_ticks,"
               "arbitrage_inventory,arbitrage_cash_ticks,"
               "value_agent_inventory,value_agent_cash_ticks,final_fundamental_value_ticks,"
@@ -762,6 +765,10 @@ void SequentialMultiAssetSimulator::write_summary_csv(
                << state.best_ask_ticks << ','
                << state.best_bid_depth << ','
                << state.best_ask_depth << ','
+               << state.background_best_bid_depth << ','
+               << state.background_best_ask_depth << ','
+               << state.total_background_bid_depth << ','
+               << state.total_background_ask_depth << ','
                << state.last_trade_price_ticks << ','
                << book_summary.market_maker_inventory << ','
                << book_summary.market_maker_cash_ticks << ','
@@ -803,7 +810,10 @@ void SequentialMultiAssetSimulator::write_summary_csv(
                                  + trace_path.string());
     }
     trace << "book_id,symbol,exchange_time_ns,best_bid_ticks,best_ask_ticks,"
-             "best_bid_depth,best_ask_depth,last_trade_price_ticks,mid_price_ticks,"
+             "best_bid_depth,best_ask_depth,"
+             "background_best_bid_depth,background_best_ask_depth,"
+             "total_background_bid_depth,total_background_ask_depth,"
+             "last_trade_price_ticks,mid_price_ticks,"
              "fundamental_value_ticks,cumulative_aggressive_buy,"
              "cumulative_aggressive_sell\n";
     trace << std::setprecision(17);
@@ -813,6 +823,10 @@ void SequentialMultiAssetSimulator::write_summary_csv(
                   << state.exchange_time_ns << ','
                   << state.best_bid_ticks << ',' << state.best_ask_ticks << ','
                   << state.best_bid_depth << ',' << state.best_ask_depth << ','
+                  << state.background_best_bid_depth << ','
+                  << state.background_best_ask_depth << ','
+                  << state.total_background_bid_depth << ','
+                  << state.total_background_ask_depth << ','
                   << state.last_trade_price_ticks << ',' << state.mid_price_ticks << ','
                   << state.fundamental_value_ticks << ','
                   << state.cumulative_aggressive_buy << ','

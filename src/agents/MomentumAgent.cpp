@@ -1,87 +1,90 @@
-#include "MomentumAgent.hpp"
+// Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
+#include "agents/MomentumAgent.hpp"
+
 #include <algorithm>
 #include <cmath>
-int MomentumAgent::number_of_agents_ = 0;
+
+namespace dlob {
 namespace {
 int sign_from_threshold(double value, double threshold) {
     if (value > threshold) return 1;
     if (value < -threshold) return -1;
     return 0;
 }
-}
-MomentumAgent::MomentumAgent(
-    std::int64_t lookback_ns,int order_quantity,double threshold_ticks,int tick_size,
-    double order_flow_imbalance_threshold,double depth_imbalance_threshold,double strong_depth_imbalance_threshold
-)
-    : agent_index_(number_of_agents_++),
-      lookback_ns_(std::max<std::int64_t>(1, lookback_ns)),
-      order_quantity_(std::max(1, order_quantity)),
-      threshold_ticks_(threshold_ticks),
-      tick_size_(std::max(1, tick_size)),
-      order_flow_imbalance_threshold_(std::clamp(order_flow_imbalance_threshold, 0.0, 1.0)),
-      depth_imbalance_threshold_(std::clamp(depth_imbalance_threshold, 0.0, 1.0)),
-      strong_depth_imbalance_threshold_(std::clamp(strong_depth_imbalance_threshold, 0.0, 1.0)) {}
+} // namespace
 
-void MomentumAgent::record_mid_price(const LimitOrderBook& book, std::int64_t current_time_ns) {
-    if (!book.has_bid() || !book.has_ask()) return;
-    history_.push_back(MarketRecord{
-        current_time_ns, book.mid_price(), book.cumulative_aggressive_buy_quantity(),
-        book.cumulative_aggressive_sell_quantity(), book.quantity_at_best_bid(), book.quantity_at_best_ask()
-    });
-
-    const std::int64_t keep_after = current_time_ns - 2 * lookback_ns_;
-    while (!history_.empty() && history_.front().time_ns < keep_after) history_.pop_front();
+MomentumAgent::MomentumAgent(int owner_id,
+                             const MomentumAgentConfig& config,
+                             std::int64_t simulation_start_ns,
+                             std::uint64_t seed)
+    : owner_id_(owner_id), config_(config), rng_(seed) {
+    next_wake_ns_ = safe_add_time(simulation_start_ns, rng_.exponential_wait_ns(config_.wake_rate_per_second));
 }
 
-int MomentumAgent::wake_up(LimitOrderBook& book, std::int64_t current_time_ns) {
-    if (!book.has_bid() || !book.has_ask() || history_.empty()) return 0;
-    const std::int64_t target_time = current_time_ns - lookback_ns_;
-    bool found = false;
-    MarketRecord past = history_.front();
-    for (const MarketRecord& record : history_) {
-        if (record.time_ns <= target_time) {
-            past = record;
-            found = true;
-        } else break;
-    }
-    if (!found) return 0;
-    const double mid_change_ticks = (book.mid_price() - past.mid_price) / static_cast<double>(tick_size_);
-    const int mid_signal = sign_from_threshold(mid_change_ticks, threshold_ticks_);
-    const std::uint64_t current_buy = book.cumulative_aggressive_buy_quantity();
-    const std::uint64_t current_sell = book.cumulative_aggressive_sell_quantity();
-    const std::uint64_t recent_buy = current_buy >= past.aggressive_buy_quantity ? current_buy - past.aggressive_buy_quantity : 0ULL;
-    const std::uint64_t recent_sell = current_sell >= past.aggressive_sell_quantity ? current_sell - past.aggressive_sell_quantity : 0ULL;
-    const std::uint64_t recent_total = recent_buy + recent_sell;
-    int flow_signal = 0;
-    if (recent_total >= static_cast<std::uint64_t>(std::max(1, order_quantity_ / 2))) {
-        const double flow_imbalance = (static_cast<double>(recent_buy) - static_cast<double>(recent_sell)) / static_cast<double>(recent_total);
-        flow_signal = sign_from_threshold(flow_imbalance, order_flow_imbalance_threshold_);
-    }
+void MomentumAgent::generate_orders(const MarketState& current,
+                                    const MarketState* past,
+                                    std::int64_t window_start_ns,
+                                    std::int64_t window_end_ns,
+                                    OrderMessageBuilder& builder,
+                                    std::vector<OrderMessage>& out) {
+    const bool valid_book = current.best_bid_ticks > 0 && current.best_ask_ticks > 0;
 
-    const int bid_depth = book.quantity_at_best_bid();
-    const int ask_depth = book.quantity_at_best_ask();
-    const int total_depth = bid_depth + ask_depth;
-    int depth_signal = 0;
-    if (total_depth > 0) {
-        const double depth_imbalance = (static_cast<double>(bid_depth) - static_cast<double>(ask_depth)) / static_cast<double>(total_depth);
-        depth_signal = sign_from_threshold(depth_imbalance, depth_imbalance_threshold_);
-        if (depth_signal == 0) depth_signal = sign_from_threshold(depth_imbalance, strong_depth_imbalance_threshold_);
+    while (next_wake_ns_ < window_end_ns) {
+        const std::int64_t decision_time = std::max(next_wake_ns_, window_start_ns);
+        if (valid_book && past != nullptr) {
+            const double mid_change_ticks = (current.mid_price_ticks - past->mid_price_ticks)
+                / static_cast<double>(std::max(1, config_.tick_size));
+            const int mid_signal = sign_from_threshold(mid_change_ticks, config_.threshold_ticks);
+
+            const std::uint64_t recent_buy = current.cumulative_aggressive_buy >= past->cumulative_aggressive_buy
+                ? current.cumulative_aggressive_buy - past->cumulative_aggressive_buy : 0ULL;
+            const std::uint64_t recent_sell = current.cumulative_aggressive_sell >= past->cumulative_aggressive_sell
+                ? current.cumulative_aggressive_sell - past->cumulative_aggressive_sell : 0ULL;
+            const std::uint64_t recent_total = recent_buy + recent_sell;
+
+            int flow_signal = 0;
+            if (recent_total > 0) {
+                const double imbalance = (static_cast<double>(recent_buy) - static_cast<double>(recent_sell))
+                    / static_cast<double>(recent_total);
+                flow_signal = sign_from_threshold(imbalance, config_.order_flow_imbalance_threshold);
+            }
+
+            int depth_signal = 0;
+            const int total_depth = current.best_bid_depth + current.best_ask_depth;
+            if (total_depth > 0) {
+                const double imbalance = (static_cast<double>(current.best_bid_depth) - current.best_ask_depth)
+                    / static_cast<double>(total_depth);
+                depth_signal = sign_from_threshold(imbalance, config_.depth_imbalance_threshold);
+                if (depth_signal == 0) {
+                    depth_signal = sign_from_threshold(imbalance, config_.strong_depth_imbalance_threshold);
+                }
+            }
+
+            int direction = 0;
+            if (mid_signal != 0) {
+                if (flow_signal == 0 || flow_signal == mid_signal) direction = mid_signal;
+            } else if (flow_signal != 0) {
+                direction = flow_signal;
+            } else {
+                direction = depth_signal;
+            }
+
+            if (direction != 0) {
+                int quantity = std::max(1, static_cast<int>(std::llround(
+                    config_.order_quantity * (0.75 + 0.50 * rng_.uniform01()))));
+                if (mid_signal == 0 && flow_signal == 0) quantity = std::max(1, quantity / 2);
+                builder.emit(out, AgentKind::Momentum, owner_id_, OrderAction::Market,
+                             direction > 0 ? Side::Buy : Side::Sell,
+                             quantity, 0, 0, decision_time, rng_);
+            }
+        }
+        next_wake_ns_ = safe_add_time(next_wake_ns_, rng_.exponential_wait_ns(config_.wake_rate_per_second));
     }
-
-    int direction = 0;
-    if (mid_signal != 0) {
-        if (flow_signal != 0 && flow_signal != mid_signal) return 0;
-        direction = mid_signal;
-    } else if (flow_signal != 0) {
-        direction = flow_signal;
-    } else if (depth_signal != 0) {
-        direction = depth_signal;
-    }
-
-    if (direction == 0) return 0;
-    int quantity = order_quantity_;
-    if (mid_signal == 0 && flow_signal == 0 && depth_signal != 0) quantity = std::max(1, order_quantity_ / 2);
-
-    if (direction > 0) return book.submit_market_order(Side::Buy, quantity, current_time_ns);
-    return book.submit_market_order(Side::Sell, quantity, current_time_ns);
 }
+
+void MomentumAgent::apply_report(const AgentReport& report) {
+    if (report.owner_id != owner_id_) return;
+    update_cash_inventory(report, inventory_, cash_ticks_);
+}
+
+} // namespace dlob

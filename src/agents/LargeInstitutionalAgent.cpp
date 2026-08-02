@@ -1,74 +1,83 @@
-#include "LargeInstitutionalAgent.hpp"
-#include "EmpiricalDistribution.hpp"
+// Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
+#include "agents/LargeInstitutionalAgent.hpp"
+
+#include "common/EmpiricalDistribution.hpp"
+#include "common/DataPaths.hpp"
+
 #include <algorithm>
 #include <cmath>
-int LargeInstitutionalAgent::number_of_agents_ = 0;
+
+namespace dlob {
 namespace {
 struct InstitutionalDistributions {
     EmpiricalDistribution market_buy_quantity;
     EmpiricalDistribution market_sell_quantity;
+
     InstitutionalDistributions() {
-        market_buy_quantity.set_fallback(50, 1000);
-        market_sell_quantity.set_fallback(50, 1000);
-        market_buy_quantity.load_from_csv("market_buy_quantity_distribution.txt", "quantity");
-        market_sell_quantity.load_from_csv("market_sell_quantity_distribution.txt", "quantity");
+        market_buy_quantity.set_fallback(50, 1'000);
+        market_sell_quantity.set_fallback(50, 1'000);
+        market_buy_quantity.load_from_csv(resolve_data_file("market_buy_quantity_distribution.txt"), "quantity");
+        market_sell_quantity.load_from_csv(resolve_data_file("market_sell_quantity_distribution.txt"), "quantity");
     }
 };
-InstitutionalDistributions& institutional_distributions() {
-    static InstitutionalDistributions d;
-    return d;
+
+InstitutionalDistributions& distributions() {
+    static InstitutionalDistributions value;
+    return value;
 }
-int sample_child_quantity(Side side, std::mt19937_64& rng) {
-    auto& d = institutional_distributions();
+
+int sample_child_quantity(Side side, FastRng& rng) {
+    auto& d = distributions();
     return side == Side::Buy ? d.market_buy_quantity.sample(rng) : d.market_sell_quantity.sample(rng);
 }
-int best_level_participation_cap(const LimitOrderBook& book, Side side, double cap) {
-    int available = 0;
-    if (side == Side::Buy) {
-        if (!book.has_ask()) return 0;
-        available = book.quantity_at_best_ask();
-    } else {
-        if (!book.has_bid()) return 0;
-        available = book.quantity_at_best_bid();
-    }
-    if (available <= 0) return 0;
-    return std::max(1, static_cast<int>(std::floor(std::max(0.01, cap) * static_cast<double>(available))));
-}
-}
-LargeInstitutionalAgent::LargeInstitutionalAgent(
-    Side side,
-    int parent_quantity,
-    int child_quantity,
-    double participation_cap,
-    std::int64_t start_time_ns,
-    std::int64_t end_time_ns,
-    std::uint64_t seed
-): agent_index_(number_of_agents_++),
-      side_(side),
-      parent_quantity_(std::max(1, parent_quantity)),
-      remaining_quantity_(std::max(1, parent_quantity)),
-      child_quantity_(std::max(1, child_quantity)),
-      participation_cap_(std::max(0.01, participation_cap)),
-      start_time_ns_(start_time_ns),
-      end_time_ns_(end_time_ns),
-      rng_(seed + static_cast<std::uint64_t>(agent_index_) * 104729ULL) {}
+} // namespace
 
-int LargeInstitutionalAgent::wake_up(LimitOrderBook& book, std::int64_t current_time_ns) {
-    if (!active_ || current_time_ns < start_time_ns_ || current_time_ns > end_time_ns_) return 0;
-    if (remaining_quantity_ <= 0) {
-        active_ = false;
-        return 0;
-    }
-    const int sampled = sample_child_quantity(side_, rng_);
-    const int cap = best_level_participation_cap(book, side_, participation_cap_);
-    if (cap <= 0) return 0;
-    const int quantity = std::min({child_quantity_, sampled, cap, remaining_quantity_});
-    if (quantity <= 0) return 0;
-    const int executed = book.submit_market_order(side_, quantity, current_time_ns);
-    remaining_quantity_ -= executed;
-    if (remaining_quantity_ <= 0) active_ = false;
-    return executed;
+LargeInstitutionalAgent::LargeInstitutionalAgent(int owner_id,
+                                                 const LargeInstitutionalConfig& config,
+                                                 std::uint64_t seed)
+    : owner_id_(owner_id), config_(config), rng_(seed) {
+    next_wake_ns_ = safe_add_time(config_.start_time_ns, rng_.exponential_wait_ns(config_.wake_rate_per_second));
 }
 
-bool LargeInstitutionalAgent::is_finished() const { return !active_ || remaining_quantity_ <= 0; }
-int LargeInstitutionalAgent::remaining_quantity() const { return remaining_quantity_; }
+int LargeInstitutionalAgent::remaining_quantity() const {
+    return std::max(0, config_.parent_quantity - executed_quantity_ - outstanding_quantity_);
+}
+
+void LargeInstitutionalAgent::generate_orders(const MarketState& current,
+                                              std::int64_t window_start_ns,
+                                              std::int64_t window_end_ns,
+                                              OrderMessageBuilder& builder,
+                                              std::vector<OrderMessage>& out) {
+    while (next_wake_ns_ < window_end_ns && remaining_quantity() > 0) {
+        const std::int64_t decision_time = std::max(next_wake_ns_, window_start_ns);
+        if (decision_time >= config_.start_time_ns && decision_time <= config_.end_time_ns) {
+            const int available = config_.side == Side::Buy ? current.best_ask_depth : current.best_bid_depth;
+            const int participation_limit = available > 0
+                ? std::max(1, static_cast<int>(std::floor(config_.participation_cap * available)))
+                : 0;
+            if (participation_limit > 0) {
+                const int sampled = sample_child_quantity(config_.side, rng_);
+                const int quantity = std::min({config_.child_quantity, sampled,
+                                               participation_limit, remaining_quantity()});
+                if (quantity > 0) {
+                    builder.emit(out, AgentKind::Institutional, owner_id_, OrderAction::Market,
+                                 config_.side, quantity, 0, 0, decision_time, rng_);
+                    outstanding_quantity_ += quantity;
+                }
+            }
+        }
+        next_wake_ns_ = safe_add_time(next_wake_ns_, rng_.exponential_wait_ns(config_.wake_rate_per_second));
+    }
+}
+
+void LargeInstitutionalAgent::apply_report(const AgentReport& report) {
+    if (report.owner_id != owner_id_) return;
+    if (report.kind == ReportKind::OrderResult && report.action == OrderAction::Market) {
+        outstanding_quantity_ = std::max(0, outstanding_quantity_ - report.requested_quantity);
+    } else if (report.kind == ReportKind::Fill) {
+        executed_quantity_ = std::min(config_.parent_quantity, executed_quantity_ + report.fill_quantity);
+        update_cash_inventory(report, inventory_, cash_ticks_);
+    }
+}
+
+} // namespace dlob

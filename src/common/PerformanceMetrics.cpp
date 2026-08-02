@@ -1,4 +1,6 @@
+// Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 #include "common/PerformanceMetrics.hpp"
+
 #include <algorithm>
 #include <fstream>
 #include <iomanip>
@@ -6,17 +8,21 @@
 #include <numeric>
 #include <stdexcept>
 #include <type_traits>
+
 namespace dlob {
 namespace {
+
 std::size_t index_of(TimingStage stage) {
     return static_cast<std::size_t>(stage);
 }
+
 const char* role_name(const RankProfile& profile) {
     if (profile.is_exchange && profile.is_worker) return "exchange+worker";
     if (profile.is_exchange) return "exchange";
     if (profile.is_worker) return "worker";
     return "idle";
 }
+
 void ensure_output_dir(const std::filesystem::path& output_dir) {
     std::error_code error;
     std::filesystem::create_directories(output_dir, error);
@@ -25,7 +31,9 @@ void ensure_output_dir(const std::filesystem::path& output_dir) {
                                  + " (" + error.message() + ")");
     }
 }
-} 
+
+} // namespace
+
 const char* timing_stage_name(TimingStage stage) {
     switch (stage) {
         case TimingStage::Initialization: return "initialization";
@@ -43,12 +51,19 @@ const char* timing_stage_name(TimingStage stage) {
         case TimingStage::ScatterReportCounts: return "scatter_report_counts";
         case TimingStage::ScatterReportPayload: return "scatter_report_payload";
         case TimingStage::ApplyReports: return "apply_reports";
+        case TimingStage::ActivationSend: return "activation_send";
+        case TimingStage::ActivationReceive: return "activation_receive";
+        case TimingStage::OrderBatchSend: return "order_batch_send";
+        case TimingStage::OrderBatchReceive: return "order_batch_receive";
+        case TimingStage::SharedSnapshotPublish: return "shared_snapshot_publish";
+        case TimingStage::SharedSnapshotRead: return "shared_snapshot_read";
         case TimingStage::EndBarrier: return "end_barrier";
         case TimingStage::TotalWall: return "total_wall";
         case TimingStage::Count: break;
     }
     return "unknown";
 }
+
 PerformanceMetrics::PerformanceMetrics(int rank, int world_size, bool is_exchange, bool is_worker) {
     profile_.rank = rank;
     profile_.world_size = world_size;
@@ -111,23 +126,32 @@ void PerformanceMetrics::write_rank_csv(const std::filesystem::path& output_dir)
     }
 }
 
-std::vector<RankProfile> gather_rank_profiles(const RankProfile& local,int rank,int world_size) {
+std::vector<RankProfile> gather_rank_profiles(const RankProfile& local,
+                                              int rank,
+                                              int world_size,
+                                              MPI_Comm communicator) {
     static_assert(std::is_trivially_copyable_v<RankProfile>);
     if (sizeof(RankProfile) > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
         throw std::runtime_error("RankProfile is too large for MPI_Gather byte count");
     }
+
     std::vector<RankProfile> profiles;
     if (rank == 0) profiles.resize(static_cast<std::size_t>(world_size));
     const int bytes = static_cast<int>(sizeof(RankProfile));
-    const int result = MPI_Gather(&local, bytes, MPI_BYTE, rank == 0 ? profiles.data() : nullptr, bytes, MPI_BYTE, 0, MPI_COMM_WORLD);
+    const int result = MPI_Gather(&local, bytes, MPI_BYTE,
+                                  rank == 0 ? profiles.data() : nullptr,
+                                  bytes, MPI_BYTE, 0, communicator);
     if (result != MPI_SUCCESS) throw std::runtime_error("MPI_Gather failed for rank profiles");
     return profiles;
 }
-void write_combined_timing_csv(const std::filesystem::path& output_dir,const std::vector<RankProfile>& profiles) {
+
+void write_combined_timing_csv(const std::filesystem::path& output_dir,
+                               const std::vector<RankProfile>& profiles) {
     ensure_output_dir(output_dir);
     const std::filesystem::path file = output_dir / "timing_all_ranks.csv";
     std::ofstream output(file);
     if (!output) throw std::runtime_error("Could not open combined timing file: " + file.string());
+
     output << "rank,host,role,stage,total_seconds,calls,mean_seconds\n";
     output << std::setprecision(12);
     for (const RankProfile& profile : profiles) {
@@ -140,12 +164,14 @@ void write_combined_timing_csv(const std::filesystem::path& output_dir,const std
         }
     }
 }
+
 void write_timing_summary_csv(const std::filesystem::path& output_dir,
                               const std::vector<RankProfile>& profiles) {
     ensure_output_dir(output_dir);
     const std::filesystem::path file = output_dir / "timing_summary.csv";
     std::ofstream output(file);
     if (!output) throw std::runtime_error("Could not open timing summary file: " + file.string());
+
     output << "stage,min_seconds,mean_seconds,max_seconds,sum_seconds,max_rank\n";
     output << std::setprecision(12);
     for (std::size_t i = 0; i < timing_stage_count; ++i) {
@@ -171,16 +197,22 @@ void write_timing_summary_csv(const std::filesystem::path& output_dir,
                << minimum << ',' << mean << ',' << maximum << ',' << sum << ',' << max_rank << '\n';
     }
 }
-void write_rank_counters_csv(const std::filesystem::path& output_dir, const std::vector<RankProfile>& profiles) {
+
+void write_rank_counters_csv(const std::filesystem::path& output_dir,
+                             const std::vector<RankProfile>& profiles) {
     ensure_output_dir(output_dir);
     const std::filesystem::path file = output_dir / "rank_counters.csv";
     std::ofstream output(file);
     if (!output) throw std::runtime_error("Could not open rank counter file: " + file.string());
+
     output << "rank,host,role,local_market_makers,local_momentum,local_informed,local_institutional,"
               "local_total_agents,windows,strategic_orders_generated,strategic_orders_received_exchange,"
               "strategic_orders_processed,background_orders_processed,reports_created,reports_received,"
               "order_bytes_sent,order_bytes_received_exchange,report_bytes_sent_exchange,"
-              "report_bytes_received,fill_reports,order_result_reports,peak_pending_orders\n";
+              "report_bytes_received,fill_reports,order_result_reports,peak_pending_orders,"
+              "worker_activations_sent,worker_activations_received,order_batches_sent,"
+              "order_batches_received_exchange,empty_order_batches,activation_bytes_sent_exchange,"
+              "activation_bytes_received,shared_snapshot_publishes,shared_snapshot_reads\n";
     for (const RankProfile& p : profiles) {
         const int total_agents = p.local_market_makers + p.local_momentum
             + p.local_informed + p.local_institutional;
@@ -194,7 +226,12 @@ void write_rank_counters_csv(const std::filesystem::path& output_dir, const std:
                << c.reports_received << ',' << c.order_bytes_sent << ','
                << c.order_bytes_received_exchange << ',' << c.report_bytes_sent_exchange << ','
                << c.report_bytes_received << ',' << c.fill_reports << ','
-               << c.order_result_reports << ',' << c.peak_pending_orders << '\n';
+               << c.order_result_reports << ',' << c.peak_pending_orders << ','
+               << c.worker_activations_sent << ',' << c.worker_activations_received << ','
+               << c.order_batches_sent << ',' << c.order_batches_received_exchange << ','
+               << c.empty_order_batches << ',' << c.activation_bytes_sent_exchange << ','
+               << c.activation_bytes_received << ',' << c.shared_snapshot_publishes << ','
+               << c.shared_snapshot_reads << '\n';
     }
 }
 

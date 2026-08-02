@@ -1,3 +1,4 @@
+// Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 #include "simulation/MultiAssetConfiguration.hpp"
 
 #include <algorithm>
@@ -19,7 +20,16 @@ std::vector<std::string> split_csv_row(const std::string& row) {
     std::vector<std::string> fields;
     std::istringstream input(row);
     std::string field;
-    while (std::getline(input, field, ',')) fields.push_back(field);
+    while (std::getline(input, field, ',')) {
+        // std::getline removes '\n' but retains the '\r' in a CRLF record.
+        // Most empirical configuration files are written by Python's CSV
+        // module and may use CRLF.  Without this normalization the final
+        // header (currently quote_improvement_probability) is silently not
+        // recognized when it is optional, and a hard-coded default is used
+        // for every symbol instead of the extracted value.
+        if (!field.empty() && field.back() == '\r') field.pop_back();
+        fields.push_back(std::move(field));
+    }
     if (!row.empty() && row.back() == ',') fields.emplace_back();
     return fields;
 }
@@ -149,13 +159,39 @@ void validate_book_configs(const std::vector<MultiAssetBookConfig>& books) {
         if (book.symbol.empty() || book.data_dir.empty()
             || !std::isfinite(book.fundamental_price_ticks)
             || book.fundamental_price_ticks <= 0.0
+            || !std::isfinite(
+                book.fundamental_volatility_bps_sqrt_second)
+            || book.fundamental_volatility_bps_sqrt_second < 0.0
+            || !std::isfinite(
+                book.fundamental_move_probability_per_second)
+            || book.fundamental_move_probability_per_second < 0.0
+            || book.fundamental_move_probability_per_second > 1.0
+            || !std::isfinite(book.fundamental_conditional_kurtosis)
+            || book.fundamental_conditional_kurtosis < 1.0
+            || !std::isfinite(
+                book.fundamental_log_variance_persistence)
+            || book.fundamental_log_variance_persistence < 0.0
+            || book.fundamental_log_variance_persistence >= 1.0
+            || !std::isfinite(book.fundamental_log_variance_std)
+            || book.fundamental_log_variance_std < 0.0
+            || !std::isfinite(book.fundamental_order_flow_coupling)
+            || book.fundamental_order_flow_coupling < 0.0
+            || book.fundamental_order_flow_coupling > 2.5
+            || (book.fundamental_order_flow_coupling > 0.0
+                && book.fundamental_log_variance_std <= 0.0)
             || !std::isfinite(book.beta) || book.beta == 0.0
             || !std::isfinite(book.basket_weight) || book.basket_weight < 0.0
             || book.market_maker_quote_quantity < 0
             || book.target_spread_ticks <= 0
             || !std::isfinite(book.quote_improvement_probability)
             || book.quote_improvement_probability < 0.0
-            || book.quote_improvement_probability > 1.0) {
+            || book.quote_improvement_probability > 1.0
+            || !std::isfinite(book.target_mean_bid_depth)
+            || !std::isfinite(book.target_mean_ask_depth)
+            || ((book.target_mean_bid_depth == 0.0)
+                != (book.target_mean_ask_depth == 0.0))
+            || book.target_mean_bid_depth < 0.0
+            || book.target_mean_ask_depth < 0.0) {
             throw std::invalid_argument("invalid per-book multi-asset configuration");
         }
         const bool any_opening = book.initial_best_bid_ticks != 0
@@ -191,6 +227,24 @@ std::vector<MultiAssetBookConfig> load_multi_asset_book_configs(
     const std::size_t data_col = column_index(header, "data_dir");
     const std::size_t rates_col = column_index(header, "hawkes_rates_file");
     const std::size_t fundamental_col = column_index(header, "fundamental_price_ticks");
+    const std::optional<std::size_t> fundamental_volatility_col =
+        optional_column_index(
+            header, "fundamental_volatility_bps_sqrt_second");
+    const std::optional<std::size_t> fundamental_move_probability_col =
+        optional_column_index(
+            header, "fundamental_move_probability_per_second");
+    const std::optional<std::size_t> fundamental_conditional_kurtosis_col =
+        optional_column_index(
+            header, "fundamental_conditional_kurtosis");
+    const std::optional<std::size_t> fundamental_log_variance_persistence_col =
+        optional_column_index(
+            header, "fundamental_log_variance_persistence");
+    const std::optional<std::size_t> fundamental_log_variance_std_col =
+        optional_column_index(
+            header, "fundamental_log_variance_std");
+    const std::optional<std::size_t> fundamental_order_flow_coupling_col =
+        optional_column_index(
+            header, "fundamental_order_flow_coupling");
     const std::size_t bid_col = column_index(header, "initial_best_bid_ticks");
     const std::size_t ask_col = column_index(header, "initial_best_ask_ticks");
     const std::size_t bid_depth_col = column_index(header, "initial_best_bid_depth");
@@ -201,6 +255,14 @@ std::vector<MultiAssetBookConfig> load_multi_asset_book_configs(
     const std::size_t spread_col = column_index(header, "target_spread_ticks");
     const std::optional<std::size_t> improvement_col = optional_column_index(
         header, "quote_improvement_probability");
+    const std::optional<std::size_t> target_bid_depth_col = optional_column_index(
+        header, "target_mean_bid_depth");
+    const std::optional<std::size_t> target_ask_depth_col = optional_column_index(
+        header, "target_mean_ask_depth");
+    if (target_bid_depth_col.has_value() != target_ask_depth_col.has_value()) {
+        throw std::runtime_error(
+            "book configuration must contain both target mean depth columns");
+    }
     const std::size_t required = 1U + std::max({
         id_col, symbol_col, data_col, rates_col, fundamental_col, bid_col, ask_col,
         bid_depth_col, ask_depth_col, beta_col, weight_col, quote_col, spread_col});
@@ -226,6 +288,66 @@ std::vector<MultiAssetBookConfig> load_multi_asset_book_configs(
         book.hawkes_rates_file = fields[rates_col];
         book.fundamental_price_ticks = parse_double(
             fields[fundamental_col], "fundamental_price_ticks", line_number);
+        if (fundamental_volatility_col.has_value()) {
+            if (*fundamental_volatility_col >= fields.size()) {
+                throw std::runtime_error(
+                    "short fundamental-volatility field at book-config line "
+                    + std::to_string(line_number));
+            }
+            book.fundamental_volatility_bps_sqrt_second = parse_double(
+                fields[*fundamental_volatility_col],
+                "fundamental_volatility_bps_sqrt_second", line_number);
+        }
+        if (fundamental_move_probability_col.has_value()) {
+            if (*fundamental_move_probability_col >= fields.size()) {
+                throw std::runtime_error(
+                    "short fundamental-move-probability field at book-config line "
+                    + std::to_string(line_number));
+            }
+            book.fundamental_move_probability_per_second = parse_double(
+                fields[*fundamental_move_probability_col],
+                "fundamental_move_probability_per_second", line_number);
+        }
+        if (fundamental_conditional_kurtosis_col.has_value()) {
+            if (*fundamental_conditional_kurtosis_col >= fields.size()) {
+                throw std::runtime_error(
+                    "short fundamental-conditional-kurtosis field at book-config line "
+                    + std::to_string(line_number));
+            }
+            book.fundamental_conditional_kurtosis = parse_double(
+                fields[*fundamental_conditional_kurtosis_col],
+                "fundamental_conditional_kurtosis", line_number);
+        }
+        if (fundamental_log_variance_persistence_col.has_value()) {
+            if (*fundamental_log_variance_persistence_col >= fields.size()) {
+                throw std::runtime_error(
+                    "short fundamental-log-variance-persistence field at "
+                    "book-config line " + std::to_string(line_number));
+            }
+            book.fundamental_log_variance_persistence = parse_double(
+                fields[*fundamental_log_variance_persistence_col],
+                "fundamental_log_variance_persistence", line_number);
+        }
+        if (fundamental_log_variance_std_col.has_value()) {
+            if (*fundamental_log_variance_std_col >= fields.size()) {
+                throw std::runtime_error(
+                    "short fundamental-log-variance-std field at "
+                    "book-config line " + std::to_string(line_number));
+            }
+            book.fundamental_log_variance_std = parse_double(
+                fields[*fundamental_log_variance_std_col],
+                "fundamental_log_variance_std", line_number);
+        }
+        if (fundamental_order_flow_coupling_col.has_value()) {
+            if (*fundamental_order_flow_coupling_col >= fields.size()) {
+                throw std::runtime_error(
+                    "short fundamental-order-flow-coupling field at "
+                    "book-config line " + std::to_string(line_number));
+            }
+            book.fundamental_order_flow_coupling = parse_double(
+                fields[*fundamental_order_flow_coupling_col],
+                "fundamental_order_flow_coupling", line_number);
+        }
         book.initial_best_bid_ticks = parse_integer<std::int32_t>(
             fields[bid_col], "initial_best_bid_ticks", line_number);
         book.initial_best_ask_ticks = parse_integer<std::int32_t>(
@@ -234,6 +356,18 @@ std::vector<MultiAssetBookConfig> load_multi_asset_book_configs(
             fields[bid_depth_col], "initial_best_bid_depth", line_number);
         book.initial_best_ask_depth = parse_integer<std::int32_t>(
             fields[ask_depth_col], "initial_best_ask_depth", line_number);
+        if (target_bid_depth_col.has_value()) {
+            if (*target_bid_depth_col >= fields.size()
+                || *target_ask_depth_col >= fields.size()) {
+                throw std::runtime_error(
+                    "short target mean depth field at book-config line "
+                    + std::to_string(line_number));
+            }
+            book.target_mean_bid_depth = parse_double(
+                fields[*target_bid_depth_col], "target_mean_bid_depth", line_number);
+            book.target_mean_ask_depth = parse_double(
+                fields[*target_ask_depth_col], "target_mean_ask_depth", line_number);
+        }
         book.beta = parse_double(fields[beta_col], "beta", line_number);
         book.basket_weight = parse_double(
             fields[weight_col], "basket_weight", line_number);
@@ -293,10 +427,15 @@ BackgroundHawkesConfig make_multi_asset_background_config(
     const MultiAssetBookConfig& book,
     BookId book_id) {
     BackgroundHawkesConfig background;
-    background.seed = stable_sequence(background_entity(book_id), config.seed);
+    (void)book_id; // Routing identity is deliberately not a stochastic identity.
+    background.seed = stable_sequence(
+        stable_symbol_stream_id(book.symbol), config.seed);
     background.tick_size = config.tick_size;
+    background.target_spread_ticks = book.target_spread_ticks;
     background.quote_improvement_probability =
         book.quote_improvement_probability;
+    background.target_mean_bid_depth = book.target_mean_bid_depth;
+    background.target_mean_ask_depth = book.target_mean_ask_depth;
     const auto calibrated = load_calibrated_mu(book.hawkes_rates_file);
     if (calibrated.has_value()) background.mu = *calibrated;
     background.limit_buy_quantity_file = data_file(book.data_dir, "limit_buy_quantity_distribution.txt");
