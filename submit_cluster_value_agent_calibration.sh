@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 # Run the ten-cluster behavioural calibration on one allocated Seagull node.
 # Submit from the login node; all extraction-independent computation below runs
 # only after Slurm has allocated the job:

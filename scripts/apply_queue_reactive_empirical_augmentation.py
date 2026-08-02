@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Merge audited queue-reactive sidecars into a new compact-data root.
 
 The baseline data root is never edited.  Files are hard-linked into a sibling

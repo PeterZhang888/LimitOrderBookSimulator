@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Run a validated fragmented-market MPI matrix and write raw/summary CSVs.
 
 Every runtime agent control is part of each scenario identity, so timing or

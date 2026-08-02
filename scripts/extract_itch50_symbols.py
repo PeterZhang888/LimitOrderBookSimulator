@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Extract several ITCH 5.0 books in one streaming pass.
 
 This is the production extractor for the coupled-LOB experiment.  It preserves

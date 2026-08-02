@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Deterministic two-level calibration for the queue-reactive LOB model.
 
 This driver calibrates one ordinary-market realisation at a time.  Independent

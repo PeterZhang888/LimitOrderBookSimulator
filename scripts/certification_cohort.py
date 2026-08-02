@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Fail-closed identity contract for the fixed 1,480-symbol cohort.
 
 The development-validation cohort was selected once from the R16 balanced

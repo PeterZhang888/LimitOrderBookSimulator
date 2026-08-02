@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 # Submit the four bounded R32 directional pilots from a Seagull login node.
 
 set -Eeuo pipefail

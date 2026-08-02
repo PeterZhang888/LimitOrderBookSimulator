@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Build one resumable, all-symbol empirical ITCH universe on a workstation.
 
 This is the local counterpart of ``submit_itch50_universe_calibration.sh``.

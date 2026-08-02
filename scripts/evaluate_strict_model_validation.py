@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Versioned fit evaluation for the fragmented-LOB simulator.
 
 The evaluator consumes empirical per-symbol target configurations, a frozen

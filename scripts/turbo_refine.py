@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Generate TuRBO-1-style trust-region Bayesian optimisation proposals.
 
 Requires PyTorch, GPyTorch and BoTorch. This utility fits a Gaussian process to

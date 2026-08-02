@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Generate docs/CODE_STRUCTURE.md from the current repository layout."""
 
 from __future__ import annotations

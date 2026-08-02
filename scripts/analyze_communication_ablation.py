@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Audit and summarize the paired diagnostic-collective communication A/B test."""
 
 from __future__ import annotations

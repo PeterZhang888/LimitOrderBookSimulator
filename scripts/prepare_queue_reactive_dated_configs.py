@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Build no-oracle dated configs around one frozen pooled market model.
 
 Every runtime parameter, Hawkes-rate file and empirical mark directory comes

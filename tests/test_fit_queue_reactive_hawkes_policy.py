@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Focused tests for the training-only queue-reactive policy fitter."""
 
 from __future__ import annotations

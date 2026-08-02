@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Fail-fast audit of every empirical target used by certified calibration.
 
 This command deliberately invokes the same strict target loader as the

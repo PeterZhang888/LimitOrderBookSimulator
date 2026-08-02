@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Run and validate the short batched multi-asset MPI timing matrix."""
 
 from __future__ import annotations

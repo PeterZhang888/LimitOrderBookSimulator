@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Fit four-book value-agent parameters and validate them chronologically.
 
 This runner implements *diagonal weighted standardized moment matching*, not

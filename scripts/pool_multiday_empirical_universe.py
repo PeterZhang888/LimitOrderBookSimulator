@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Create one auditable multi-day empirical training template for the LOB ABM.
 
 The fragmented-LOB model needs one direct-input directory per symbol at run

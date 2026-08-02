@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 # Run the final one-book-per-symbol shared-liquidity case study on Seagull.
 #
 # First build the audited empirical universe on compute nodes:

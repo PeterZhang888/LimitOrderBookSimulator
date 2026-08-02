@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 # Pool the five fixed 2019 ITCH training sessions into one direct-input
 # template, while retaining every individual day for behavioural calibration.
 #

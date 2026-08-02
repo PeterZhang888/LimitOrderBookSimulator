@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Summarize an R4 calibration failure from its persistent JSON artifacts.
 
 This is a read-only diagnostic utility.  It does not rerun candidates, alter

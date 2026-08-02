@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Focused tests for fixed-cohort local ITCH extraction provenance."""
 
 from __future__ import annotations

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Create deterministic liquidity clusters from an empirical-universe config.
 
 This utility consumes the *derived* per-symbol calibration artifacts already

@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 # Run a leakage-safe four-asset weighted-moment calibration and hold-out test.
 #
 # This script performs substantial raw-ITCH extraction and simulation.  Invoke

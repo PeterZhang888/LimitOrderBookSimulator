@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Relocate certified pooled evidence for queue-reactive model development.
 
 The V19 evidence bundle records absolute Seagull paths.  This helper creates a

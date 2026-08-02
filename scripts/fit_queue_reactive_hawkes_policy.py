@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Fit training-only queue-reactive Hawkes policies by liquidity cluster.
 
 The fitter consumes sufficient statistics emitted by

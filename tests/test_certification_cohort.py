@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Regression tests for the immutable 1,480-symbol identity contract."""
 
 from __future__ import annotations

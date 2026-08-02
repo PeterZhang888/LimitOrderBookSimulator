@@ -1,4 +1,3 @@
-// Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 #include "simulation/FragmentedMpiSimulator.hpp"
 
 #include "common/AgentUtilities.hpp"

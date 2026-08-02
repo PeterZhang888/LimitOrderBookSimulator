@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Mock-simulator tests for the queue-reactive calibration driver."""
 
 from __future__ import annotations

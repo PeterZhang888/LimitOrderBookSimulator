@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Audit and select a passed R32 directional activity-regime pilot.
 
 Only candidates that produced the driver's immutable passed handoff are

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Create matched training/held-out empirical-universe configurations.
 
 Two independently extracted ITCH days need not accept exactly the same symbols:

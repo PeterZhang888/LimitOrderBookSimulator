@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Utilities for the three-stage eligibility-set calibration workflow.
 
 The script is dependency-light. It uses scipy.stats.qmc.Sobol when SciPy is

@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 # R33 continuation: reuse the completed, hash-bound R32 simulation matrix,
 # evaluate its selected iteration under the documented six-component
 # development protocol, freeze that model, and only then run five 2020

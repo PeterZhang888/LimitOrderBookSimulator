@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Assemble independently extracted ITCH symbol batches into one universe.
 
 ``extract_itch50_symbols.py`` reconstructs several visible books in one pass.

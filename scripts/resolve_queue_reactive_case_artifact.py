@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Resolve and verify the frozen R21 model used by the financial case study.
 
 The normal input is ``heldout_run_manifest.json`` from the separate held-out

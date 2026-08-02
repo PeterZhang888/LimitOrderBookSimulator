@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Guards for byte-identical calibration and final-case MPI builds."""
 
 from __future__ import annotations

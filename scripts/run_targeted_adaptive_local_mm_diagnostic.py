@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Re-evaluate the two predeclared cluster-2 finalists with adaptive repair.
 
 This is a training-only structural diagnostic.  It reuses the exact dated

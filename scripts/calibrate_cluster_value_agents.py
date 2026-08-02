@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Calibrate a compact fragmented-LOB model with a block-coordinate protocol.
 
 This is the behavioural-calibration counterpart to the direct ITCH extractor.

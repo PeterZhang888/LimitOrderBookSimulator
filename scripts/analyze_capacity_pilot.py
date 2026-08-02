@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Classify candidate global capacities from paired pilot paths."""
 
 from __future__ import annotations

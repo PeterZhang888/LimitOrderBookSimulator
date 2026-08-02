@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Combine independently scheduled Seagull jobs into thesis-ready CSV tables."""
 
 from __future__ import annotations

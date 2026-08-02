@@ -1,4 +1,3 @@
-// Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 #include "calibration/CalibrationParameters.hpp"
 #include "common/RunConfig.hpp"
 #include "mpi/MpiCompat.hpp"

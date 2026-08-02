@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 set -euo pipefail
 
 project_root="$(cd "$(dirname "$0")/.." && pwd)"

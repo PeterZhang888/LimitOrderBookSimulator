@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Create thesis-ready tables from chronological weighted-moment validation."""
 
 from __future__ import annotations

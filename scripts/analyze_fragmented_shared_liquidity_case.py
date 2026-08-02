@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Analyse paired global-capacity, uncoupled, and shared-MM-off stress paths.
 
 Continuous non-target depth and spread are the primary endpoints.  The main

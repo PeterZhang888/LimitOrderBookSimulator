@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Regression test for safe assembly of bounded ITCH extraction batches."""
 
 from __future__ import annotations

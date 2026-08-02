@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Write a deterministic SHA-256 manifest for a source-only release tree."""
 
 from __future__ import annotations

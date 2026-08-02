@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Select an auditable real-instrument universe from NASDAQ ITCH 5.0 startup data.
 
 The selector intentionally reads only the startup directory/trading-state

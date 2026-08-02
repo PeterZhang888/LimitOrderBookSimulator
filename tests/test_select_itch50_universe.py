@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Deterministic unit test for startup-only ITCH universe selection."""
 
 from __future__ import annotations

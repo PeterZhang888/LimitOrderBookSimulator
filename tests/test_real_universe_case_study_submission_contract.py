@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Regression guards for safety-critical case-study submission contracts."""
 
 from __future__ import annotations

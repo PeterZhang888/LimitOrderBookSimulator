@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Validate a selected coupled configuration against exact MPI rank counts."""
 
 from __future__ import annotations

@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 # Audit the conventional four-candidate grid written by the launch helper.
 
 set -Eeuo pipefail

@@ -1,4 +1,3 @@
-// Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 #include "mpi/MpiTransport.hpp"
 
 #include "mpi/MpiCompat.hpp"

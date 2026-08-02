@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Re-hash and structurally verify an applied queue-reactive data bundle.
 
 This is the cluster-side, fail-closed counterpart to the augmentation

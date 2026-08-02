@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Measure causal liquidity propagation in paired control/shock state traces."""
 
 from __future__ import annotations

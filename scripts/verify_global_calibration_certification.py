@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Independently certify one complete V18 calibration output.
 
 This program is deliberately a *read-only* verifier.  It does not infer

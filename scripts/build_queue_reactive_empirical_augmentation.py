@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Re-extract queue-reactive sufficient statistics from fixed raw ITCH files.
 
 The legacy compact empirical bundle predates the queue-reactive model.  This

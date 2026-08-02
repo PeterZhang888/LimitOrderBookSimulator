@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 # Final Seagull launcher for the validated 1,480-book queue-reactive case.
 #
 # Submit from the project directory after creating ./slurm:

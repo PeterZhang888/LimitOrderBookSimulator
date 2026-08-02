@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Regression tests for persistent failure diagnostics and R9 packaging."""
 
 from __future__ import annotations

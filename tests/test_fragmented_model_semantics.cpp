@@ -1,4 +1,3 @@
-// Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 #include "simulation/AssetMomentAccumulator.hpp"
 #include "simulation/DeterministicFundamentalProcess.hpp"
 #include "simulation/FragmentedQuotePlacement.hpp"

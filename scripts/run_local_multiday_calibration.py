@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Pool extracted ITCH days, cluster the common universe, fit, and validate.
 
 The raw archives are not read here.  This workstation stage consumes only the

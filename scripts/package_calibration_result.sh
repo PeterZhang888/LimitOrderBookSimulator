@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 # Package one completed/failed R9 calibration result inside a Slurm allocation.
 
 set -Eeuo pipefail

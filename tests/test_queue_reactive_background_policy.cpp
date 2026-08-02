@@ -1,4 +1,3 @@
-// Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 #include "exchange/BackgroundHawkesAgent.hpp"
 #include "simulation/MultiAssetConfiguration.hpp"
 #include "simulation/QueueReactiveBackgroundPolicy.hpp"

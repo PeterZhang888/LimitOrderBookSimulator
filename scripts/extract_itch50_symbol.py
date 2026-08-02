@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Stream one NASDAQ ITCH 5.0 symbol into simulator calibration inputs.
 
 The ITCH file is a sequence of two-byte big-endian message lengths followed by

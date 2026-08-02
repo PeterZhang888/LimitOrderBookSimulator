@@ -1,4 +1,3 @@
-// Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 #include "mpi/EventDrivenExchangeLoop.hpp"
 
 #include "common/PerformanceMetrics.hpp"

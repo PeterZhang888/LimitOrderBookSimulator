@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 set -euo pipefail
 
 if [[ $# -lt 1 || $# -gt 2 ]]; then

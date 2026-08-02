@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Rebase a hash-bound held-out target config onto its cluster data root."""
 
 from __future__ import annotations

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Describe full-session liquidity effects across the ten frozen clusters.
 
 The primary financial endpoint remains the 30-minute market-wide time series

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Run the fixed five-session training and 2020 held-out workflow locally.
 
 The program waits for exact-size public archives in ``--download-dir``, builds

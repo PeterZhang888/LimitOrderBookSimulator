@@ -8,14 +8,10 @@ debugging, testing, documentation and analysis. This disclosure should be kept
 when the repository is made public and should be reconciled with the
 university's academic-integrity and generative-AI policies.
 
-Source headers use the following wording:
-
-> Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
-
-For Python and shell programs the interpreter shebang must be line 1, so the
-notice is line 2. In C++, Objective-C++ and CMake files it is line 1. Data formats
-such as CSV and JSON do not permit comments reliably; their provenance is
-recorded in manifests and documentation instead.
+Authorship and tool assistance are disclosed once at repository level rather
+than repeated in generic per-file headers. A source-level attribution notice is
+reserved for a file that incorporates or adapts externally authored code; such
+a notice must identify the source and licence accurately.
 
 ## External-code audit
 
@@ -59,7 +55,7 @@ The GitHub collection was assembled from the complete R33 source tree and the
 five scientifically material files exported with successful R36 job 45498. The
 R36 source archive has SHA-256
 `8355e6a788a9f0feeae14cdd2b31358eee7210c7100acb7be378f781d62682d9`.
-Before attribution comments were added, the exact R36 file digests were:
+The five scientifically material files retain these exact R36 file digests:
 
 | Path | SHA-256 |
 |---|---|
@@ -69,15 +65,14 @@ Before attribution comments were added, the exact R36 file digests were:
 | `scripts/analyze_cluster_liquidity_heterogeneity.py` | `29b6b536f99b7d0ac1e14192303c1879b75dd7a37a90ca1cb112ed80422bdbd5` |
 | `submit_queue_reactive_case_study.sh` | `8d25c6b82e55c2fbaaa5cce5a9f156c0947589ca2212e573f20e6df72829217e` |
 
-The newly generated `SOURCE_MANIFEST.sha256` binds the GitHub-ready tree after
-documentation and attribution comments were added.
+The generated `SOURCE_MANIFEST.sha256` binds the GitHub-ready source tree and
+its documentation.
 
 The R33 copy of `submit_real_universe_case_study.sh` was itself a truncated
 terminal/text export. The complete 4,228-line historical launcher was recovered
 from `v19_complete_evidence_cal45321_pack45334.tar.gz`; its pristine SHA-256 was
-`31bbf78ff396a67b5714ea611cbc272bf79600fd72e669ca2f16ae9024244439`
-before the project-attribution comment was added. This launcher is retained for
-workflow history. The successful final campaign used
+`31bbf78ff396a67b5714ea611cbc272bf79600fd72e669ca2f16ae9024244439`.
+This launcher is retained for workflow history. The successful final campaign used
 `submit_queue_reactive_case_study.sh`.
 
 ## Known source-export gap

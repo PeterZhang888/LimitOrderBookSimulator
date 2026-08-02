@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 # Resume the expensive matrix only from the grid auditor's passed candidate.
 
 set -Eeuo pipefail

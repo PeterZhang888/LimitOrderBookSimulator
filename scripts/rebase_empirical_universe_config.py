@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Create a verified, location-independent copy of an empirical config CSV."""
 
 from __future__ import annotations

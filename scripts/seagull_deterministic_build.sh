@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 # Shared, source-only build contract for the certified Seagull workflow.
 #
 # Calibration and the final case study intentionally build in separate,

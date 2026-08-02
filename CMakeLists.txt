@@ -1,4 +1,3 @@
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 cmake_minimum_required(VERSION 3.20)
 project(thesis_dis_smc_abc LANGUAGES CXX)
 

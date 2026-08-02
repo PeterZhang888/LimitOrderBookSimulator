@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Derive Hawkes immigration rates from an ITCH extraction manifest.
 
 The extractor reports the observed regular-session rate of each simulator event

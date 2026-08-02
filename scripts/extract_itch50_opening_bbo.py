@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Extract one preconfigured BBO/depth snapshot for several ITCH symbols."""
 
 from __future__ import annotations

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Queue-reactive training artifacts for the streaming ITCH extractor."""
 
 from __future__ import annotations

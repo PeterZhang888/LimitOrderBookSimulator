@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Contract tests for the final queue-reactive case-study handoff."""
 
 from __future__ import annotations

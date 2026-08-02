@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Project code developed for Peter Zhang's thesis with OpenAI assistance; see PROVENANCE.md.
 """Build an auditable, real-symbol multi-asset configuration from ITCH outputs.
 
 The program deliberately does *not* manufacture a second venue or replicate a
