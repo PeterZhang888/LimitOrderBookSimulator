@@ -1,0 +1,595 @@
+{
+  "schema_version": 1,
+  "stage1": {
+    "seeds": [1729],
+    "fixed_local_candidate_id": "local_reference",
+    "survivor_count": 1,
+    "local_mm_candidates": [
+      {
+        "id": "local_off",
+        "enabled": false,
+        "interval_ms": 1000,
+        "quantity_multiplier": 1.0,
+        "improvement_probability": 0.25
+      },
+      {
+        "id": "local_reference",
+        "enabled": true,
+        "interval_ms": 1000,
+        "quantity_multiplier": 1.0,
+        "improvement_probability": 0.25
+      },
+      {
+        "id": "local_fast",
+        "enabled": true,
+        "interval_ms": 500,
+        "quantity_multiplier": 1.0,
+        "improvement_probability": 0.25
+      },
+      {
+        "id": "local_slow",
+        "enabled": true,
+        "interval_ms": 2000,
+        "quantity_multiplier": 1.0,
+        "improvement_probability": 0.25
+      },
+      {
+        "id": "local_slow_spread_eta040_cap055",
+        "enabled": true,
+        "interval_ms": 2000,
+        "quantity_multiplier": 1.0,
+        "improvement_probability": 0.25,
+        "spread_elasticity": 0.4,
+        "max_improvement_probability": 0.55,
+        "must_promote_after_short_screen": true
+      },
+      {
+        "id": "local_slow_spread_eta05_cap075",
+        "enabled": true,
+        "interval_ms": 2000,
+        "quantity_multiplier": 1.0,
+        "improvement_probability": 0.25,
+        "spread_elasticity": 0.5,
+        "max_improvement_probability": 0.75
+      },
+      {
+        "id": "local_slow_spread_eta05_cap100",
+        "enabled": true,
+        "interval_ms": 2000,
+        "quantity_multiplier": 1.0,
+        "improvement_probability": 0.25,
+        "spread_elasticity": 0.5,
+        "max_improvement_probability": 1.0
+      },
+      {
+        "id": "local_slow_spread_eta10_cap075",
+        "enabled": true,
+        "interval_ms": 2000,
+        "quantity_multiplier": 1.0,
+        "improvement_probability": 0.25,
+        "spread_elasticity": 1.0,
+        "max_improvement_probability": 0.75
+      },
+      {
+        "id": "local_slow_spread_eta10_cap100",
+        "enabled": true,
+        "interval_ms": 2000,
+        "quantity_multiplier": 1.0,
+        "improvement_probability": 0.25,
+        "spread_elasticity": 1.0,
+        "max_improvement_probability": 1.0
+      },
+      {
+        "id": "local_thin",
+        "enabled": true,
+        "interval_ms": 1000,
+        "quantity_multiplier": 0.5,
+        "improvement_probability": 0.25
+      },
+      {
+        "id": "local_deep",
+        "enabled": true,
+        "interval_ms": 1000,
+        "quantity_multiplier": 2.0,
+        "improvement_probability": 0.25
+      },
+      {
+        "id": "local_no_improvement",
+        "enabled": true,
+        "interval_ms": 1000,
+        "quantity_multiplier": 1.0,
+        "improvement_probability": 0.0
+      },
+      {
+        "id": "local_frequent_improvement",
+        "enabled": true,
+        "interval_ms": 1000,
+        "quantity_multiplier": 1.0,
+        "improvement_probability": 0.5
+      }
+    ]
+  },
+  "stage2": {
+    "seeds": [1729, 7919],
+    "mandatory_full_day_joint_candidates": [
+      {
+        "value_candidate_id": "value_20bps_20pct",
+        "volatility_candidate_id": "latent_scale_400_tail025"
+      },
+      {
+        "value_candidate_id": "value_5bps_20pct_eta100_cap075",
+        "volatility_candidate_id": "latent_scale_200_phi080_tail100_x400"
+      },
+      {
+        "value_candidate_id": "value_5bps_20pct_eta100_cap075",
+        "volatility_candidate_id": "latent_scale_200_phi080_tail100_x300"
+      },
+      {
+        "value_candidate_id": "value_20bps_20pct",
+        "volatility_candidate_id": "latent_scale_050_phi080_tail100"
+      }
+    ],
+    "value_policy_candidates": [
+      {
+        "id": "value_off",
+        "enabled": false,
+        "threshold_bps": 0.0,
+        "depth_participation": 0.02,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_5bps_2pct",
+        "enabled": true,
+        "threshold_bps": 5.0,
+        "depth_participation": 0.02,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_10bps_2pct",
+        "enabled": true,
+        "threshold_bps": 10.0,
+        "depth_participation": 0.02,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_20bps_2pct",
+        "enabled": true,
+        "threshold_bps": 20.0,
+        "depth_participation": 0.02,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_5bps_5pct",
+        "enabled": true,
+        "threshold_bps": 5.0,
+        "depth_participation": 0.05,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_10bps_5pct",
+        "enabled": true,
+        "threshold_bps": 10.0,
+        "depth_participation": 0.05,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_20bps_5pct",
+        "enabled": true,
+        "threshold_bps": 20.0,
+        "depth_participation": 0.05,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_5bps_10pct",
+        "enabled": true,
+        "threshold_bps": 5.0,
+        "depth_participation": 0.10,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_10bps_10pct",
+        "enabled": true,
+        "threshold_bps": 10.0,
+        "depth_participation": 0.10,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_20bps_10pct",
+        "enabled": true,
+        "threshold_bps": 20.0,
+        "depth_participation": 0.10,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_5bps_20pct",
+        "enabled": true,
+        "threshold_bps": 5.0,
+        "depth_participation": 0.20,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_10bps_20pct",
+        "enabled": true,
+        "threshold_bps": 10.0,
+        "depth_participation": 0.20,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_20bps_20pct",
+        "enabled": true,
+        "threshold_bps": 20.0,
+        "depth_participation": 0.20,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_20bps_2pct_eta050_cap010",
+        "enabled": true,
+        "threshold_bps": 20.0,
+        "depth_participation": 0.02,
+        "gap_elasticity": 0.50,
+        "max_depth_participation": 0.10,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_20bps_2pct_eta100_cap020",
+        "enabled": true,
+        "threshold_bps": 20.0,
+        "depth_participation": 0.02,
+        "gap_elasticity": 1.00,
+        "max_depth_participation": 0.20,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_10bps_5pct_eta050_cap010",
+        "enabled": true,
+        "threshold_bps": 10.0,
+        "depth_participation": 0.05,
+        "gap_elasticity": 0.50,
+        "max_depth_participation": 0.10,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_10bps_5pct_eta100_cap020",
+        "enabled": true,
+        "threshold_bps": 10.0,
+        "depth_participation": 0.05,
+        "gap_elasticity": 1.00,
+        "max_depth_participation": 0.20,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_5bps_5pct_eta050_cap010",
+        "enabled": true,
+        "threshold_bps": 5.0,
+        "depth_participation": 0.05,
+        "gap_elasticity": 0.50,
+        "max_depth_participation": 0.10,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_5bps_5pct_eta100_cap020",
+        "enabled": true,
+        "threshold_bps": 5.0,
+        "depth_participation": 0.05,
+        "gap_elasticity": 1.00,
+        "max_depth_participation": 0.20,
+        "trigger_mode": "news_impulse"
+      },
+      {
+        "id": "value_5bps_20pct_eta100_cap075",
+        "enabled": true,
+        "threshold_bps": 5.0,
+        "depth_participation": 0.20,
+        "gap_elasticity": 1.00,
+        "max_depth_participation": 0.75,
+        "trigger_mode": "news_impulse"
+      }
+    ],
+    "volatility_candidates": [
+      {
+        "id": "latent_scale_0_iid",
+        "fundamental_variance_scale": 0.0,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 0.0
+      },
+      {
+        "id": "latent_scale_010_iid",
+        "fundamental_variance_scale": 0.10,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 1.0
+      },
+      {
+        "id": "latent_scale_025_iid",
+        "fundamental_variance_scale": 0.25,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 1.0
+      },
+      {
+        "id": "latent_scale_050_iid",
+        "fundamental_variance_scale": 0.50,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 1.0
+      },
+      {
+        "id": "latent_scale_075_iid",
+        "fundamental_variance_scale": 0.75,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 1.0
+      },
+      {
+        "id": "latent_scale_100_iid",
+        "fundamental_variance_scale": 1.0,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 1.0
+      },
+      {
+        "id": "latent_scale_050_mild",
+        "fundamental_variance_scale": 0.50,
+        "fundamental_log_variance_persistence": 0.8,
+        "fundamental_log_variance_std": 0.2,
+        "fundamental_excess_kurtosis_share": 0.5
+      },
+      {
+        "id": "latent_scale_075_mild",
+        "fundamental_variance_scale": 0.75,
+        "fundamental_log_variance_persistence": 0.8,
+        "fundamental_log_variance_std": 0.2,
+        "fundamental_excess_kurtosis_share": 0.5
+      },
+      {
+        "id": "latent_scale_150_iid",
+        "fundamental_variance_scale": 1.50,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 1.0
+      },
+      {
+        "id": "latent_scale_200_iid",
+        "fundamental_variance_scale": 2.0,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 1.0
+      },
+      {
+        "id": "latent_scale_400_iid",
+        "fundamental_variance_scale": 4.0,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 1.0
+      },
+      {
+        "id": "latent_scale_025_tail025",
+        "fundamental_variance_scale": 0.25,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 0.25
+      },
+      {
+        "id": "latent_scale_050_tail025",
+        "fundamental_variance_scale": 0.50,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 0.25
+      },
+      {
+        "id": "latent_scale_075_tail025",
+        "fundamental_variance_scale": 0.75,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 0.25
+      },
+      {
+        "id": "latent_scale_100_tail025",
+        "fundamental_variance_scale": 1.0,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 0.25
+      },
+      {
+        "id": "latent_scale_150_tail025",
+        "fundamental_variance_scale": 1.50,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 0.25
+      },
+      {
+        "id": "latent_scale_200_tail025",
+        "fundamental_variance_scale": 2.0,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 0.25
+      },
+      {
+        "id": "latent_scale_400_tail025",
+        "fundamental_variance_scale": 4.0,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 0.25
+      },
+      {
+        "id": "latent_scale_050_tail050",
+        "fundamental_variance_scale": 0.50,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 0.50
+      },
+      {
+        "id": "latent_scale_075_tail050",
+        "fundamental_variance_scale": 0.75,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 0.50
+      },
+      {
+        "id": "latent_scale_100_tail050",
+        "fundamental_variance_scale": 1.0,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 0.50
+      },
+      {
+        "id": "latent_scale_150_tail050",
+        "fundamental_variance_scale": 1.50,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 0.50
+      },
+      {
+        "id": "latent_scale_200_tail050",
+        "fundamental_variance_scale": 2.0,
+        "fundamental_log_variance_persistence": 0.0,
+        "fundamental_log_variance_std": 0.0,
+        "fundamental_excess_kurtosis_share": 0.50
+      },
+      {
+        "id": "latent_scale_050_phi050",
+        "fundamental_variance_scale": 0.50,
+        "fundamental_log_variance_persistence": 0.50,
+        "fundamental_log_variance_std": 0.10,
+        "fundamental_excess_kurtosis_share": 0.25
+      },
+      {
+        "id": "latent_scale_100_phi050",
+        "fundamental_variance_scale": 1.0,
+        "fundamental_log_variance_persistence": 0.50,
+        "fundamental_log_variance_std": 0.10,
+        "fundamental_excess_kurtosis_share": 0.25
+      },
+      {
+        "id": "latent_scale_150_phi050",
+        "fundamental_variance_scale": 1.50,
+        "fundamental_log_variance_persistence": 0.50,
+        "fundamental_log_variance_std": 0.10,
+        "fundamental_excess_kurtosis_share": 0.25
+      },
+      {
+        "id": "latent_scale_200_phi050",
+        "fundamental_variance_scale": 2.0,
+        "fundamental_log_variance_persistence": 0.50,
+        "fundamental_log_variance_std": 0.10,
+        "fundamental_excess_kurtosis_share": 0.25
+      },
+      {
+        "id": "latent_scale_100_phi080",
+        "fundamental_variance_scale": 1.0,
+        "fundamental_log_variance_persistence": 0.80,
+        "fundamental_log_variance_std": 0.15,
+        "fundamental_excess_kurtosis_share": 0.25
+      },
+      {
+        "id": "latent_scale_150_phi080",
+        "fundamental_variance_scale": 1.50,
+        "fundamental_log_variance_persistence": 0.80,
+        "fundamental_log_variance_std": 0.15,
+        "fundamental_excess_kurtosis_share": 0.25
+      },
+      {
+        "id": "latent_scale_050_phi080_tail100",
+        "fundamental_variance_scale": 0.50,
+        "fundamental_log_variance_persistence": 0.80,
+        "fundamental_log_variance_std": 0.15,
+        "fundamental_excess_kurtosis_share": 1.0
+      },
+      {
+        "id": "latent_scale_100_phi080_tail100",
+        "fundamental_variance_scale": 1.0,
+        "fundamental_log_variance_persistence": 0.80,
+        "fundamental_log_variance_std": 0.15,
+        "fundamental_excess_kurtosis_share": 1.0
+      },
+      {
+        "id": "latent_scale_200_phi080_tail100",
+        "fundamental_variance_scale": 2.0,
+        "fundamental_log_variance_persistence": 0.80,
+        "fundamental_log_variance_std": 0.15,
+        "fundamental_excess_kurtosis_share": 1.0
+      },
+      {
+        "id": "latent_scale_100_phi080_tail100_x200",
+        "fundamental_variance_scale": 1.0,
+        "fundamental_log_variance_persistence": 0.80,
+        "fundamental_log_variance_std": 0.15,
+        "fundamental_excess_kurtosis_share": 1.0,
+        "fundamental_tail_transmission_multiplier": 2.0
+      },
+      {
+        "id": "latent_scale_100_phi080_tail100_x400",
+        "fundamental_variance_scale": 1.0,
+        "fundamental_log_variance_persistence": 0.80,
+        "fundamental_log_variance_std": 0.15,
+        "fundamental_excess_kurtosis_share": 1.0,
+        "fundamental_tail_transmission_multiplier": 4.0
+      },
+      {
+        "id": "latent_scale_100_phi080_tail100_x300",
+        "fundamental_variance_scale": 1.0,
+        "fundamental_log_variance_persistence": 0.80,
+        "fundamental_log_variance_std": 0.15,
+        "fundamental_excess_kurtosis_share": 1.0,
+        "fundamental_tail_transmission_multiplier": 3.0
+      },
+      {
+        "id": "latent_scale_100_phi080_tail100_x800",
+        "fundamental_variance_scale": 1.0,
+        "fundamental_log_variance_persistence": 0.80,
+        "fundamental_log_variance_std": 0.15,
+        "fundamental_excess_kurtosis_share": 1.0,
+        "fundamental_tail_transmission_multiplier": 8.0
+      },
+      {
+        "id": "latent_scale_200_phi080_tail100_x200",
+        "fundamental_variance_scale": 2.0,
+        "fundamental_log_variance_persistence": 0.80,
+        "fundamental_log_variance_std": 0.15,
+        "fundamental_excess_kurtosis_share": 1.0,
+        "fundamental_tail_transmission_multiplier": 2.0
+      },
+      {
+        "id": "latent_scale_200_phi080_tail100_x400",
+        "fundamental_variance_scale": 2.0,
+        "fundamental_log_variance_persistence": 0.80,
+        "fundamental_log_variance_std": 0.15,
+        "fundamental_excess_kurtosis_share": 1.0,
+        "fundamental_tail_transmission_multiplier": 4.0
+      },
+      {
+        "id": "latent_scale_200_phi080_tail100_x300",
+        "fundamental_variance_scale": 2.0,
+        "fundamental_log_variance_persistence": 0.80,
+        "fundamental_log_variance_std": 0.15,
+        "fundamental_excess_kurtosis_share": 1.0,
+        "fundamental_tail_transmission_multiplier": 3.0
+      },
+      {
+        "id": "latent_scale_200_phi080_tail100_x800",
+        "fundamental_variance_scale": 2.0,
+        "fundamental_log_variance_persistence": 0.80,
+        "fundamental_log_variance_std": 0.15,
+        "fundamental_excess_kurtosis_share": 1.0,
+        "fundamental_tail_transmission_multiplier": 8.0
+      }
+    ],
+    "full_day_confirmation_count": 4,
+    "full_day_confirmation_candidate_cap": 45,
+    "full_day_confirmation_seeds": [1729, 7919, 1103],
+    "full_day_recheck_counts": [0, 2, 4, 8, 16],
+    "global_refinement_alternatives_per_cluster": 4,
+    "global_refinement_beam_width": 3
+  },
+  "stage3": {
+    "seeds": [6599, 2027, 31337, 4242, 9001],
+    "global_refinement_finalist_count": 3
+  },
+  "timeout_seconds": {
+    "stage1": 3600,
+    "stage2": 7200,
+    "stage3": 43200,
+    "heldout": 43200
+  }
+}

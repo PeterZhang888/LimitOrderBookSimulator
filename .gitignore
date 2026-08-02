@@ -1,0 +1,41 @@
+# Build products
+build/
+build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+compile_commands.json
+
+# Runtime outputs
+results/*
+!results/r36-summary/
+!results/r36-summary/**
+slurm/
+*.out
+*.err
+core
+core.*
+
+# Python and editor state
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+._*
+.idea/
+.vscode/
+
+# Raw and expanded empirical data
+*.NASDAQ_ITCH50
+*.NASDAQ_ITCH50.gz
+*.NASDAQ_ITCH50.gz.parts/
+data/itch_*/
+empirical_data/
+pooled_data/
+
+# Local environments
+.venv/
+venv/
+env/
