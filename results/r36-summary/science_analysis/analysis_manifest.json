@@ -1,0 +1,68 @@
+{
+  "analysis": "paired_post_shock_difference_in_differences",
+  "formula": "(global_shock - global_control) - (uncoupled_shock - uncoupled_control)",
+  "global_raw": {
+    "path": "/home/users/mschpc/2025/czhang4/coupled_lob_r36_case_integrated_20260802/results/seagull/queue_case_45498/science_global_raw.csv",
+    "sha256": "45e105a9fbb4c38c25024c37149bfb74b4ff58a2ef5efb0072b2c3cfc253f49f"
+  },
+  "outputs": {
+    "seed_effects": "paired_liquidity_effects_by_seed.csv",
+    "summary": "paired_liquidity_effect_summary.csv",
+    "time_series": "paired_liquidity_effects_by_time.csv"
+  },
+  "post_shock_horizon_seconds": 1800.0,
+  "primary_outcomes": [
+    "unshocked_mean_top_depth",
+    "unshocked_mean_spread_bps"
+  ],
+  "rank_filter": 32,
+  "risk_limits": [
+    "25",
+    "100"
+  ],
+  "scenario_metadata": {
+    "campaign_manifest": "/home/users/mschpc/2025/czhang4/coupled_lob_r36_case_integrated_20260802/results/seagull/queue_case_45498/portable_case/portable_queue_reactive_case.json",
+    "campaign_manifest_sha256": "f982c749f8abc71f9996a7ffdc035f8ce044c6f5b66fde970070c5bd06773e17",
+    "executable_sha256": "54ffc0b8c3852b6d1494a0a11dc03f08ad7b8202c96b3a05effcd1fc5a0482bf",
+    "hawkes_activity_scale": "0.3",
+    "input_config_sha256": "47e57b857bcc00a8bb7b0cea142e6712b20c300ed567d6afedb582228a5c4962",
+    "local_mm_improvement_probability": "0.25",
+    "local_mm_interval_ms": "1000.0",
+    "local_mm_max_improvement_probability": "1.0",
+    "local_mm_quantity_multiplier": "1.0",
+    "local_mm_spread_elasticity": "0.0",
+    "requested_capacity_threshold": "0.5",
+    "requested_local_inventory_limit": "100.0",
+    "requested_local_mm_enabled": "1",
+    "requested_shared_quote_levels": "1",
+    "requested_shared_quote_multiplier": "1.0",
+    "requested_shared_quote_relative": "1",
+    "requested_shock_fraction": "0.01",
+    "requested_shock_target_count": "0",
+    "requested_shock_target_seed": "314159",
+    "requested_shock_time_seconds": "11700.0",
+    "requested_shock_top_depth_multiple": "1.0",
+    "requested_value_agent_enabled": "1",
+    "requested_window_ms": "1000.0",
+    "shared_quote_quantity": "200",
+    "shock_cluster_sha256": "6b2387803e6a5d1449b70304bd2ebfa942b397a593d27c4d279a2ae8cb0b52f7",
+    "value_agent_policy_sha256": "491e6d924adba4aed7fbbe7941300b28f3009aeef64a1ff8a416f85cba3f51b2"
+  },
+  "schema_version": 3,
+  "seed_count": 5,
+  "shared_off_raw": {
+    "path": "/home/users/mschpc/2025/czhang4/coupled_lob_r36_case_integrated_20260802/results/seagull/queue_case_45498/science_shared_off_raw.csv",
+    "sha256": "a70407e94dc958cb28890fe1c2da12c576642491a304d4bc617f605e80d87592"
+  },
+  "shock_time_seconds": 11700.0,
+  "uncoupled_raw": {
+    "path": "/home/users/mschpc/2025/czhang4/coupled_lob_r36_case_integrated_20260802/results/seagull/queue_case_45498/science_uncoupled_raw.csv",
+    "sha256": "8634ccf5d8c4bff6dd97df9b89ac5b21856906c83791bfc14dfeca678fbe01af"
+  },
+  "universe_input": {
+    "case_executable_sha256": "54ffc0b8c3852b6d1494a0a11dc03f08ad7b8202c96b3a05effcd1fc5a0482bf",
+    "case_study_protocol_sha256": "bfdb34dff1d20b8d1346efc7513e86492011a044b7433472e8faf7276c3b6708",
+    "path": "/home/users/mschpc/2025/czhang4/coupled_lob_r36_case_integrated_20260802/results/seagull/queue_case_45498/portable_case/portable_queue_reactive_case.json",
+    "sha256": "f982c749f8abc71f9996a7ffdc035f8ce044c6f5b66fde970070c5bd06773e17"
+  }
+}

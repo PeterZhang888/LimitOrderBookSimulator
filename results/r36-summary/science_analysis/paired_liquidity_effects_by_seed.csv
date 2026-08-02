@@ -1,0 +1,11 @@
+risk_limit_per_asset,seed,post_shock_horizon_seconds,post_shock_observations,mean_depth_difference_in_differences,peak_depth_difference_in_differences,integrated_depth_difference_in_differences,mean_spread_difference_in_differences_bps,peak_spread_difference_in_differences_bps,integrated_spread_difference_in_differences_bps_seconds,mean_affected_fraction_difference_in_differences,mean_global_depth_deterioration,mean_global_spread_deterioration_bps,mean_shared_mm_off_shock_minus_control,minimum_two_sided_book_fraction_on_shock,minimum_shared_quote_scale_on_shock,shock_requested_quantity,shock_executed_quantity,shock_shared_mm_quantity,shock_execution_fraction,shared_mm_absorption_fraction
+25,20200130,1800.0,1800,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,11325.0,11325.0,0.0,1.0,0.0
+25,20200131,1800.0,1800,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,18943.0,18943.0,0.0,1.0,0.0
+25,20200132,1800.0,1800,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.999324324,0.0,6906.0,6906.0,0.0,1.0,0.0
+25,20200133,1800.0,1800,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,2618.0,2618.0,0.0,1.0,0.0
+25,20200134,1800.0,1800,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.999324324,0.0,14962.0,14962.0,0.0,1.0,0.0
+100,20200130,1800.0,1800,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.999324324,0.0,6670.0,6670.0,0.0,1.0,0.0
+100,20200131,1800.0,1800,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,22500.0,22500.0,0.0,1.0,0.0
+100,20200132,1800.0,1800,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,5315.0,5315.0,0.0,1.0,0.0
+100,20200133,1800.0,1800,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.999324324,0.0,3314.0,3314.0,0.0,1.0,0.0
+100,20200134,1800.0,1800,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,6978.0,6978.0,0.0,1.0,0.0

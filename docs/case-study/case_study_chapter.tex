@@ -1,0 +1,270 @@
+% R36 case-study chapter generated from audited job 45498 evidence.
+% Requires: \usepackage{booktabs,graphicx,float}
+\section{Market-wide liquidity-shock case study}
+\label{sec:liquidity-shock-case}
+
+\subsection{Objective and hypotheses}
+
+The purpose of the case study is to test whether a liquidity shock applied to
+a small set of books affects otherwise unshocked books through a common
+inventory-capacity constraint.  It is distinct from the scaling study.  The
+scaling study asks whether one large coupled market can be executed efficiently;
+the case study asks whether the implemented coupling generates an economically
+interpretable cross-asset response.
+
+Four predeclared hypotheses guide the analysis.  First, aggressive sell orders
+should deteriorate liquidity in the targeted books.  Second, if a globally
+constrained shared market maker is active, non-target books should exhibit a
+larger deterioration than under an uncoupled market maker.  Third, this
+difference should be stronger under the tighter global capacity.  Fourth,
+clusters with wider spreads and lower depth should exhibit a larger response
+than more liquid clusters.  The first hypothesis concerns successful shock
+injection; the remaining hypotheses concern cross-book transmission.
+
+\subsection{Experimental design}
+
+The experiment uses the 30 January 2020 development-validation configuration for the balanced
+panel of 1,480 NASDAQ symbols.  Each symbol is represented by one limit order
+book and retains its symbol-specific background-order-flow inputs.  Behavioural
+policies are frozen at the level of ten liquidity clusters.  The 6.5-hour
+regular session contains 23,400 one-second decision windows.  Fifteen symbols
+are selected with a fixed mask that covers every cluster.  At
+$t^\star=11{,}700$ seconds, an aggressive sell order equal to one contemporaneous
+top-of-book depth is submitted to each selected book.
+
+The treatments are: (i) a globally constrained shared market maker with
+capacity 25 per asset; (ii) the same mechanism with capacity 100; (iii) an
+uncoupled specification that retains the liquidity-supply logic but removes
+the common cross-asset capacity constraint; and (iv) a control without the
+shared market maker.  Every treatment is run with shock on and shock off for
+five entity-keyed seeds.  Shock and control paths use common random numbers,
+giving 40 full-session paths in total.  Each path uses 32 MPI ranks.  The
+target mask is fixed across treatments, but the number of submitted shares is
+state dependent because it is defined as a multiple of contemporaneous depth.
+Consequently, differences in the direct response across treatments are
+descriptive and are not interpreted as responses to an identical share order.
+
+For outcome $Y$, let $Y^1_{mcs}(t)$ and $Y^0_{mcs}(t)$ denote the mean of
+non-target books in mode $m$, cluster $c$ and seed $s$ in shocked and control
+paths.  Spread deterioration is
+\begin{equation}
+  \Delta^S_{mcs}(t)=S^1_{mcs}(t)-S^0_{mcs}(t),
+\end{equation}
+whereas depth deterioration is
+\begin{equation}
+  \Delta^D_{mcs}(t)=D^0_{mcs}(t)-D^1_{mcs}(t).
+\end{equation}
+Positive values therefore indicate worse liquidity.  The cross-asset estimand
+is the paired cross-mode contrast, where $g$ and $u$ denote the global
+and uncoupled modes,
+\begin{equation}
+  \tau^Y_{cs}(t)=\Delta^Y_{g,cs}(t)-\Delta^Y_{u,cs}(t),
+\end{equation}
+summarised over the 1,800 seconds following the shock.  This construction
+removes seed-specific background variation and isolates effects attributable
+to the global coupling.
+
+\subsection{Liquidity-cluster composition}
+
+Table~\ref{tab:r36-cluster-profiles} reports unshocked simulated baselines.
+The cluster numbers are identifiers, not an ordinal liquidity ranking.  The
+descriptive labels use spread and displayed depth only; the clustering itself
+also uses activity, return variance and price information.  Spread is
+reconstructed from the asset summaries as
+$10^6\,\overline{s}_a/p_a$ basis points because one exchange tick corresponds
+to 100 units of the ITCH $10^{-4}$-dollar price grid.  This conversion reconciles
+the asset summaries with the market-wide per-second spread series.
+
+\begin{table}[H]
+\centering
+\caption{Liquidity-cluster profiles and fixed shock targets. Baselines are means of five uncoupled, unshocked paths.}
+\label{tab:r36-cluster-profiles}
+\scriptsize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{rrlrrl}
+\toprule
+Cluster & Books & Descriptive profile & Spread (bps) & Top depth & Target symbols \\
+\midrule
+0 & 146 & widest, shallow & 110.8 & 396 & NBN \\
+1 & 144 & wide, medium depth & 69.5 & 912 & ELOX \\
+2 & 191 & moderate, shallowest & 41.0 & 346 & AVAV, ZBRA \\
+3 & 266 & moderate, shallow & 36.1 & 527 & BWB, LFVN, SPAR \\
+4 & 161 & wide, deep & 73.9 & 2561 & ITI, PXLW \\
+5 & 196 & tight, moderate depth & 22.1 & 616 & PRAA, PRFT \\
+6 & 145 & tight, deep & 21.8 & 1504 & OXLC \\
+7 & 82 & tightest, shallow & 7.1 & 409 & FTNT \\
+8 & 79 & moderate, exceptionally deep & 29.1 & 11574 & RFIL \\
+9 & 70 & tightest, deep & 7.7 & 1987 & FOX \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+The panel is deliberately heterogeneous.  Cluster 0 has the widest spread,
+whereas clusters 7 and 9 have the tightest spreads.  Cluster 8 has an order of
+magnitude more displayed depth than most clusters.  The target design includes
+one to three symbols per cluster, so it provides broad coverage but not enough
+independent target books to estimate a precise cluster-specific direct response.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\textwidth]{cluster_profiles_corrected.pdf}
+\caption{Unshocked cluster profiles. Marker area represents the number of books; labels identify clusters.}
+\label{fig:r36-cluster-profiles}
+\end{figure}
+
+\subsection{Shock execution and direct response}
+
+All requested shock quantities executed in every treatment.  Table
+~\ref{tab:r36-direct-response} reports mean targeted-book spread effects,
+with sample standard deviations across the five seeds in parentheses.  The
+one-second column is the immediate paired response; the 60- and 300-second
+columns are averages over $(0,h]$, not point estimates at the endpoint.
+
+\begin{table}[H]
+\centering
+\caption{Shock execution and paired targeted-book spread response.}
+\label{tab:r36-direct-response}
+\scriptsize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrrrr}
+\toprule
+Mode & Capacity & Mean total requested & Executed (\%) & Shared absorption (\%) & 1 s & First 60 s & First 300 s \\
+\midrule
+Global & 25 & 10951 & 100 & 0.0 & 11.796 (0.541) & 5.770 (1.516) & 2.064 (1.748) \\
+Global & 100 & 8955 & 100 & 0.0 & 12.345 (1.935) & 8.020 (2.091) & 3.413 (0.378) \\
+Absent & 100 & 10459 & 100 & 0.0 & 12.422 (2.635) & 5.492 (1.185) & 2.655 (1.341) \\
+Uncoupled & 100 & 9504 & 100 & 9.7 & 0.062 (0.138) & 0.243 (0.309) & 0.353 (0.792) \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+The shock therefore enters the simulated market.  Under global capacity 25,
+the targeted spread rises by 11.80 basis points after one second and by an
+average of 2.06 basis points over the first five minutes.  The corresponding
+values under global capacity 100 are 12.35 and 3.41 basis points.  Depth effects
+are considerably noisier and sometimes negative because background and local
+liquidity replenishment can add displayed quantity after the aggressive order.
+The uncoupled market maker absorbs 9.69\% of executed shock volume on average;
+the globally constrained maker absorbs none.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.96\textwidth]{paired_shock_response.pdf}
+\caption{Paired shock-minus-control response averaged across five seeds. Non-target effects are exactly zero in every recorded window.}
+\label{fig:r36-paired-response}
+\end{figure}
+
+\subsection{Cluster-level cross-book response}
+
+Table~\ref{tab:r36-cluster-effects} gives the non-target response separately
+for every cluster and both global capacities.  Each value is zero.  This is not
+a rounded result: shock and control observations are bit-for-bit identical for
+all non-target books at every recorded second, seed and treatment.  The same
+zero is obtained for full-session asset summaries and for the 30-minute
+post-shock endpoint.  There is consequently no estimable difference between
+wide-spread, shallow clusters and tight-spread or deep clusters.  Hypothesis 4
+is not supported, but the reason must be established before the zero can be
+given an economic interpretation.
+
+\begin{table}[H]
+\centering
+\caption{Mean paired non-target liquidity deterioration by cluster.}
+\label{tab:r36-cluster-effects}
+\small
+\begin{tabular}{rrrrrr}
+\toprule
+& & \multicolumn{2}{c}{Capacity 25} & \multicolumn{2}{c}{Capacity 100} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}
+Cluster & Non-target books & Spread (bps) & Depth loss & Spread (bps) & Depth loss \\
+\midrule
+0 & 145 & 0.000 & 0.0 & 0.000 & 0.0 \\
+1 & 143 & 0.000 & 0.0 & 0.000 & 0.0 \\
+2 & 189 & 0.000 & 0.0 & 0.000 & 0.0 \\
+3 & 263 & 0.000 & 0.0 & 0.000 & 0.0 \\
+4 & 159 & 0.000 & 0.0 & 0.000 & 0.0 \\
+5 & 194 & 0.000 & 0.0 & 0.000 & 0.0 \\
+6 & 144 & 0.000 & 0.0 & 0.000 & 0.0 \\
+7 & 81 & 0.000 & 0.0 & 0.000 & 0.0 \\
+8 & 78 & 0.000 & 0.0 & 0.000 & 0.0 \\
+9 & 69 & 0.000 & 0.0 & 0.000 & 0.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Mechanism audit}
+
+The state of the shared market maker explains the cluster-level null.  As shown
+in Table~\ref{tab:r36-capacity-audit}, the global quote scale becomes
+permanently zero long before $t^\star$.  At capacity 25 this occurs after 2.41
+minutes on average; at capacity 100 it occurs after 23.62 minutes.  The shock is
+applied after 195 minutes.  The shared maker therefore supplies no liquidity
+and absorbs no shock volume when the intervention occurs.
+
+\begin{table}[H]
+\centering
+\caption{Pre-shock audit of the globally constrained shared market maker.}
+\label{tab:r36-capacity-audit}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{rrrrrr}
+\toprule
+Capacity & First reduction (s) & Permanent zero (min) & Pre-shock zero (\%) & Scale at shock & Absorption (\%) \\
+\midrule
+25 & 8.0 & 2.41 & 98.8 & 0.0 & 0.0 \\
+100 & 51.2 & 23.62 & 87.9 & 0.0 & 0.0 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.80\textwidth]{shared_mm_capacity_shutdown.pdf}
+\caption{Median shared-market-maker quote scale. Both globally constrained treatments enter the zero-quote state well before the shock.}
+\label{fig:r36-capacity-shutdown}
+\end{figure}
+
+The implementation multiplies both risk-increasing and risk-reducing quotes by
+the global scale.  Once that scale reaches zero, the dealer cannot trade to
+reduce inventory; its inventory and utilisation cease to recover, making the
+zero-quote state absorbing.  The primary difference-in-differences estimate is
+therefore non-identifying for shared-liquidity contagion.  It shows that the
+implemented channel was inactive, not that an active common dealer prevented
+or failed to transmit the shock.  Hypotheses 2--4 cannot be evaluated from this
+matrix.
+
+\subsection{Computational evidence}
+
+The rank-equivalence preflight processed 3,100,370
+orders and produced the same state hash on one and 32 ranks.  Runtime fell from
+8.412 to 0.638
+seconds, a speedup of 13.19 and efficiency of
+41.2\%.  This establishes that whole-book
+decomposition changes execution time without changing the simulated state.
+The 40 production paths processed 6,030,761,053
+orders in total.
+
+The science matrix is not used as the principal scaling benchmark.  Fourteen
+paths experienced intermittent communication stalls of 235--471 seconds while
+their compute time remained comparable with other paths.  Treatment wall times
+would therefore confound the financial design with system noise.  Strong- and
+weak-scaling conclusions are taken from the dedicated benchmark campaign,
+whereas this section uses MPI to make the large coupled market practical and
+to preserve causal equivalence across ranks.
+
+\subsection{Limitations and case-study conclusion}
+
+Three limitations determine the interpretation.  First, the 2020 session is a
+development validation date rather than an untouched final holdout.  Second,
+five seeds and one to three targets per cluster are insufficient for a precise
+cluster-specific direct-effect ranking.  Third, the shared dealer is inactive
+at the shock, so the central contagion mechanism is absent.  The cluster audit
+is nevertheless informative: it demonstrates that the null is universal
+across heterogeneous books and identifies the model state responsible for it.
+
+The experiment therefore establishes successful shock injection, deterministic
+MPI equivalence and broad cluster coverage, but it does not establish
+cross-asset liquidity contagion.  A corrected dealer should continue to submit
+risk-reducing inventory-unwind quotes at the global boundary while suppressing
+only risk-increasing quotes.  A new pilot should require a positive quote scale
+immediately before the intervention and positive shared-maker absorption before
+the production matrix is repeated.

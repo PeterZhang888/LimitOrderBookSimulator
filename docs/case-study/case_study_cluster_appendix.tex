@@ -1,0 +1,35 @@
+% Optional descriptive appendix for R36 job 45498.
+\subsection{Descriptive targeted-book effects by cluster}
+\label{app:r36-target-cluster-diagnostics}
+
+Table~\ref{tab:r36-target-cluster-diagnostics} reports full-session
+shock-minus-control spread differences for the targeted books.  These values
+are supplementary diagnostics, not cluster-specific causal estimates.  They
+average the intervention over the complete 23,400-second session, each cluster
+contains only one to three target symbols, and submitted quantities vary with
+contemporaneous depth.  The per-second output aggregates all 15 targets and
+therefore cannot recover cluster-specific response trajectories after the run.
+
+\begin{table}[H]
+\centering
+\caption{Descriptive full-session targeted-book spread effects by cluster. Values are means with sample standard deviations in parentheses.}
+\label{tab:r36-target-cluster-diagnostics}
+\scriptsize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{rlrrrr}
+\toprule
+Cluster & Target symbols & Global 25 & Global 100 & Uncoupled & Absent \\
+\midrule
+0 & NBN & 0.457 (4.842) & -6.011 (10.049) & 0.184 (0.411) & 1.898 (3.026) \\
+1 & ELOX & 2.795 (8.368) & -2.270 (2.683) & 0.342 (2.436) & 3.225 (8.133) \\
+2 & AVAV, ZBRA & -0.325 (0.775) & 0.247 (0.851) & -0.171 (0.312) & -0.460 (0.699) \\
+3 & BWB, LFVN, SPAR & 0.080 (0.933) & -0.098 (0.435) & 0.073 (0.296) & 0.185 (0.780) \\
+4 & ITI, PXLW & -0.174 (0.662) & 0.160 (0.696) & -0.005 (0.037) & -0.272 (0.622) \\
+5 & PRAA, PRFT & 0.108 (0.164) & 0.078 (0.196) & 0.025 (0.200) & 0.010 (0.233) \\
+6 & OXLC & -0.236 (0.642) & -0.237 (0.844) & 0.025 (0.304) & -0.236 (0.642) \\
+7 & FTNT & 0.037 (0.068) & -0.065 (0.072) & 0.017 (0.085) & -0.026 (0.102) \\
+8 & RFIL & 4.564 (8.900) & 0.047 (9.125) & 2.424 (8.176) & 4.564 (8.900) \\
+9 & FOX & -0.031 (0.058) & -0.021 (0.044) & -0.005 (0.018) & -0.010 (0.018) \\
+\bottomrule
+\end{tabular}}
+\end{table}
