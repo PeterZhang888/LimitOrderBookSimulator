@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this software, cite the associated master's thesis."
+title: "Whole-Book MPI Decomposition for Coupled Limit-Order-Book Simulation"
+type: software
+authors:
+  - family-names: Zhang
+    given-names: Peter
+date-released: 2026-08-02
+version: 1.0.0-r36
+
