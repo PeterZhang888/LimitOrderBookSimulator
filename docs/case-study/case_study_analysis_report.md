@@ -1,4 +1,4 @@
-# R36 cluster and case-study audit
+# Cluster and case-study audit
 
 The 40-path matrix and fixed 15-symbol target mask were verified. The target mask covers all ten clusters. The corrected asset-summary spread conversion reconciles to the recorded market-wide series: 45.203195 versus 45.251398 bps in the reference path.
 

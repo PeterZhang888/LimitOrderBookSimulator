@@ -37,8 +37,14 @@ class LiquidityRegimeProtocolTests(unittest.TestCase):
         )
 
     def test_hash_bound_training_seed(self) -> None:
+        evidence_root = ROOT / "calibration_seed_evidence"
+        if not evidence_root.is_dir():
+            self.skipTest(
+                "external calibration-seed evidence is not installed: "
+                f"{evidence_root}"
+            )
         candidates, record = driver.load_training_refinement_seed(
-            ROOT / "config/r30_r28_training_refinement_seed.json",
+            ROOT / "config/training_refinement_seed.json",
             cluster_ids={str(value) for value in range(10)},
         )
         self.assertEqual(len(candidates), 10)

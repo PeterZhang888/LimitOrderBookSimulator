@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
-# R33 continuation: reuse the completed, hash-bound R32 simulation matrix,
-# evaluate its selected iteration under the documented six-component
-# development protocol, freeze that model, and only then run five 2020
-# development-validation seeds. Cached simulations are reused only when
-# their exact command hashes match.
+# Full-universe queue-reactive validation. The workflow evaluates the selected
+# training iteration under the six-component protocol, freezes the model, and
+# only then runs five 2020 development-validation seeds. Cached simulations are
+# reused only when their exact command hashes match.
 #
 # Submit after phase 1 succeeds:
 #   sbatch --export=ALL,SELECTION_ROOT=/abs/queue_selection_JOB,\
 # POOL_ROOT=/abs/pool submit_queue_reactive_full_validation_hpc.sh
-#SBATCH --job-name=lob-r33-cont
+#SBATCH --job-name=lob-model-validate
 #SBATCH --nodes=2
 #SBATCH --ntasks=32
 #SBATCH --ntasks-per-node=16
@@ -92,7 +91,7 @@ fi
 (
     cd "${PROJECT_DIR}"
     sha256sum --quiet -c SOURCE_MANIFEST.sha256
-) || fail "R32 source-manifest verification failed"
+) || fail "source-manifest verification failed"
 
 if ! type module >/dev/null 2>&1 && [[ -r /etc/profile.d/lmod.sh ]]; then
     # shellcheck disable=SC1091
@@ -122,29 +121,23 @@ export LD_LIBRARY_PATH="${MPI_LIB_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 ulimit -s unlimited
 
-# R32 changes the runtime itself, so the old binary hashed by phase-1 is used
-# only as selection provenance. Build and test the new source inside the
-# compute allocation before opening any empirical target.
-# Keep the executable path identical to the selected R32 scale-1.25 campaign.
-# Exact checkpoint resumption hashes the full invocation, including this path.
-# The completed R32 commands used build-seagull-r32-scale_1p25; changing only
-# the directory name makes a scientifically identical command fail closed.
-# R33 changes Python evaluation/continuation code, not the C++ simulator, so
-# rebuilding in this exact directory is both safe and required for verified
-# reuse. Do not launch concurrent validation jobs from the same release.
-BUILD_DIR="${BUILD_DIR:-${PROJECT_DIR}/build-seagull-r32-scale_1p25}"
+# Build and test the current source inside the compute allocation before any
+# empirical target is opened. Checkpoint resumption hashes the full invocation,
+# including the executable path, so a resumed run must reuse the same BUILD_DIR.
+# Do not launch concurrent validation jobs against one result directory.
+BUILD_DIR="${BUILD_DIR:-${PROJECT_DIR}/build-seagull-model-validation}"
 # shellcheck disable=SC1091
 source "${PROJECT_DIR}/scripts/seagull_deterministic_build.sh"
 lob_deterministic_configure_and_build \
     "${PROJECT_DIR}" "${BUILD_DIR}" "${MPI_LIB_DIR}" "${BUILD_JOBS}"
 EXECUTABLE="${BUILD_DIR}/fragmented_mpi_lob"
-[[ -x "${EXECUTABLE}" ]] || fail "R32 executable was not built: ${EXECUTABLE}"
+[[ -x "${EXECUTABLE}" ]] || fail "validation executable was not built: ${EXECUTABLE}"
 ctest --test-dir "${BUILD_DIR}" --output-on-failure \
     -R '^(background_hawkes_stream|fragmented_model_semantics)$'
 python3 -m unittest \
     tests.test_strict_model_validation \
     tests.test_queue_reactive_calibration_driver \
-    tests.test_r30_liquidity_regime_protocol \
+    tests.test_liquidity_regime_protocol \
     tests.test_prepare_heldout_target_config \
     tests.test_resolve_queue_reactive_case_artifact.QueueReactiveCaseArtifactTest
 
@@ -168,7 +161,7 @@ python3 scripts/prepare_heldout_target_config.py \
     --expected-date 2020-01-30 \
     --output "${HELDOUT_TARGET_CONFIG}" \
     >"${HELDOUT_INPUT_DIR}/preparation_stdout.json"
-TRAINING_REFINEMENT_MANIFEST="${PROJECT_DIR}/config/r30_r28_training_refinement_seed.json"
+TRAINING_REFINEMENT_MANIFEST="${PROJECT_DIR}/config/training_refinement_seed.json"
 for path in \
     "${SELECTION_FREEZE}" \
     "${FULL_CONFIG_ROOT}/deployment_config.csv" \
@@ -245,7 +238,7 @@ payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 raise SystemExit(0 if payload.get("status") == "rejected" else 1)
 PY
     then
-        echo "R32 DIRECTIONAL PILOT: REJECTED BY FROZEN TRAINING GATE"
+        echo "DIRECTIONAL PILOT: REJECTED BY FROZEN TRAINING GATE"
         echo "This is a completed scientific candidate, not an infrastructure failure."
         echo "No 25-run matrix or held-out validation was launched."
         echo "activity_scale=${ACTIVITY_SCALE}"
@@ -260,7 +253,7 @@ if [[ "${PILOT_ONLY}" == "on" ]]; then
     PILOT_HANDOFF="${RESULT_DIR}/full_training_adequacy/directional_pilot/directional_pilot_handoff.json"
     [[ -s "${PILOT_HANDOFF}" ]] || fail \
         "directional pilot completed without a passed handoff"
-    echo "R32 DIRECTIONAL PILOT: PASS"
+    echo "DIRECTIONAL PILOT: PASS"
     echo "No 25-run matrix or held-out validation was launched."
     echo "activity_scale=${ACTIVITY_SCALE}"
     echo "result_dir=${RESULT_DIR}"

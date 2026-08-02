@@ -12,10 +12,10 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(ROOT / "scripts"))
 
-import summarize_r32_activity_grid as summary  # noqa: E402
+import summarize_activity_grid as summary  # noqa: E402
 
 
-class R32GridSummaryTests(unittest.TestCase):
+class ActivityGridSummaryTests(unittest.TestCase):
     def make_candidate(
         self, root: pathlib.Path, scale: float, status: str, error: float,
     ) -> pathlib.Path:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit and select a passed R32 directional activity-regime pilot.
+"""Audit and select a passed directional activity-regime pilot.
 
 Only candidates that produced the driver's immutable passed handoff are
 eligible.  Among multiple passed candidates, the script chooses the smallest
@@ -173,5 +173,5 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except (GridAuditError, json.JSONDecodeError, OSError) as error:
-        print(f"R32 pilot-grid audit failed: {error}", file=sys.stderr)
+        print(f"activity-regime pilot-grid audit failed: {error}", file=sys.stderr)
         raise SystemExit(1) from error

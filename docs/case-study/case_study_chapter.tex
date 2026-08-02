@@ -1,4 +1,4 @@
-% R36 case-study chapter generated from audited job 45498 evidence.
+% Case-study chapter generated from audited job 45498 evidence.
 % Requires: \usepackage{booktabs,graphicx,float}
 \section{Market-wide liquidity-shock case study}
 \label{sec:liquidity-shock-case}
@@ -66,7 +66,7 @@ to the global coupling.
 
 \subsection{Liquidity-cluster composition}
 
-Table~\ref{tab:r36-cluster-profiles} reports unshocked simulated baselines.
+Table~\ref{tab:case-cluster-profiles} reports unshocked simulated baselines.
 The cluster numbers are identifiers, not an ordinal liquidity ranking.  The
 descriptive labels use spread and displayed depth only; the clustering itself
 also uses activity, return variance and price information.  Spread is
@@ -78,7 +78,7 @@ the asset summaries with the market-wide per-second spread series.
 \begin{table}[H]
 \centering
 \caption{Liquidity-cluster profiles and fixed shock targets. Baselines are means of five uncoupled, unshocked paths.}
-\label{tab:r36-cluster-profiles}
+\label{tab:case-cluster-profiles}
 \scriptsize
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{rrlrrl}
@@ -109,13 +109,13 @@ independent target books to estimate a precise cluster-specific direct response.
 \centering
 \includegraphics[width=0.78\textwidth]{cluster_profiles_corrected.pdf}
 \caption{Unshocked cluster profiles. Marker area represents the number of books; labels identify clusters.}
-\label{fig:r36-cluster-profiles}
+\label{fig:case-cluster-profiles}
 \end{figure}
 
 \subsection{Shock execution and direct response}
 
 All requested shock quantities executed in every treatment.  Table
-~\ref{tab:r36-direct-response} reports mean targeted-book spread effects,
+~\ref{tab:case-direct-response} reports mean targeted-book spread effects,
 with sample standard deviations across the five seeds in parentheses.  The
 one-second column is the immediate paired response; the 60- and 300-second
 columns are averages over $(0,h]$, not point estimates at the endpoint.
@@ -123,7 +123,7 @@ columns are averages over $(0,h]$, not point estimates at the endpoint.
 \begin{table}[H]
 \centering
 \caption{Shock execution and paired targeted-book spread response.}
-\label{tab:r36-direct-response}
+\label{tab:case-direct-response}
 \scriptsize
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{lrrrrrrr}
@@ -151,12 +151,12 @@ the globally constrained maker absorbs none.
 \centering
 \includegraphics[width=0.96\textwidth]{paired_shock_response.pdf}
 \caption{Paired shock-minus-control response averaged across five seeds. Non-target effects are exactly zero in every recorded window.}
-\label{fig:r36-paired-response}
+\label{fig:case-paired-response}
 \end{figure}
 
 \subsection{Cluster-level cross-book response}
 
-Table~\ref{tab:r36-cluster-effects} gives the non-target response separately
+Table~\ref{tab:case-cluster-effects} gives the non-target response separately
 for every cluster and both global capacities.  Each value is zero.  This is not
 a rounded result: shock and control observations are bit-for-bit identical for
 all non-target books at every recorded second, seed and treatment.  The same
@@ -169,7 +169,7 @@ given an economic interpretation.
 \begin{table}[H]
 \centering
 \caption{Mean paired non-target liquidity deterioration by cluster.}
-\label{tab:r36-cluster-effects}
+\label{tab:case-cluster-effects}
 \small
 \begin{tabular}{rrrrrr}
 \toprule
@@ -194,7 +194,7 @@ Cluster & Non-target books & Spread (bps) & Depth loss & Spread (bps) & Depth lo
 \subsection{Mechanism audit}
 
 The state of the shared market maker explains the cluster-level null.  As shown
-in Table~\ref{tab:r36-capacity-audit}, the global quote scale becomes
+in Table~\ref{tab:case-capacity-audit}, the global quote scale becomes
 permanently zero long before $t^\star$.  At capacity 25 this occurs after 2.41
 minutes on average; at capacity 100 it occurs after 23.62 minutes.  The shock is
 applied after 195 minutes.  The shared maker therefore supplies no liquidity
@@ -203,7 +203,7 @@ and absorbs no shock volume when the intervention occurs.
 \begin{table}[H]
 \centering
 \caption{Pre-shock audit of the globally constrained shared market maker.}
-\label{tab:r36-capacity-audit}
+\label{tab:case-capacity-audit}
 \small
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{rrrrrr}
@@ -220,7 +220,7 @@ Capacity & First reduction (s) & Permanent zero (min) & Pre-shock zero (\%) & Sc
 \centering
 \includegraphics[width=0.80\textwidth]{shared_mm_capacity_shutdown.pdf}
 \caption{Median shared-market-maker quote scale. Both globally constrained treatments enter the zero-quote state well before the shock.}
-\label{fig:r36-capacity-shutdown}
+\label{fig:case-capacity-shutdown}
 \end{figure}
 
 The implementation multiplies both risk-increasing and risk-reducing quotes by

@@ -4221,7 +4221,7 @@ def load_training_refinement_seed(
 ) -> tuple[dict[str, VolatilityCandidate], dict[str, object]]:
     """Load a hash-bound seed derived only from prior training residuals.
 
-    This is a warm start, never a passed fit.  Both referenced R28 evidence
+    This is a warm start, never a passed fit. Both referenced training evidence
     files must be present and hash-identical before any simulator is launched.
     """
     manifest_path = path.expanduser().resolve()
@@ -4299,14 +4299,14 @@ def load_training_refinement_seed(
         if not isinstance(summaries, Mapping) \
                 or set(map(str, summaries)) != expected_summary_dates:
             raise CalibrationDriverError(
-                "structural repair evidence lacks the exact R28 same-seed "
+                "structural repair evidence lacks the exact same-seed "
                 "summary set"
             )
         for day in sorted(expected_summary_dates):
             summary = summaries.get(day)
             if not isinstance(summary, Mapping):
                 raise CalibrationDriverError(
-                    f"R28 same-seed summary is malformed for {day}"
+                    f"same-seed summary is malformed for {day}"
                 )
             raw_path = pathlib.Path(str(summary.get("path", "")))
             summary_path = raw_path if raw_path.is_absolute() \
@@ -4315,7 +4315,7 @@ def load_training_refinement_seed(
             if not summary_path.is_file() or not expected_hash \
                     or sha256_file(summary_path) != expected_hash:
                 raise CalibrationDriverError(
-                    "R28 same-seed evidence is missing or hash-mismatched: "
+                    "same-seed evidence is missing or hash-mismatched: "
                     f"{summary_path}"
                 )
             verified_repair_sources[f"r28_summary_{day}"] = {

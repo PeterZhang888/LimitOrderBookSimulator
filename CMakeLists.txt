@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(thesis_dis_smc_abc LANGUAGES CXX)
+project(whole_book_mpi_lob LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -494,6 +494,27 @@ if(LOB_BUILD_TESTS)
                 --output-dir ${CMAKE_BINARY_DIR}/test_event_driven_smoke_output
         )
 
+        # These tests exercise file-backed empirical configurations.  Keep
+        # them registered for data-complete environments while allowing a
+        # source-only checkout to select the independent unit-test subset.
+        set_tests_properties(
+            sequential_multiasset_determinism
+            exact_mpi_equivalence_local
+            batched_mpi_multi_asset_smoke_local
+            fragmented_mpi_smoke_local
+            fragmented_local_mm_spread_response_local
+            fragmented_mpi_empirical_universe_local
+            fragmented_calibration_output
+            fragmented_value_policy_legacy_local
+            fragmented_value_policy_periodic_local
+            fragmented_value_policy_news_local
+            fragmented_value_policy_recheck_local
+            fragmented_value_policy_gap_local
+            liquidity_shock
+            event_driven_smoke_local
+            PROPERTIES LABELS "empirical"
+        )
+
         if(MPI_CXX_FOUND AND MPIEXEC_EXECUTABLE)
             add_test(
                 NAME shared_market_snapshot_mpi_5
@@ -503,6 +524,7 @@ if(LOB_BUILD_TESTS)
                         ${MPIEXEC_POSTFLAGS}
             )
             set_tests_properties(shared_market_snapshot_mpi_5 PROPERTIES
+                LABELS "mpi"
                 PROCESSORS 5
                 TIMEOUT 120
             )
@@ -523,6 +545,7 @@ if(LOB_BUILD_TESTS)
                         --output-dir ${CMAKE_BINARY_DIR}/test_event_driven_mpi_output
             )
             set_tests_properties(event_driven_smoke_mpi_5 PROPERTIES
+                LABELS "empirical;mpi"
                 PROCESSORS 5
                 TIMEOUT 120
             )
@@ -538,6 +561,7 @@ if(LOB_BUILD_TESTS)
                 )
                 set_tests_properties(
                     exact_mpi_equivalence_mpi_${rank_count} PROPERTIES
+                    LABELS "mpi"
                     PROCESSORS ${rank_count}
                     TIMEOUT 180
                 )

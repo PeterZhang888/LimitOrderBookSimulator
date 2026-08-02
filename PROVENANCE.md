@@ -1,85 +1,47 @@
-# Source provenance
+# Source and data provenance
 
-## Authorship disclosure
+## Source code
 
-The repository is project code developed for Peter Zhang's master's thesis with
-substantial OpenAI ChatGPT/Codex assistance in design, implementation,
-debugging, testing, documentation and analysis. This disclosure should be kept
-when the repository is made public and should be reconciled with the
-university's academic-integrity and generative-AI policies.
+The production implementation is maintained in this repository. An audit of
+the available source tree found no vendored or visibly copied third-party source
+code. Standard-library use, MPI calls, and implementations of published file
+formats or mathematical models do not by themselves constitute copied source.
 
-Authorship and tool assistance are disclosed once at repository level rather
-than repeated in generic per-file headers. A source-level attribution notice is
-reserved for a file that incorporates or adapts externally authored code; such
-a notice must identify the source and licence accurately.
+If externally authored code is incorporated later, the affected file must name
+the original author, source URL, licence and local modifications. The same
+material must be recorded in `THIRD_PARTY_NOTICES.md`.
 
-## External-code audit
+## Specifications and model inputs
 
-The available project trees and the final R36 evidence export were searched for
-copyright notices, licence notices, repository URLs and statements such as
-"copied", "adapted" or "derived". No vendored or visibly copied third-party
-source code was identified. Standard-library imports, MPI calls and an
-implementation of a published file format or mathematical model are not, by
-themselves, copied source code.
+- The binary parser implements the publicly documented Nasdaq TotalView--ITCH
+  5.0 message layout; no Nasdaq implementation source is included.
+- The stochastic order-flow model uses Hawkes-process and queue-reactive model
+  concepts described and cited in the accompanying academic work.
+- The market-making mechanisms implement inventory- and capacity-dependent
+  policies described by the model specification.
+- `config/qqq_reduced_basket_weights_20190930.csv` contains derived weights;
+  its SEC filing source is recorded in each row and in the accompanying method
+  note.
 
-This is an evidence-based audit, not a legal guarantee or a global source-code
-similarity proof. If a contributor later introduces externally authored code,
-the first permissible comment line must identify the author, source URL,
-licence and local modifications, and the material must also be added to
-`THIRD_PARTY_NOTICES.md`.
+These sources require scholarly citation but do not imply source-code
+authorship by the cited researchers or institutions.
 
-## Research and specification influences
+## Empirical data
 
-- The binary parser follows the publicly documented Nasdaq TotalView--ITCH 5.0
-  message layout. No Nasdaq implementation source is included.
-- The stochastic order-flow implementation uses Hawkes-process concepts.
-- The market-making and shared-inventory mechanisms are research-model
-  implementations informed by the academic literature discussed in the thesis.
-- `config/qqq_reduced_basket_weights_20190930.csv` contains derived weights with
-  its SEC filing source recorded in every row and in the accompanying methodology.
+Raw Nasdaq ITCH archives are external and are not redistributed. Derived data
+directories remain subject to the terms governing their source data. The
+repository contains only small configurations, cohort identifiers, code and
+compact result summaries. See `DATA.md` for the required local layout.
 
-These influences require scholarly citation, but they do not establish source
-code authorship by the cited researchers or institutions.
+## Result evidence
 
-## Final-source lineage
+`results/final-case-study/` contains the compact outputs retained from the
+completed campaign. `docs/case-study/analysis_manifest.json` records the source
+archive digest and generated analysis products. Absolute cluster paths are not
+required to interpret the published summary statistics.
 
-The final source was integrated onto the existing public-project lineage at
-commit `0c14558`. All files unique to that earlier history, including the
-`Draft/` tree, legacy header layout and small empirical inputs, are retained.
-The only path relocation is the empty tracked file `include/agents`, moved to
-`legacy-layout/include-agents-placeholder.txt` because its filename prevented
-creation of the production `include/agents/` directory. Git records this as a
-rename rather than a deletion.
+## Dependencies
 
-The GitHub collection was assembled from the complete R33 source tree and the
-five scientifically material files exported with successful R36 job 45498. The
-R36 source archive has SHA-256
-`8355e6a788a9f0feeae14cdd2b31358eee7210c7100acb7be378f781d62682d9`.
-The five scientifically material files retain these exact R36 file digests:
-
-| Path | SHA-256 |
-|---|---|
-| `src/fragmented_mpi_main.cpp` | `8af0559ac48d467c573d0d15a383ce2d8b46f9b65f98fb3da8d344e674392a73` |
-| `src/simulation/FragmentedMpiSimulator.cpp` | `c2549992d5e196ea480be55d3b6424ead3f588108fe2360b966cfcf9d1effae9` |
-| `scripts/run_fragmented_mpi_experiments.py` | `10ff2773226dd157317c0ea48efa9064d9fc60c315f28624bff48a2e78de75a1` |
-| `scripts/analyze_cluster_liquidity_heterogeneity.py` | `29b6b536f99b7d0ac1e14192303c1879b75dd7a37a90ca1cb112ed80422bdbd5` |
-| `submit_queue_reactive_case_study.sh` | `8d25c6b82e55c2fbaaa5cce5a9f156c0947589ca2212e573f20e6df72829217e` |
-
-The generated `SOURCE_MANIFEST.sha256` binds the GitHub-ready source tree and
-its documentation.
-
-The R33 copy of `submit_real_universe_case_study.sh` was itself a truncated
-terminal/text export. The complete 4,228-line historical launcher was recovered
-from `v19_complete_evidence_cal45321_pack45334.tar.gz`; its pristine SHA-256 was
-`31bbf78ff396a67b5714ea611cbc272bf79600fd72e669ca2f16ae9024244439`.
-This launcher is retained for workflow history. The successful final campaign used
-`submit_queue_reactive_case_study.sh`.
-
-## Known source-export gap
-
-The R36 result archive contains the successful launcher and its source manifest,
-but not `scripts/prepare_portable_queue_case.py`. Its executed-source SHA-256 is
-`b5335de40d5d5ac7b5f48e3abf9372efb1a389360dec480b0f5fc07122ae26fd`.
-The exact helper should be recovered from the original Seagull R36 project
-directory before claiming a complete byte-for-byte source release. No
-substitute is silently presented as the executed helper.
+Compiler, C++ standard-library, CMake, MPI, Python and optional Apple Metal
+components are supplied by the execution environment and remain governed by
+their own licences. See `THIRD_PARTY_NOTICES.md`.

@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Submit the four bounded R32 directional pilots from a Seagull login node.
+# Submit the four bounded directional pilots from a Seagull login node.
 
 set -Eeuo pipefail
 
-: "${SELECTION_ROOT:?export the passed R27 selection root}"
-: "${POOL_ROOT:?export the completed R26 pool root}"
+: "${SELECTION_ROOT:?export the passed selection root}"
+: "${POOL_ROOT:?export the completed five-day pool root}"
 command -v sbatch >/dev/null 2>&1 || { echo "ERROR: sbatch is unavailable" >&2; exit 2; }
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 SELECTION_ROOT="$(cd "${SELECTION_ROOT}" && pwd -P)"
 POOL_ROOT="$(cd "${POOL_ROOT}" && pwd -P)"
 GRID_TAG="${GRID_TAG:-$(date +%Y%m%dT%H%M%S)}"
-GRID_ROOT="${GRID_ROOT:-${PROJECT_DIR}/results/seagull/r32_activity_grid_${GRID_TAG}}"
+GRID_ROOT="${GRID_ROOT:-${PROJECT_DIR}/results/seagull/activity_grid_${GRID_TAG}}"
 JOBS_FILE="${GRID_ROOT}/pilot_jobs.tsv"
 
 [[ -s "${SELECTION_ROOT}/selection/training_selection_freeze.json" ]] || {
@@ -30,7 +30,7 @@ cd "${PROJECT_DIR}"
 for scale in 0.50 0.75 1.00 1.25; do
     tag="${scale/./p}"
     result_root="${GRID_ROOT}/scale_${tag}"
-    build_dir="${PROJECT_DIR}/build-seagull-r32-scale_${tag}"
+    build_dir="${PROJECT_DIR}/build-seagull-activity-scale_${tag}"
     job_id="$(sbatch --parsable \
         --time=01:30:00 \
         --export="ALL,SELECTION_ROOT=${SELECTION_ROOT},POOL_ROOT=${POOL_ROOT},ACTIVITY_SCALE=${scale},RESULT_DIR=${result_root},BUILD_DIR=${build_dir},PILOT_ONLY=on,RESUME=off,ALLOW_PILOT_REJECTION=on" \
@@ -50,4 +50,4 @@ echo "JOBS_FILE=${JOBS_FILE}"
 echo "Monitor:"
 echo "  squeue -j ${JOB_LIST} -o \"%.18i %.24j %.10T %.12M %.50R\""
 echo "After all four finish:"
-echo "  bash ${PROJECT_DIR}/summarize_r32_activity_grid.sh ${GRID_ROOT}"
+echo "  bash ${PROJECT_DIR}/summarize_activity_grid.sh ${GRID_ROOT}"

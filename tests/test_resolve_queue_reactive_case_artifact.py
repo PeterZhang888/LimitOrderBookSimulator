@@ -367,47 +367,52 @@ class QueueReactiveCaseArtifactTest(unittest.TestCase):
             MODULE.resolve_artifact(self.manifest)
 
 
-class QueueReactiveSubmissionSourceContractTest(unittest.TestCase):
+class QueueReactiveCaseSubmissionSourceContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.source = (ROOT / "submit_real_universe_case_study.sh").read_text(
+        cls.launcher = (ROOT / "submit_queue_reactive_case_study.sh").read_text(
+            encoding="utf-8",
+        )
+        cls.preparer = (ROOT / "scripts/prepare_portable_queue_case.py").read_text(
             encoding="utf-8",
         )
 
     def test_final_runner_forwards_frozen_background(self) -> None:
-        self.assertIn('--background-model "${BACKGROUND_MODEL}"', self.source)
+        self.assertIn("--background-model queue-reactive-v1", self.launcher)
         self.assertIn(
-            'RUNNER+=(--background-policy-csv '
-            '"${CALIBRATED_BACKGROUND_POLICY_PATH}")',
-            self.source,
+            '--background-policy-csv "${BACKGROUND_POLICY}"',
+            self.launcher,
         )
 
     def test_final_science_requires_validated_queue_handoff(self) -> None:
         self.assertIn(
-            '"${CALIBRATION_ARTIFACT_ROLE}" != '
-            '"queue_reactive_validation_handoff"',
-            self.source,
+            '"${EVIDENCE_ROOT}/development_validation/'
+            'heldout_run_manifest.json"',
+            self.launcher,
         )
         self.assertIn(
-            'QUEUE_REACTIVE_MODEL_ARTIFACT pointing to a passed '
-            'heldout_run_manifest.json',
-            self.source,
+            'scripts/prepare_portable_queue_case.py',
+            self.launcher,
+        )
+        self.assertIn(
+            'heldout.get("status") != "heldout_adequacy_passed"',
+            self.preparer,
         )
 
     def test_transitive_freeze_provenance_is_written_to_campaign(self) -> None:
-        self.assertIn("transitive_runtime_manifest_sha256", self.source)
-        self.assertIn("CALIBRATION_TRANSITIVE_ARTIFACT_COUNT", self.source)
+        self.assertIn("expanded_training_freeze_sha256", self.preparer)
+        self.assertIn("strict_validation_report_sha256", self.preparer)
+        self.assertIn("background_policy_artifacts", self.preparer)
+        self.assertIn("empirical_target_artifacts", self.preparer)
 
     def test_final_runner_forwards_frozen_adaptive_local_controls(self) -> None:
         self.assertIn(
-            '--local-mm-spread-elasticities '
-            '"${CALIBRATED_LOCAL_MM_SPREAD_ELASTICITY}"',
-            self.source,
+            "--local-mm-spread-elasticities 0.0",
+            self.launcher,
         )
         self.assertIn(
-            '--local-mm-max-improvement-probabilities '
-            '"${CALIBRATED_LOCAL_MM_MAX_IMPROVEMENT_PROBABILITY}"',
-            self.source,
+            "--local-mm-max-improvement-probabilities 1.0",
+            self.launcher,
         )
 
 

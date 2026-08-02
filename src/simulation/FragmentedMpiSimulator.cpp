@@ -729,7 +729,7 @@ private:
             }
             // Interpret the selected order-flow coupling directly as the
             // standard deviation theta of a persistent log-activity regime.
-            // R31 multiplied it by the latent-volatility standard deviation,
+            // A previous formulation multiplied it by the latent-volatility standard deviation,
             // reducing several cluster loadings by factors of 3--50 and
             // producing no measurable ACF response. The discrete session
             // normalizer preserves the mean immigration multiplier, while

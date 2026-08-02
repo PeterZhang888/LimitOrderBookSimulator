@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Final Seagull launcher for the validated 1,480-book queue-reactive case.
+# Seagull launcher for the validated 1,480-book queue-reactive case study.
 #
 # Submit from the project directory after creating ./slurm:
 #   sbatch --export=ALL,EXPERIMENT=preflight submit_queue_reactive_case_study.sh
@@ -8,7 +8,7 @@
 #
 # EXPERIMENT=science always repeats the short rank-equivalence preflight before
 # starting the 40 predeclared full-day paths.  This script does not calibrate.
-#SBATCH --job-name=lob-r36-case
+#SBATCH --job-name=lob-final-case
 #SBATCH --nodes=2
 #SBATCH --ntasks=32
 #SBATCH --ntasks-per-node=16
@@ -24,14 +24,13 @@ set -Eeuo pipefail
 : "${SLURM_SUBMIT_DIR:?SLURM_SUBMIT_DIR is unavailable}"
 
 PROJECT_DIR="${SLURM_SUBMIT_DIR}"
-BASE_DIR="${BASE_DIR:-/home/users/mschpc/2025/czhang4}"
-POOL_ROOT="${POOL_ROOT:-${BASE_DIR}/coupled_lob_r26_grid_projection_20260801/results/seagull/five_day_pool_45477}"
-SELECTION_ROOT="${SELECTION_ROOT:-${BASE_DIR}/coupled_lob_r27_target_protocol_20260801/results/seagull/queue_selection_45480}"
-DATA_ROOT="${DATA_ROOT:-${BASE_DIR}/lob_empirical_compact_20260724_r2}"
+: "${POOL_ROOT:?export POOL_ROOT as the completed pooling-result directory}"
+: "${SELECTION_ROOT:?export SELECTION_ROOT as the frozen selection-result directory}"
+: "${DATA_ROOT:?export DATA_ROOT as the compact empirical-data directory}"
 EVIDENCE_ROOT="${EVIDENCE_ROOT:-${PROJECT_DIR}/case_evidence}"
 EXPERIMENT="${EXPERIMENT:-preflight}"
 RESULT_DIR="${RESULT_DIR:-${PROJECT_DIR}/results/seagull/queue_case_${SLURM_JOB_ID}}"
-BUILD_DIR="${BUILD_DIR:-${PROJECT_DIR}/build-seagull-r36-${SLURM_JOB_ID}}"
+BUILD_DIR="${BUILD_DIR:-${PROJECT_DIR}/build-seagull-case-${SLURM_JOB_ID}}"
 BUILD_JOBS="${BUILD_JOBS:-16}"
 RUN_TIMEOUT_SECONDS="${RUN_TIMEOUT_SECONDS:-21600}"
 

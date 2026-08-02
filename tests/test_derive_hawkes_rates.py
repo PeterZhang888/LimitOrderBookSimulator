@@ -14,6 +14,12 @@ import derive_hawkes_rates as rates  # noqa: E402
 
 
 class HawkesRateDerivationTest(unittest.TestCase):
+    def empirical_fixture(self, symbol: str) -> pathlib.Path:
+        path = PROJECT_ROOT / "data" / f"itch_20200130_{symbol.lower()}"
+        if not path.is_dir():
+            self.skipTest(f"external ITCH fixture is not installed: {path}")
+        return path
+
     def test_default_excitation_is_diagonal_and_matches_runtime_contract(self) -> None:
         alpha = rates.default_alpha()
         for row in range(6):
@@ -78,7 +84,7 @@ class HawkesRateDerivationTest(unittest.TestCase):
             rates.derive(target, 0.30, 10.0, alpha)
 
     def test_best_depth_balance_raises_qqq_cancel_rates(self) -> None:
-        data_dir = PROJECT_ROOT / "data" / "itch_20200130_qqq"
+        data_dir = self.empirical_fixture("QQQ")
         observed = [47.037, 47.321, 0.889, 0.893, 45.98, 46.627]
         adjusted = rates.balance_best_depth(data_dir, observed)
         self.assertEqual(adjusted[:4], observed[:4])
@@ -86,7 +92,7 @@ class HawkesRateDerivationTest(unittest.TestCase):
         self.assertGreater(adjusted[5], observed[5])
 
     def test_directional_balance_equalises_expected_pair_volume(self) -> None:
-        data_dir = PROJECT_ROOT / "data" / "itch_20200130_amzn"
+        data_dir = self.empirical_fixture("AMZN")
         observed = [6.55, 6.39, 0.396, 0.410, 5.48, 5.32]
         adjusted = rates.balance_directional_volume(data_dir, observed)
         quantity_files = (

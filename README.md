@@ -1,89 +1,97 @@
-# Whole-Book MPI Decomposition for Coupled Limit-Order-Book Simulation
+# Whole-Book MPI Limit-Order-Book Simulator
 
-Research code accompanying Peter Zhang's HPC master's thesis. The repository
-contains the C++20 limit-order-book simulator, MPI whole-book decomposition,
-ITCH preprocessing and calibration utilities, validation tools, Slurm launchers,
-tests, and the audited R36 case-study analysis.
+C++20 simulator for causally coupled, multi-asset limit-order books. Each book
+uses price--time priority and is owned by one MPI rank. Cross-asset state is
+updated at deterministic decision boundaries through collective communication.
 
-## Scientific scope
+## Components
 
-The final model assigns each complete price--time-priority book to one MPI rank.
-Book matching remains sequential within a book, while ranks exchange the shared
-market maker's aggregate exposure at fixed decision boundaries. The empirical
-background is informed by Nasdaq TotalView--ITCH observations and a queue-reactive
-Hawkes specification. Behavioural policies are selected by liquidity cluster.
+| Path | Purpose |
+|---|---|
+| `include/`, `src/` | Production simulator, agents, calibration support and MPI execution |
+| `scripts/` | ITCH extraction, empirical pooling, clustering, calibration, validation and analysis |
+| `config/` | Small model configurations and the fixed 1,480-symbol cohort |
+| `tests/` | C++ correctness tests and Python workflow-contract tests |
+| `submit_*.sh` | Slurm launchers for calibration, validation and case-study execution |
+| `results/final-case-study/` | Compact timing and treatment summaries from the final campaign |
+| `docs/case-study/` | LaTeX tables, figures and the case-study analysis report |
 
-The successful R36 campaign used 1,480 books, 32 ranks, a 23,400-second session,
-a one-second decision window and 40 paired shock/control paths. Its audited
-scientific conclusion is deliberately limited: the direct shocks were executed,
-but the global shared market maker had stopped quoting before the shock, so the
-run does not establish cross-asset contagion. See
-[`docs/case-study/case_study_analysis_report.md`](docs/case-study/case_study_analysis_report.md).
-
-## Repository map
-
-- `include/`, `src/`: simulator and MPI implementation.
-- `Draft/`, `include/*_hpp/` and the retained legacy placeholders: early
-  development sources preserved from the original GitHub history. They are not
-  deleted or rewritten into the production layout.
-- `scripts/`: ITCH extraction, pooling, clustering, calibration, validation,
-  experiment orchestration and analysis.
-- `tests/`: C++ and Python correctness tests.
-- `config/`: small configuration inputs and the frozen 1,480-symbol identity list.
-- `submit_*.sh`: Slurm workflows used during model development.
-- `submit_queue_reactive_case_study.sh`: final R36 Seagull case-study launcher.
-- `docs/case-study/`: audited chapter text, figures and analysis outputs.
-- `TESTING.md`: release-audit results and data/source-dependent test limits.
+The production build uses `include/` and `src/`. Historical sources retained
+under `Draft/` and `include/*_hpp/` are excluded from CMake targets.
 
 ## Build
 
-Requirements are CMake 3.20+, a C++20 compiler and, for distributed execution,
-an MPI implementation. Python utilities use the Python standard library.
+Requirements:
+
+- CMake 3.20 or later;
+- a C++20 compiler;
+- an MPI implementation for distributed execution;
+- Python 3.10 or later for workflow utilities.
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DLOB_REQUIRE_MPI=ON
+cmake -S . -B build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DLOB_REQUIRE_MPI=ON \
+  -DLOB_BUILD_TESTS=ON
 cmake --build build --parallel
-ctest --test-dir build --output-on-failure
+ctest --test-dir build -LE 'empirical|mpi' --output-on-failure
 ```
 
-Set `LOB_REQUIRE_MPI=OFF` for single-process correctness mode. Some integration
-tests require derived ITCH inputs that are intentionally not committed.
-The precise verification status of this public-source collection is recorded in
-[`TESTING.md`](TESTING.md); it distinguishes code failures from unavailable
-empirical fixtures and from one known historical source-export gap.
+Set `LOB_REQUIRE_MPI=OFF` only for single-process development and unit testing.
 
-## Empirical data
+## Executables
 
-Raw Nasdaq ITCH archives and the large derived symbol directories are excluded
-because of their size and redistribution conditions. The repository retains
-the extraction and calibration code, cohort identity, small configurations and
-hash-bound result summaries. See [`DATA.md`](DATA.md).
+| Target | Function |
+|---|---|
+| `fragmented_mpi_lob` | Whole-book MPI simulator used by the final experiments |
+| `sequential_multi_asset_lob` | One-process semantic reference |
+| `exact_mpi_multi_asset_lob` | Exact distributed multi-asset execution |
+| `batched_mpi_multi_asset_lob` | Batched-communication execution |
+| `smc_abc_calibrate` | SMC-ABC calibration driver |
+| `eligibility_evaluate` | Structural-validity evaluator |
 
-## Reproducing the R36 case
+## Empirical workflow
 
-The case launcher expects the pooled empirical root, selected-policy root and
-derived data root to exist on the execution system. The successful Seagull run
-used external hash-bound artifacts and cannot be reproduced from this source
-repository alone. Instructions and the precise source-export limitation are in
-[`REPRODUCIBILITY.md`](REPRODUCIBILITY.md).
+Raw Nasdaq TotalView--ITCH archives are not distributed with the repository.
+The main workflow is:
 
-## Provenance and attribution
+1. Extract book events and empirical targets with
+   `scripts/extract_itch50_symbols.py`.
+2. Pool the five training sessions with
+   `submit_five_day_pooled_training.sh`.
+3. Form liquidity clusters and select behavioural parameters with
+   `submit_cluster_value_agent_calibration.sh`.
+4. Validate the frozen model with
+   `submit_queue_reactive_full_validation_hpc.sh`.
+5. Run rank-equivalence, scaling or financial treatments with
+   `submit_queue_reactive_case_study.sh`.
 
-This project was developed for Peter Zhang's thesis with OpenAI ChatGPT/Codex
-assistance. No vendored or copied third-party source code was identified in the
-available source history. Published models, file-format specifications,
-dependencies and external data are acknowledged without implying that their
-authors wrote this implementation. See [`PROVENANCE.md`](PROVENANCE.md) and
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+Cluster jobs must be submitted with `sbatch`; the login node is used only for
+data inspection, packaging and job submission. Dataset requirements and path
+conventions are specified in [`DATA.md`](DATA.md).
 
-No open-source licence has been selected. The default copyright position is
-therefore all rights reserved; see [`LICENSE`](LICENSE).
+## Determinism
 
-## Development history
+Logical identifiers and random streams are independent of MPI ownership.
+Fixed-point collective reductions and canonical state hashing allow a run at
+one rank to be compared with the same realization at multiple ranks. The case
+launcher performs this rank-equivalence preflight before production treatments.
 
-This tree extends the existing `PeterZhang888/LimitOrderBookSimulator`
-repository. Commit `0c14558` is the final pre-integration website-upload state;
-subsequent commits separately introduce the production core, empirical
-workflows, tests, R36 evidence and release documentation. Consequently, Git can
-show both the early implementation and every thesis-integration change without
-requiring a force push or replacement repository.
+## Verification
+
+```bash
+python3 -m unittest discover -s tests -p 'test_*.py'
+sha256sum -c SOURCE_MANIFEST.sha256
+```
+
+Some integration tests require the external empirical directories. See
+[`TESTING.md`](TESTING.md) for the verified source-only subset and
+[`REPRODUCIBILITY.md`](REPRODUCIBILITY.md) for the full cluster workflow.
+
+## Results
+
+The final case-study summaries and rank-equivalence records are under
+`results/final-case-study/`. The associated interpretation is in
+`docs/case-study/case_study_analysis_report.md`.
+
+No open-source licence has been selected; see [`LICENSE`](LICENSE).

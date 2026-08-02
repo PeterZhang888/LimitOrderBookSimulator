@@ -1,46 +1,42 @@
-# Verification status
+# Verification
 
-This file records the release audit honestly; it is not a claim that empirical
-workflows can run without their external data.
+## Source-only checks
 
-## Passed checks
+The repository supports the following checks without proprietary data:
 
-- CMake configuration and compilation completed with the locally available
-  Open MPI C++ toolchain.
-- Every shell file passes `bash -n`.
-- Every Python source file compiles with `python3 -m compileall`.
-- The restored 4,228-line historical real-universe launcher passes all 28 tests
-  in `test_real_universe_case_study_submission_contract.py`.
-- All 13 functional artifact-resolution tests in
-  `test_resolve_queue_reactive_case_artifact.py` pass.
-- Twenty-six self-contained C++/executable CTest cases pass. The remaining
-  local executable tests stop at startup because their empirical mark/rate
-  fixtures are excluded; the sandbox also prevents Open MPI from binding a TCP
-  listener, so this environment is not a cluster-MPI acceptance test.
-- The R36 rank-equivalence evidence records the same state hash at 1 and 32
-  ranks; the evidence and interpretation are under `docs/case-study`.
+```bash
+cmake -S . -B build -DLOB_REQUIRE_MPI=OFF -DLOB_BUILD_TESTS=ON
+cmake --build build --parallel
+ctest --test-dir build -LE 'empirical|mpi' --output-on-failure
+python3 -m unittest discover -s tests -p 'test_*.py'
+sha256sum -c SOURCE_MANIFEST.sha256
+```
 
-## Tests requiring external empirical fixtures
+The release audit also applies `bash -n` to every shell launcher and parses all
+Python sources before packaging.
 
-The public repository deliberately excludes raw Nasdaq ITCH archives and the
-expanded per-symbol empirical distribution directories. Tests that open files
-such as `data/itch_20200130_qqq/limit_buy_quantity_distribution.txt` therefore
-cannot pass in this source-only collection. This is missing test data, not a
-compiler or parser failure.
+## MPI acceptance checks
 
-## Known historical source-export mismatch
+Production acceptance requires a real MPI build on the target cluster. The
+case-study preflight compares one-rank and production-rank state hashes using
+the same cohort, model parameters and random streams. The retained preflight
+records equal hashes at one and 32 ranks.
 
-Four source-contract assertions in
-`QueueReactiveSubmissionSourceContractTest` describe a later queue-reactive
-extension to the historical `submit_real_universe_case_study.sh`. The matching
-revision of that legacy launcher was not present in any local archive, so this
-release does not fabricate it or weaken the tests. The successful R36 campaign
-used the separate `submit_queue_reactive_case_study.sh`, which is included with
-its executed-source digest in `PROVENANCE.md`.
+## Data-dependent checks
 
-The successful R36 source manifest also names
-`scripts/prepare_portable_queue_case.py`, but the evidence export omitted that
-helper. Its expected SHA-256 and recovery command are in
-`REPRODUCIBILITY.md`. Until it is recovered, describe this repository as the
-complete locally available source collection, not a byte-for-byte complete R36
-execution bundle.
+Tests that open empirical mark distributions, Hawkes-rate files or reconstructed
+ITCH targets require the external data described in `DATA.md`. Absence of those
+fixtures is reported as a skip by Python tests. CTest registers the corresponding
+C++ tests with the `empirical` label; run them with `ctest -L empirical` after
+installing the data. Multi-process launcher tests carry the `mpi` label and must
+run in an environment where MPI may open its control sockets.
+
+## Release criteria
+
+A release is accepted only when:
+
+1. source-manifest verification passes;
+2. configuration and compilation succeed;
+3. source-only C++ and Python tests pass;
+4. shell and Python syntax checks pass;
+5. the cluster rank-equivalence preflight passes before production execution.

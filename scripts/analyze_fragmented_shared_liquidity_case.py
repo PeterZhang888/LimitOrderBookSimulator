@@ -682,7 +682,10 @@ def validate_universe_input(
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise AnalysisError(f"cannot parse universe-input manifest: {error}") from error
-    if not isinstance(payload, dict) or payload.get("schema_version") != 4:
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema_version") not in {4, 5}
+    ):
         raise AnalysisError("unsupported universe-input manifest schema")
     provenance_mode = payload.get("calibration_provenance_mode")
     if provenance_mode not in {
@@ -700,7 +703,7 @@ def validate_universe_input(
     if (payload.get("universe_config_sha256") != config_hash
             or metadata.get("input_config_sha256") != config_hash):
         raise AnalysisError("universe configuration hash disagrees across artifacts")
-    expected_runtime_fields = [
+    legacy_runtime_fields = [
         "book_id", "symbol", "data_dir", "hawkes_rates_file",
         "fundamental_price_ticks", "fundamental_volatility_bps_sqrt_second",
         "fundamental_move_probability_per_second",
@@ -712,11 +715,22 @@ def validate_universe_input(
         "quote_improvement_probability", "target_mean_bid_depth",
         "target_mean_ask_depth",
     ]
+    extended_runtime_fields = [
+        *legacy_runtime_fields,
+        "fundamental_log_variance_persistence",
+        "fundamental_log_variance_std",
+        "fundamental_order_flow_coupling",
+    ]
+    expected_runtime_fields = (
+        extended_runtime_fields
+        if payload.get("schema_version") == 5
+        else legacy_runtime_fields
+    )
     schema_hash = hashlib.sha256(json.dumps(
         expected_runtime_fields, ensure_ascii=True, separators=(",", ":")
     ).encode("utf-8")).hexdigest()
     expected_runtime_schema = {
-        "schema_version": 5,
+        "schema_version": 6 if payload.get("schema_version") == 5 else 5,
         "fields": expected_runtime_fields,
         "sha256": schema_hash,
         "pooled_homeostatic_fields": [
@@ -727,6 +741,14 @@ def validate_universe_input(
             "fundamental_volatility_bps_sqrt_second",
             "fundamental_move_probability_per_second",
             "fundamental_conditional_kurtosis",
+            *(
+                [
+                    "fundamental_log_variance_persistence",
+                    "fundamental_log_variance_std",
+                    "fundamental_order_flow_coupling",
+                ]
+                if payload.get("schema_version") == 5 else []
+            ),
         ],
         "frozen_training_derived_fields": [
             "target_spread_ticks", "target_mean_bid_depth",
@@ -734,6 +756,14 @@ def validate_universe_input(
             "fundamental_volatility_bps_sqrt_second",
             "fundamental_move_probability_per_second",
             "fundamental_conditional_kurtosis",
+            *(
+                [
+                    "fundamental_log_variance_persistence",
+                    "fundamental_log_variance_std",
+                    "fundamental_order_flow_coupling",
+                ]
+                if payload.get("schema_version") == 5 else []
+            ),
         ],
         "heldout_target_files_used": False,
     }
@@ -833,8 +863,13 @@ def validate_universe_input(
             or metadata.get("executable_sha256") != executable_hash):
         raise AnalysisError("case executable hash disagrees across artifacts")
     profile = payload.get("case_study_protocol")
-    if not isinstance(profile, dict) or profile.get("profile_id") != (
-            "systemic_liquidity_case_v1"):
+    if (
+        not isinstance(profile, dict)
+        or profile.get("profile_id") not in {
+            "systemic_liquidity_case_v1",
+            "systemic_liquidity_case_v2_queue_reactive",
+        }
+    ):
         raise AnalysisError("universe-input lacks the canonical case-study profile")
     encoded = json.dumps(
         profile, sort_keys=True, separators=(",", ":"), allow_nan=False,
