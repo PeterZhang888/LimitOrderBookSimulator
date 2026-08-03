@@ -358,8 +358,8 @@ int main(int argc, char** argv) {
 
     // A symbol must retain the same stochastic stream when calibration writes
     // a smaller subset and consequently assigns a different local book_id.
-    dlob::SequentialMultiAssetConfig stream_config;
-    stream_config.seed = 424242;
+    constexpr std::uint64_t stream_seed = 424242;
+    constexpr int stream_tick_size = 100;
     dlob::MultiAssetBookConfig qqq_stream_book = parsed_config[0];
     dlob::MultiAssetBookConfig aapl_stream_book = parsed_config[1];
     for (dlob::MultiAssetBookConfig* book : {
@@ -370,13 +370,13 @@ int main(int argc, char** argv) {
     }
     const dlob::BackgroundHawkesConfig qqq_as_book_zero =
         dlob::make_multi_asset_background_config(
-            stream_config, qqq_stream_book, 0);
+            qqq_stream_book, 0, stream_seed, stream_tick_size);
     const dlob::BackgroundHawkesConfig qqq_as_book_seventeen =
         dlob::make_multi_asset_background_config(
-            stream_config, qqq_stream_book, 17);
+            qqq_stream_book, 17, stream_seed, stream_tick_size);
     const dlob::BackgroundHawkesConfig aapl_stream =
         dlob::make_multi_asset_background_config(
-            stream_config, aapl_stream_book, 0);
+            aapl_stream_book, 0, stream_seed, stream_tick_size);
     assert(qqq_as_book_zero.seed == qqq_as_book_seventeen.seed);
     assert(qqq_as_book_zero.seed != aapl_stream.seed);
 

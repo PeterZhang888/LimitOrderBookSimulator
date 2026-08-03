@@ -19,10 +19,6 @@ material must be recorded in `THIRD_PARTY_NOTICES.md`.
   concepts described and cited in the accompanying academic work.
 - The market-making mechanisms implement inventory- and capacity-dependent
   policies described by the model specification.
-- `config/qqq_reduced_basket_weights_20190930.csv` contains derived weights;
-  its SEC filing source is recorded in each row and in the accompanying method
-  note.
-
 These sources require scholarly citation but do not imply source-code
 authorship by the cited researchers or institutions.
 
@@ -43,6 +39,6 @@ statistics.
 
 ## Dependencies
 
-Compiler, C++ standard-library, CMake, MPI, Python and optional Apple Metal
-components are supplied by the execution environment and remain governed by
+Compiler, C++ standard-library, CMake, MPI and Python components are supplied
+by the execution environment and remain governed by
 their own licences. See `THIRD_PARTY_NOTICES.md`.

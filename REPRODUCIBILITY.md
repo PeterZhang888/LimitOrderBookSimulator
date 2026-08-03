@@ -125,14 +125,7 @@ market-wide and per-cluster fixed-clock series.
 
 ## Interpretation boundary
 
-The superseded diagnostic run confirms deterministic rank equivalence and
-direct shock execution, but the dealer was already close to its capacity and
-supplied only a small share of target-book depth before the shock. Its nearly
-null treatment contrasts therefore do not identify economically material
-cross-asset transmission through a common dealer. The audit is in
-`docs/diagnostics/inactive_dealer_audit.md`.
-
-The corrected campaign passed the rank-equivalence, horizon-prefix and
+The reported campaign passed the rank-equivalence, horizon-prefix and
 mechanism gates before executing the financial matrix. Compact result evidence
 is stored in `results/final-case-study/`, and the academic interpretation is
 in `docs/case-study/final_results_report.md`. The full external archive is

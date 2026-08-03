@@ -8,18 +8,16 @@ updated at deterministic decision boundaries through collective communication.
 
 | Path | Purpose |
 |---|---|
-| `include/`, `src/` | Production simulator, agents, calibration support and MPI execution |
-| `scripts/` | ITCH extraction, empirical pooling, clustering, calibration, validation and analysis |
-| `config/` | Small model configurations and the fixed 1,480-symbol cohort |
+| `include/`, `src/` | Production whole-book MPI simulator |
+| `scripts/` | ITCH extraction, pooling, calibration, validation and final analysis |
+| `config/` | Test configuration and the fixed 1,480-symbol cohort |
 | `tests/` | C++ correctness tests and Python workflow-contract tests |
 | `submit_*.sh` | Slurm launchers for calibration, validation and case-study execution |
 | `results/final-case-study/` | Compact, hash-traceable summaries from the completed inventory-stress campaign |
-| `results/superseded-mechanism-audit/` | Diagnostic outputs from the rejected low-participation mechanism |
 | `docs/case-study/` | Experiment specification, result audit, LaTeX text and figures |
-| `docs/diagnostics/` | Audit explaining why the earlier zero-effect matrix is not a result |
 
-The production build uses `include/` and `src/`. Historical sources retained
-under `Draft/` and `include/*_hpp/` are excluded from CMake targets.
+The source tree contains only the executable dependency closure used by the
+calibration, validation, scaling and inventory-stress experiments.
 
 ## Build
 
@@ -41,16 +39,8 @@ ctest --test-dir build -LE 'empirical|mpi' --output-on-failure
 
 Set `LOB_REQUIRE_MPI=OFF` only for single-process development and unit testing.
 
-## Executables
-
-| Target | Function |
-|---|---|
-| `fragmented_mpi_lob` | Whole-book MPI simulator used by the final experiments |
-| `sequential_multi_asset_lob` | One-process semantic reference |
-| `exact_mpi_multi_asset_lob` | Exact distributed multi-asset execution |
-| `batched_mpi_multi_asset_lob` | Batched-communication execution |
-| `smc_abc_calibrate` | SMC-ABC calibration driver |
-| `eligibility_evaluate` | Structural-validity evaluator |
+The build produces one executable, `fragmented_mpi_lob`. A one-rank run of
+that same executable is the semantic reference for MPI rank-equivalence tests.
 
 ## Empirical workflow
 
@@ -102,8 +92,5 @@ is external because it expands to more than 8 GB. The principal result is a
 small withdrawal of unshocked top-of-book depth during the first seconds after
 the intervention, followed by recovery within tens of seconds. No persistent
 30-minute depth or spread effect is established.
-
-The files in `results/superseded-mechanism-audit/` document a rejected
-low-participation implementation and must not be used as final evidence.
 
 The repository is distributed under the terms in [`LICENSE`](LICENSE).

@@ -1,4 +1,0 @@
-symbol,raw_qqq_portfolio_weight,normalized_three_stock_proxy_weight,source_as_of,filing_date,source_url
-AAPL,0.10952264763442063,0.3451534666089234,2019-09-30,2019-12-20,https://www.sec.gov/Archives/edgar/data/1067839/000119312519320290/d813945dn30b2.htm
-MSFT,0.1148636758566884,0.3619853680100401,2019-09-30,2019-12-20,https://www.sec.gov/Archives/edgar/data/1067839/000119312519320290/d813945dn30b2.htm
-AMZN,0.09292947434937861,0.29286116538103657,2019-09-30,2019-12-20,https://www.sec.gov/Archives/edgar/data/1067839/000119312519320290/d813945dn30b2.htm

@@ -54,11 +54,6 @@ class GlobalCertificationVerifierTests(unittest.TestCase):
         for relative in relatives:
             self.assertIn(relative, CALIBRATION.WORKFLOW_SEMANTICS_FILES)
             self.assertIn(relative, pool.WORKFLOW_SEMANTICS_FILES)
-        case_text = (ROOT / "submit_real_universe_case_study.sh").read_text(
-            encoding="utf-8"
-        )
-        for relative in relatives:
-            self.assertIn(f'"{relative}"', case_text)
         self.assertEqual(
             CALIBRATION.workflow_source_semantics_sha256(ROOT),
             pool.workflow_source_semantics_sha256(ROOT),
@@ -396,39 +391,40 @@ class GlobalCertificationVerifierTests(unittest.TestCase):
         calibration_submit = (ROOT / "submit_cluster_value_agent_calibration.sh").read_text(
             encoding="utf-8"
         )
-        case_submit = (ROOT / "submit_real_universe_case_study.sh").read_text(
+        validation_submit = (
+            ROOT / "submit_queue_reactive_full_validation_hpc.sh"
+        ).read_text(encoding="utf-8")
+        case_submit = (ROOT / "submit_queue_reactive_case_study.sh").read_text(
             encoding="utf-8"
         )
         verifier_path = (
             '${PROJECT_DIR}/scripts/verify_global_calibration_certification.py'
         )
         self.assertIn(f'python3 "{verifier_path}"', calibration_submit)
-        self.assertIn(f'python3 "{verifier_path}"', case_submit)
         self.assertIn(
             "independent_global_calibration_certification.json",
             calibration_submit,
         )
         self.assertIn(
-            "stored independent certification differs from fresh re-verification",
+            "expanded_training_freeze.json", validation_submit,
+        )
+        self.assertIn(
+            "heldout_run_manifest.json", validation_submit,
+        )
+        self.assertIn(
+            "scripts/prepare_portable_queue_case.py", case_submit,
+        )
+        self.assertIn(
+            '--evidence-root "${EVIDENCE_ROOT}"', case_submit,
+        )
+        self.assertIn(
+            '"${EVIDENCE_ROOT}/training/expanded_training_freeze.json"',
             case_submit,
         )
         self.assertIn(
-            'INPUT_SNAPSHOT_DIR="${RESULT_DIR}/input_snapshot"', case_submit,
-        )
-        self.assertIn(
-            'UNIVERSE_CONFIG="${INPUT_SNAPSHOT_DIR}/universe_config.csv"',
+            '"${EVIDENCE_ROOT}/development_validation/heldout_run_manifest.json"',
             case_submit,
         )
-        self.assertIn(
-            'VALUE_AGENT_POLICY_CSV="${INPUT_SNAPSHOT_DIR}/value_agent_policy.csv"',
-            case_submit,
-        )
-        self.assertIn(
-            'SHOCK_CLUSTER_CSV="${INPUT_SNAPSHOT_DIR}/shock_clusters.csv"',
-            case_submit,
-        )
-        self.assertIn("certified_sha256", case_submit)
-        self.assertIn("original_path", case_submit)
         self.assertIn(
             "independent_global_calibration_certification.json",
             CALIBRATION.TERMINAL_CALIBRATION_ARTIFACT_FILENAMES,

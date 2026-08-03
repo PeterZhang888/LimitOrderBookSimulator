@@ -390,46 +390,16 @@ std::vector<MultiAssetBookConfig> load_multi_asset_book_configs(
     return books;
 }
 
-std::vector<MultiAssetBookConfig> resolve_multi_asset_book_configs(
-    const SequentialMultiAssetConfig& config) {
-    if (!config.book_configs.empty()) {
-        if (config.book_configs.size() != static_cast<std::size_t>(config.book_count)) {
-            throw std::invalid_argument("book_count differs from per-book configuration");
-        }
-        validate_book_configs(config.book_configs);
-        return config.book_configs;
-    }
-    std::vector<MultiAssetBookConfig> books;
-    books.reserve(static_cast<std::size_t>(config.book_count));
-    for (int index = 0; index < config.book_count; ++index) {
-        MultiAssetBookConfig book;
-        book.symbol = config.book_count == 1
-            ? "QQQ" : "BOOK_" + std::to_string(index);
-        book.data_dir = config.data_dir;
-        book.hawkes_rates_file = config.hawkes_rates_file;
-        if (book.hawkes_rates_file.empty()) {
-            const std::filesystem::path fallback =
-                std::filesystem::path(config.data_dir) / "hawkes_rates_qqq_20200130.csv";
-            if (std::filesystem::exists(fallback)) {
-                book.hawkes_rates_file = fallback.string();
-            }
-        }
-        book.fundamental_price_ticks = config.fundamental_price_ticks;
-        books.push_back(std::move(book));
-    }
-    validate_book_configs(books);
-    return books;
-}
-
 BackgroundHawkesConfig make_multi_asset_background_config(
-    const SequentialMultiAssetConfig& config,
     const MultiAssetBookConfig& book,
-    BookId book_id) {
+    BookId book_id,
+    std::uint64_t seed,
+    int tick_size) {
     BackgroundHawkesConfig background;
     (void)book_id; // Routing identity is deliberately not a stochastic identity.
     background.seed = stable_sequence(
-        stable_symbol_stream_id(book.symbol), config.seed);
-    background.tick_size = config.tick_size;
+        stable_symbol_stream_id(book.symbol), seed);
+    background.tick_size = tick_size;
     background.target_spread_ticks = book.target_spread_ticks;
     background.quote_improvement_probability =
         book.quote_improvement_probability;
@@ -448,59 +418,6 @@ BackgroundHawkesConfig make_multi_asset_background_config(
     background.cancel_bid_distance_file = data_file(book.data_dir, "cancel_bid_distance_distribution.txt");
     background.cancel_ask_distance_file = data_file(book.data_dir, "cancel_ask_distance_distribution.txt");
     return background;
-}
-
-SharedMarketMakerConfig make_multi_asset_market_maker_config(
-    const SequentialMultiAssetConfig& config,
-    const std::vector<MultiAssetBookConfig>& books) {
-    SharedMarketMakerConfig maker;
-    maker.logical_owner_id = 900'001;
-    maker.message_source_rank = 0;
-    maker.quote_quantity = config.market_maker_order_quantity;
-    maker.quote_levels = config.market_maker_quote_levels;
-    maker.quote_quantity_growth = config.market_maker_quote_quantity_growth;
-    maker.quote_half_spread_ticks = config.tick_size;
-    maker.price_tick_size = config.tick_size;
-    maker.order_latency_ns = config.market_maker_order_latency_ns;
-    maker.exposure_threshold = config.market_maker_exposure_threshold;
-    maker.enable_cross_book_hedging =
-        config.enable_shared_market_maker_hedging;
-    maker.hedge_lot_size = config.hedge_lot_size;
-    maker.max_hedge_quantity = config.max_hedge_quantity;
-    maker.report_latency_ns = config.report_latency_ns;
-    maker.reaction_latency_ns = config.cross_book_reaction_latency_ns;
-    maker.network_latency_ns = config.hedge_order_latency_ns;
-    maker.books.reserve(books.size());
-    double component_weight_sum = 0.0;
-    for (std::size_t index = 1; index < books.size(); ++index) {
-        component_weight_sum += books[index].basket_weight;
-    }
-    for (std::size_t index = 0; index < books.size(); ++index) {
-        const BookId id = static_cast<BookId>(index);
-        const BookId hedge = books.size() == 1U
-            ? id : (index == 0U ? BookId{1} : BookId{0});
-        SharedMarketMakerBookConfig book_config{
-            id, books[index].beta, hedge,
-            books[index].market_maker_quote_quantity,
-            books[index].target_spread_ticks, {}};
-        if (books.size() > 1U) {
-            if (index == 0U) {
-                for (std::size_t component = 1;
-                     component < books.size(); ++component) {
-                    const double weight = component_weight_sum > 0.0
-                        ? books[component].basket_weight : 1.0;
-                    book_config.hedge_routes.push_back(
-                        SharedMarketMakerHedgeRoute{
-                            static_cast<BookId>(component), weight});
-                }
-            } else {
-                book_config.hedge_routes.push_back(
-                    SharedMarketMakerHedgeRoute{BookId{0}, 1.0});
-            }
-        }
-        maker.books.push_back(std::move(book_config));
-    }
-    return maker;
 }
 
 } // namespace dlob

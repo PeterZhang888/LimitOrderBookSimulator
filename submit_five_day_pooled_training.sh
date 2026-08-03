@@ -4,8 +4,9 @@
 #
 # This is a normal Slurm submission script: submit it from seagull01 and it
 # performs all work only after a compute node has been allocated.  It does not
-# launch MPI.  First finish six complete `submit_itch50_universe_calibration.sh`
-# jobs (the five training dates plus the 2020-01-30 held-out date), then submit:
+# launch MPI. First extract the five training dates and the 2020-01-30
+# development-validation date with `scripts/extract_itch50_symbols.py`, then
+# submit:
 #
 #   sbatch --export=ALL,\
 # TRAIN_20190130_ROOT=/shared/results/itch_universe_20190130_<job>,\

@@ -556,11 +556,8 @@ QueueReactiveBackgroundBundle load_queue_reactive_background_bundle(
                 "queue-policy mapping cluster disagrees with policy metadata");
         }
 
-        SequentialMultiAssetConfig bridge;
-        bridge.seed = simulation_seed;
-        bridge.tick_size = tick_size;
         BackgroundHawkesConfig config = make_multi_asset_background_config(
-            bridge, asset, static_cast<BookId>(index));
+            asset, static_cast<BookId>(index), simulation_seed, tick_size);
         config.activity_scale = policy.activity_scale;
         config.beta = policy.fast_beta;
         config.slow_beta = policy.slow_beta;

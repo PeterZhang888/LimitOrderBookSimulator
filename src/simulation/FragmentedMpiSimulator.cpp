@@ -854,11 +854,8 @@ private:
 
             BackgroundHawkesConfig background;
             if (config_.background_configs.empty()) {
-                SequentialMultiAssetConfig bridge;
-                bridge.seed = config_.seed;
-                bridge.tick_size = config_.tick_size;
                 background = make_multi_asset_background_config(
-                    bridge, source, asset_id);
+                    source, asset_id, config_.seed, config_.tick_size);
                 background.activity_scale = config_.hawkes_activity_scale;
             } else {
                 background = config_.background_configs[

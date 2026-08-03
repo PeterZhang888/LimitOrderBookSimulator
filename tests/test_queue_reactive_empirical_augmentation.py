@@ -17,7 +17,6 @@ sys.path.insert(0, str(PROJECT / "scripts"))
 
 import apply_queue_reactive_empirical_augmentation as apply_module  # noqa: E402
 import build_queue_reactive_empirical_augmentation as build_module  # noqa: E402
-import verify_queue_reactive_empirical_bundle as verify_module  # noqa: E402
 
 
 def write_json(path: pathlib.Path, value: object) -> None:
@@ -258,13 +257,6 @@ class AugmentationApplicationTest(unittest.TestCase):
                 provenance["state_targets"]["sha256"],
                 apply_module.sha256_file(output / "queue_reactive_state_targets.csv"),
             )
-            verified = verify_module.verify(type("Args", (), {
-                "data_root": output,
-                "expected_symbols": 1,
-                "expected_date": ["2019-01-30"],
-            })())
-            self.assertEqual(verified["status"], "passed")
-            self.assertEqual(verified["verified_file_count"], 8)
             self.assertEqual(
                 (baseline / relative / "legacy.txt").stat().st_ino,
                 (output / relative / "legacy.txt").stat().st_ino,
@@ -295,36 +287,6 @@ class AugmentationApplicationTest(unittest.TestCase):
             self.assertEqual(audit["raw_exact_inside_spread_mark_count"], 4)
             self.assertEqual(audit["runtime_compatible_mark_count"], 3)
             self.assertEqual(audit["excluded_off_grid_mark_count"], 1)
-            verified = verify_module.verify(type("Args", (), {
-                "data_root": output,
-                "expected_symbols": 1,
-                "expected_date": ["2019-01-30"],
-            })())
-            self.assertEqual(verified["status"], "passed")
-
-    def test_bundle_verifier_rejects_tampered_queue_artifact(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            baseline, augmentation, output = self.fixture(pathlib.Path(temporary))
-            apply_module.apply(type("Args", (), {
-                "baseline_root": baseline,
-                "augmentation_root": augmentation,
-                "output_root": output,
-                "copy_files": False,
-            })())
-            artifact = (
-                output / "itch_20190130/empirical_data/itch_20190130_qqq"
-                / "queue_state_counts.csv"
-            )
-            artifact.write_text("tampered\n", encoding="utf-8")
-            with self.assertRaisesRegex(
-                verify_module.VerificationError, "hash mismatch",
-            ):
-                verify_module.verify(type("Args", (), {
-                    "data_root": output,
-                    "expected_symbols": 1,
-                    "expected_date": ["2019-01-30"],
-                })())
-
     def test_application_rejects_new_legacy_event_count_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             baseline, augmentation, output = self.fixture(

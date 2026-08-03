@@ -19,7 +19,8 @@
 #
 # The job deliberately needs one MPI rank at a time: this is compact
 # behavioural-policy fitting, not the distributed scaling experiment.  The
-# resulting policy is later supplied to submit_real_universe_case_study.sh.
+# The resulting policy is consumed by the queue-reactive validation and final
+# liquidity-shock launchers.
 #
 # Change literal #SBATCH directives, or override them at submission time.
 #SBATCH --job-name=lob-cluster-cal

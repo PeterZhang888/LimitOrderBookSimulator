@@ -1,2 +1,0 @@
-book_id,symbol,data_dir,hawkes_rates_file,fundamental_price_ticks,initial_best_bid_ticks,initial_best_ask_ticks,initial_best_bid_depth,initial_best_ask_depth,beta,basket_weight,market_maker_quote_quantity,target_spread_ticks
-0,AAPL,data/itch_20200130_aapl,data/itch_20200130_aapl/hawkes_rates_aapl_provisional_20200130.csv,3206150,3204500,3207800,11,10,1.0,0.0,25,4

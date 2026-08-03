@@ -1,2 +1,0 @@
-book_id,symbol,data_dir,hawkes_rates_file,fundamental_price_ticks,initial_best_bid_ticks,initial_best_ask_ticks,initial_best_bid_depth,initial_best_ask_depth,beta,basket_weight,market_maker_quote_quantity,target_spread_ticks
-0,AMZN,data/itch_20200130_amzn,data/itch_20200130_amzn/hawkes_rates_amzn_provisional_20200130.csv,18594650,18589300,18600000,153,3,1.0,0.0,10,61

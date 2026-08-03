@@ -1,5 +1,6 @@
 #pragma once
 
+#include "exchange/BackgroundHawkesAgent.hpp"
 #include "mpi/MpiCompat.hpp"
 #include "simulation/MultiAssetTypes.hpp"
 
