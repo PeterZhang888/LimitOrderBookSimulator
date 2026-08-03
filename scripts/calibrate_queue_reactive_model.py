@@ -2184,7 +2184,7 @@ def full_day_value_variants(
                 "full-day news recheck count must be between 0 and 16"
             )
         variants.append(ValueCandidate(
-            identifier=f"{candidate.identifier}_r{count}",
+            identifier=f"{candidate.identifier}_rechecks_{count}",
             enabled=candidate.enabled,
             threshold_bps=candidate.threshold_bps,
             depth_participation=candidate.depth_participation,
@@ -4292,7 +4292,7 @@ def load_training_refinement_seed(
             verified_repair_sources[key] = {
                 "path": str(repair_path), "sha256": expected_hash,
             }
-        summaries = repair.get("r28_same_seed_summaries")
+        summaries = repair.get("baseline_same_seed_summaries")
         expected_summary_dates = {
             "2019-01-30", "2019-03-27", "2019-10-30",
         }
@@ -4318,7 +4318,7 @@ def load_training_refinement_seed(
                     "same-seed evidence is missing or hash-mismatched: "
                     f"{summary_path}"
                 )
-            verified_repair_sources[f"r28_summary_{day}"] = {
+            verified_repair_sources[f"baseline_summary_{day}"] = {
                 "path": str(summary_path), "sha256": expected_hash,
             }
         pilot = json.loads(

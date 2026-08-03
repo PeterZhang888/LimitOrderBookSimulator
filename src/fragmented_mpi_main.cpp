@@ -340,6 +340,7 @@ struct Options {
     int duration_seconds = 60;
     int assets = 101;
     double window_ms = 1000.0;
+    double stochastic_baseline_normalization_seconds = 0.0;
     // Zero means use the causal shared-risk decision-window cadence.
     double metrics_interval_ms = 0.0;
     double hawkes_activity_scale = 0.30;
@@ -357,6 +358,7 @@ struct Options {
     std::string base_config = "config/qqq_aapl_msft_amzn_20200130.csv";
     std::string universe_config;
     std::string metrics_csv;
+    std::string cluster_metrics_csv;
     std::string asset_summary_csv;
     std::string shock_targets_csv;
     std::string shock_cluster_csv;
@@ -372,9 +374,11 @@ struct Options {
     int shared_quote_levels = 1;
     bool shared_quote_relative_to_asset = false;
     double shared_quote_multiplier = 1.0;
+    bool shared_capacity_relative_to_asset = false;
     double local_inventory_limit = 100.0;
     double global_risk_limit_per_asset = 100.0;
     double capacity_threshold = 0.5;
+    double minimum_shared_quote_scale = 0.05;
     bool shock = false;
     double shock_time_seconds = 30.0;
     double shock_fraction = 0.01;
@@ -382,6 +386,8 @@ struct Options {
     std::uint64_t shock_target_seed = 20200130;
     int shock_quantity = 5'000;
     double shock_top_depth_multiple = 0.0;
+    double shock_reference_bid_depth_multiple = 0.0;
+    bool shock_inventory_adverse = false;
 };
 
 void print_usage(const char* program) {
@@ -394,6 +400,8 @@ void print_usage(const char* program) {
         << "  --duration-seconds N       simulated seconds (default 60)\n"
         << "  --assets N                synthetic logical assets (default 101)\n"
         << "  --window-ms X             global decision window (default 1000)\n"
+        << "  --stochastic-baseline-normalization-seconds X\n"
+        << "                           fixed activity-normalization horizon; zero uses duration\n"
         << "  --metrics-interval-ms X   global diagnostic sampling cadence "
            "(default: decision window; no effect on market state)\n"
         << "  --hawkes-activity-scale X global background Hawkes activity multiplier "
@@ -412,6 +420,7 @@ void print_usage(const char* program) {
         << "  --universe-config PATH    exact empirical universe CSV; uses every row\n"
         << "  --seed N                  rank-independent random seed\n"
         << "  --metrics-csv PATH        write boundary liquidity series on rank 0\n"
+        << "  --cluster-metrics-csv PATH write non-target cluster series on rank 0\n"
         << "  --asset-summary-csv PATH  write per-asset fixed-clock calibration moments\n"
         << "  --asset-summary-interval-ms X\n"
         << "                           sampling cadence for --asset-summary-csv "
@@ -421,12 +430,14 @@ void print_usage(const char* program) {
         << "  --risk-limit-per-asset X backward-compatible alias for the preceding option\n"
         << "  --local-inventory-limit X fixed local inventory-skew scale\n"
         << "  --capacity-threshold X global withdrawal activation u_0\n"
+        << "  --minimum-shared-quote-scale X residual participation in [0,1]\n"
         << "  --shared-quote-quantity N shared-MM quantity per asset book\n"
         << "  --shared-quote-levels N   shared-MM levels per side\n"
         << "  --shared-quote-relative   scale shared quotes by each asset's calibrated size\n"
         << "  --shared-quote-multiplier X multiplier used with --shared-quote-relative\n"
+        << "  --shared-capacity-relative scale local capacities by empirical quote proxy\n"
         << "  --disable-shared-mm       remove cross-asset shared firm\n"
-        << "  --uncoupled-shared-mm     keep shared quotes/skew but force global phi=1\n"
+        << "  --uncoupled-shared-mm     apply matched capacity separately within each asset\n"
         << "  --disable-local-mm        remove local market makers\n"
         << "  --disable-value-agent     remove stabilising value agents\n"
         << "  --value-agent-interval-ms X local value-decision cadence "
@@ -438,14 +449,16 @@ void print_usage(const char* program) {
            "value_threshold_bps,value_depth_participation"
            "[,value_trigger_mode,value_maximum_news_rechecks,"
            "value_gap_elasticity,value_max_depth_participation]\n"
-        << "  --shock                   enable common-random-number sell shock\n"
+        << "  --shock                   enable common-random-number liquidity shock\n"
         << "  --shock-time-seconds X    shock time (default 30)\n"
         << "  --shock-fraction X        fraction of assets shocked (default 0.01)\n"
         << "  --shock-target-count N    exact target count; overrides fraction\n"
         << "  --shock-target-seed N     fixed mask seed, independent of path seed\n"
         << "  --shock-cluster-csv PATH  symbol,cluster_id mapping for stratified mask\n"
-        << "  --shock-quantity N        fixed sell quantity per shocked asset\n"
-        << "  --shock-top-depth-multiple X override quantity with X times bid depth at t_s-\n";
+        << "  --shock-quantity N        fixed quantity per shocked asset\n"
+        << "  --shock-top-depth-multiple X override quantity with X times bid depth at t_s-\n"
+        << "  --shock-reference-bid-depth-multiple X use X times held-out opening bid depth as the fixed dose unit\n"
+        << "  --shock-inventory-adverse choose the aggressive side at t_s to increase shared-dealer |inventory|\n";
 }
 
 Options parse_options(int argc, char** argv) {
@@ -460,6 +473,9 @@ Options parse_options(int argc, char** argv) {
                 require_value(index, argc, argv, argument.c_str()), argument.c_str());
         } else if (argument == "--window-ms") {
             options.window_ms = parse_double(
+                require_value(index, argc, argv, argument.c_str()), argument.c_str());
+        } else if (argument == "--stochastic-baseline-normalization-seconds") {
+            options.stochastic_baseline_normalization_seconds = parse_double(
                 require_value(index, argc, argv, argument.c_str()), argument.c_str());
         } else if (argument == "--metrics-interval-ms") {
             options.metrics_interval_ms = parse_double(
@@ -500,6 +516,9 @@ Options parse_options(int argc, char** argv) {
                 require_value(index, argc, argv, argument.c_str()), argument.c_str());
         } else if (argument == "--metrics-csv") {
             options.metrics_csv = require_value(index, argc, argv, argument.c_str());
+        } else if (argument == "--cluster-metrics-csv") {
+            options.cluster_metrics_csv = require_value(
+                index, argc, argv, argument.c_str());
         } else if (argument == "--asset-summary-csv") {
             options.asset_summary_csv = require_value(
                 index, argc, argv, argument.c_str());
@@ -519,6 +538,9 @@ Options parse_options(int argc, char** argv) {
         } else if (argument == "--capacity-threshold") {
             options.capacity_threshold = parse_double(
                 require_value(index, argc, argv, argument.c_str()), argument.c_str());
+        } else if (argument == "--minimum-shared-quote-scale") {
+            options.minimum_shared_quote_scale = parse_double(
+                require_value(index, argc, argv, argument.c_str()), argument.c_str());
         } else if (argument == "--shared-quote-quantity") {
             options.shared_quote_quantity = parse_integer<int>(
                 require_value(index, argc, argv, argument.c_str()), argument.c_str());
@@ -530,6 +552,8 @@ Options parse_options(int argc, char** argv) {
         } else if (argument == "--shared-quote-multiplier") {
             options.shared_quote_multiplier = parse_double(
                 require_value(index, argc, argv, argument.c_str()), argument.c_str());
+        } else if (argument == "--shared-capacity-relative") {
+            options.shared_capacity_relative_to_asset = true;
         } else if (argument == "--disable-shared-mm") {
             options.shared_market_maker = false;
         } else if (argument == "--uncoupled-shared-mm") {
@@ -570,6 +594,11 @@ Options parse_options(int argc, char** argv) {
         } else if (argument == "--shock-top-depth-multiple") {
             options.shock_top_depth_multiple = parse_double(
                 require_value(index, argc, argv, argument.c_str()), argument.c_str());
+        } else if (argument == "--shock-reference-bid-depth-multiple") {
+            options.shock_reference_bid_depth_multiple = parse_double(
+                require_value(index, argc, argv, argument.c_str()), argument.c_str());
+        } else if (argument == "--shock-inventory-adverse") {
+            options.shock_inventory_adverse = true;
         } else if (argument == "-h" || argument == "--help") {
             print_usage(argv[0]);
             std::exit(0);
@@ -579,6 +608,11 @@ Options parse_options(int argc, char** argv) {
     }
     if (options.duration_seconds <= 0 || options.assets <= 0
         || !std::isfinite(options.window_ms) || options.window_ms <= 0.0
+        || !std::isfinite(options.stochastic_baseline_normalization_seconds)
+        || options.stochastic_baseline_normalization_seconds < 0.0
+        || (options.stochastic_baseline_normalization_seconds > 0.0
+            && options.stochastic_baseline_normalization_seconds
+                < static_cast<double>(options.duration_seconds))
         || !std::isfinite(options.metrics_interval_ms)
         || options.metrics_interval_ms < 0.0
         || !std::isfinite(options.hawkes_activity_scale)
@@ -605,6 +639,10 @@ Options parse_options(int argc, char** argv) {
         || options.shock_quantity <= 0
         || !std::isfinite(options.shock_top_depth_multiple)
         || options.shock_top_depth_multiple < 0.0
+        || !std::isfinite(options.shock_reference_bid_depth_multiple)
+        || options.shock_reference_bid_depth_multiple < 0.0
+        || (options.shock_top_depth_multiple > 0.0
+            && options.shock_reference_bid_depth_multiple > 0.0)
         || options.shock_target_count < 0
         || !std::isfinite(options.local_inventory_limit)
         || options.local_inventory_limit <= 0.0
@@ -612,6 +650,9 @@ Options parse_options(int argc, char** argv) {
         || options.global_risk_limit_per_asset <= 0.0
         || !std::isfinite(options.capacity_threshold)
         || options.capacity_threshold < 0.0 || options.capacity_threshold >= 1.0
+        || !std::isfinite(options.minimum_shared_quote_scale)
+        || options.minimum_shared_quote_scale < 0.0
+        || options.minimum_shared_quote_scale > 1.0
         || options.shared_quote_quantity <= 0
         || options.shared_quote_levels <= 0
         || !std::isfinite(options.shared_quote_multiplier)
@@ -743,6 +784,11 @@ int main(int argc, char** argv) {
         config.asset_count = static_cast<int>(asset_configs.size());
         config.decision_window_ns = static_cast<std::int64_t>(
             std::llround(window_ns_double));
+        config.stochastic_baseline_normalization_horizon_ns =
+            options.stochastic_baseline_normalization_seconds > 0.0
+            ? static_cast<std::int64_t>(std::llround(
+                options.stochastic_baseline_normalization_seconds * 1e9))
+            : 0;
         config.global_metrics_interval_ns = static_cast<std::int64_t>(
             std::llround(metrics_interval_ns_double));
         config.hawkes_activity_scale = options.hawkes_activity_scale;
@@ -773,10 +819,13 @@ int main(int argc, char** argv) {
         config.shared_quote_levels = options.shared_quote_levels;
         config.shared_quote_relative_to_asset = options.shared_quote_relative_to_asset;
         config.shared_quote_multiplier = options.shared_quote_multiplier;
+        config.shared_capacity_relative_to_asset =
+            options.shared_capacity_relative_to_asset;
         config.shared_local_inventory_scale = options.local_inventory_limit;
         config.shared_global_risk_limit_per_asset =
             options.global_risk_limit_per_asset;
         config.shared_capacity_threshold = options.capacity_threshold;
+        config.shared_minimum_quote_scale = options.minimum_shared_quote_scale;
         config.enable_shock = options.shock;
         config.shock_time_ns = static_cast<std::int64_t>(
             std::llround(shock_ns_double));
@@ -786,7 +835,11 @@ int main(int argc, char** argv) {
         config.shock_cluster_ids = shock_clusters;
         config.shock_quantity_per_asset = options.shock_quantity;
         config.shock_top_depth_multiple = options.shock_top_depth_multiple;
+        config.shock_reference_bid_depth_multiple =
+            options.shock_reference_bid_depth_multiple;
+        config.shock_inventory_adverse = options.shock_inventory_adverse;
         config.metrics_csv = options.metrics_csv;
+        config.cluster_metrics_csv = options.cluster_metrics_csv;
         config.asset_summary_csv = options.asset_summary_csv;
         config.shock_targets_csv = options.shock_targets_csv;
 
@@ -800,6 +853,10 @@ int main(int argc, char** argv) {
                 << " lobs=" << result.lob_count
                 << " simulated_seconds=" << options.duration_seconds
                 << " window_ms=" << options.window_ms
+                << " stochastic_baseline_normalization_seconds="
+                << (options.stochastic_baseline_normalization_seconds > 0.0
+                    ? options.stochastic_baseline_normalization_seconds
+                    : static_cast<double>(options.duration_seconds))
                 << " metrics_interval_ms=" << metrics_interval_ms
                 << " fundamental_news_interval_ms=1000.000000000"
                 << " windows=" << result.windows
@@ -844,6 +901,8 @@ int main(int argc, char** argv) {
                 << (options.shared_quote_relative_to_asset ? 1 : 0)
                 << " shared_quote_quantity=" << options.shared_quote_quantity
                 << " shared_quote_multiplier=" << options.shared_quote_multiplier
+                << " shared_capacity_relative="
+                << (options.shared_capacity_relative_to_asset ? 1 : 0)
                 << " shared_quote_levels=" << options.shared_quote_levels
                 << " local_inventory_limit=" << options.local_inventory_limit
                 << " global_risk_limit_per_asset="
@@ -851,17 +910,29 @@ int main(int argc, char** argv) {
                 << " risk_limit_per_asset="
                 << options.global_risk_limit_per_asset
                 << " capacity_threshold=" << options.capacity_threshold
+                << " minimum_shared_quote_scale_floor="
+                << options.minimum_shared_quote_scale
                 << " shock=" << (options.shock ? 1 : 0)
                 << " shock_time_seconds=" << options.shock_time_seconds
                 << " shock_fraction=" << options.shock_fraction
                 << " shock_target_count_requested=" << options.shock_target_count
                 << " shock_target_seed=" << options.shock_target_seed
                 << " shock_top_depth_multiple=" << options.shock_top_depth_multiple
+                << " shock_reference_bid_depth_multiple="
+                << options.shock_reference_bid_depth_multiple
+                << " shock_inventory_adverse="
+                << (options.shock_inventory_adverse ? 1 : 0)
                 << " shock_target_assets=" << result.shock_target_assets
                 << " shock_assets=" << result.shock_assets
                 << " shock_requested_quantity=" << result.shock_requested_quantity
                 << " shock_executed_quantity=" << result.shock_executed_quantity
                 << " shock_shared_mm_quantity=" << result.shock_shared_mm_quantity
+                << " shock_local_mm_quantity=" << result.shock_local_mm_quantity
+                << " shock_value_agent_quantity="
+                << result.shock_value_agent_quantity
+                << " shock_background_quantity="
+                << result.shock_background_quantity
+                << " shock_other_quantity=" << result.shock_other_quantity
                 << " withdrawal_windows=" << result.withdrawal_windows
                 << " final_shared_gross_exposure="
                 << result.final_shared_gross_exposure

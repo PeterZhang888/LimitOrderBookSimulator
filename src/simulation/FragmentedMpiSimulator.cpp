@@ -142,9 +142,21 @@ struct LocalAsset {
     std::int64_t value_inventory = 0;
     std::uint64_t shock_executed_quantity = 0;
     std::uint64_t shock_shared_mm_quantity = 0;
+    std::uint64_t shock_local_mm_quantity = 0;
+    std::uint64_t shock_value_agent_quantity = 0;
+    std::uint64_t shock_background_quantity = 0;
+    std::uint64_t shock_other_quantity = 0;
     std::uint64_t shock_requested_quantity = 0;
+    // 0=not injected, 1=aggressive buy, 2=aggressive sell.
+    std::int32_t shock_side_code = 0;
+    std::int64_t shock_pre_shared_inventory = 0;
+    bool shock_pre_inventory_recorded = false;
     bool shock_injected = false;
+    double shared_requested_bid_depth = 0.0;
+    double shared_requested_ask_depth = 0.0;
     double shared_requested_quote_depth = 0.0;
+    double shared_risk_reducing_requested_quote_depth = 0.0;
+    double shared_risk_increasing_requested_quote_depth = 0.0;
     std::uint64_t value_order_count = 0;
     std::uint64_t value_requested_quantity = 0;
     std::uint64_t background_limit_requested_quantity = 0;
@@ -204,6 +216,8 @@ struct AssetResultWire {
     std::int64_t shared_inventory = 0;
     std::int64_t value_inventory = 0;
     std::uint64_t shock_requested_quantity = 0;
+    std::int32_t shock_side_code = 0;
+    std::int64_t shock_pre_shared_inventory = 0;
     double fundamental_value_ticks = 0.0;
     double fundamental_log_variance = 0.0;
     std::int64_t value_recheck_due_ns = 0;
@@ -264,6 +278,31 @@ struct AggregateMetricSums {
     double shocked_shared_inventory_sum = 0.0;
     double value_order_count = 0.0;
     double value_requested_quantity = 0.0;
+    double shared_requested_quote_depth_sum = 0.0;
+    double shared_risk_reducing_quote_depth_sum = 0.0;
+    double shared_risk_increasing_quote_depth_sum = 0.0;
+    double shared_resting_quote_depth_sum = 0.0;
+    double shared_risk_reducing_resting_depth_sum = 0.0;
+    double shared_risk_increasing_resting_depth_sum = 0.0;
+    double unshocked_shared_resting_depth_sum = 0.0;
+    double shared_active_asset_count = 0.0;
+    double shared_two_sided_active_asset_count = 0.0;
+    double shocked_bid_top_depth_sum = 0.0;
+    double shocked_shared_bid_resting_depth_sum = 0.0;
+    double shared_best_bid_depth_sum = 0.0;
+    double shared_best_ask_depth_sum = 0.0;
+    double shared_at_best_bid_asset_count = 0.0;
+    double shared_at_best_ask_asset_count = 0.0;
+    double shared_nonzero_inventory_asset_count = 0.0;
+    double shared_absolute_inventory_sum = 0.0;
+    double shocked_shared_absolute_inventory_sum = 0.0;
+    double shared_requested_active_asset_count = 0.0;
+    double shared_requested_two_sided_asset_count = 0.0;
+};
+
+struct ScheduledQuoteDepth {
+    std::uint64_t bid = 0;
+    std::uint64_t ask = 0;
 };
 
 struct AggregateMetrics {
@@ -307,12 +346,18 @@ public:
             config_.global_metrics_interval_ns = config_.decision_window_ns;
         }
         validate_config();
+        initialize_shared_capacity_weights();
         default_value_agent_policy_.enabled = true;
         default_value_agent_policy_.threshold_bps = config_.value_threshold_bps;
         default_value_agent_policy_.depth_participation =
             config_.value_depth_participation;
         default_value_agent_policy_.order_quantity = config_.value_order_quantity;
         select_shock_assets();
+        if (!config_.shock_cluster_ids.empty()) {
+            cluster_count_ = 1 + *std::max_element(
+                config_.shock_cluster_ids.begin(),
+                config_.shock_cluster_ids.end());
+        }
     }
 
     FragmentedMpiResult run() {
@@ -449,6 +494,9 @@ private:
         if (world_size_ <= 0 || config_.asset_count <= 0
             || config_.decision_window_ns <= 0
             || config_.decision_window_ns > end_time_ns_
+            || (config_.stochastic_baseline_normalization_horizon_ns > 0
+                && config_.stochastic_baseline_normalization_horizon_ns
+                    < end_time_ns_)
             || config_.local_mm_interval_ns <= 0
             || config_.value_agent_interval_ns <= 0
             || config_.global_metrics_interval_ns < config_.decision_window_ns
@@ -491,6 +539,9 @@ private:
             || !std::isfinite(config_.shared_capacity_threshold)
             || config_.shared_capacity_threshold < 0.0
             || config_.shared_capacity_threshold >= 1.0
+            || !std::isfinite(config_.shared_minimum_quote_scale)
+            || config_.shared_minimum_quote_scale < 0.0
+            || config_.shared_minimum_quote_scale > 1.0
             || !std::isfinite(config_.shock_asset_fraction)
             || config_.shock_asset_fraction <= 0.0
             || config_.shock_asset_fraction > 1.0
@@ -498,7 +549,11 @@ private:
             || config_.shock_target_count > config_.asset_count
             || config_.shock_quantity_per_asset <= 0
             || !std::isfinite(config_.shock_top_depth_multiple)
-            || config_.shock_top_depth_multiple < 0.0) {
+            || config_.shock_top_depth_multiple < 0.0
+            || !std::isfinite(config_.shock_reference_bid_depth_multiple)
+            || config_.shock_reference_bid_depth_multiple < 0.0
+            || (config_.shock_top_depth_multiple > 0.0
+                && config_.shock_reference_bid_depth_multiple > 0.0)) {
             throw std::invalid_argument("invalid fragmented MPI configuration");
         }
         if (config_.enable_shock
@@ -538,6 +593,17 @@ private:
                 != static_cast<std::size_t>(config_.asset_count)) {
             throw std::invalid_argument(
                 "shock cluster IDs must be empty or aligned with asset configs");
+        }
+        if (!config_.cluster_metrics_csv.empty()
+            && config_.shock_cluster_ids.empty()) {
+            throw std::invalid_argument(
+                "cluster metrics require aligned shock cluster IDs");
+        }
+        if (std::any_of(
+                config_.shock_cluster_ids.begin(),
+                config_.shock_cluster_ids.end(),
+                [](int cluster) { return cluster < 0; })) {
+            throw std::invalid_argument("shock cluster IDs must be non-negative");
         }
         for (const FragmentedValueAgentPolicy& policy : config_.value_agent_policies) {
             if (!std::isfinite(policy.threshold_bps) || policy.threshold_bps < 0.0
@@ -597,7 +663,8 @@ private:
                 || (book.fundamental_order_flow_coupling > 0.0
                     && book.fundamental_log_variance_std <= 0.0)
                 || !std::isfinite(book.beta)
-                || (config_.shared_quote_relative_to_asset
+                || ((config_.shared_quote_relative_to_asset
+                     || config_.shared_capacity_relative_to_asset)
                     && book.market_maker_quote_quantity <= 0)) {
                 throw std::invalid_argument("invalid fragmented asset template");
             }
@@ -667,16 +734,71 @@ private:
         shock_asset_count_ = static_cast<std::uint64_t>(count);
     }
 
+    void initialize_shared_capacity_weights() {
+        shared_capacity_weights_.assign(
+            static_cast<std::size_t>(config_.asset_count), 1.0);
+        if (!config_.shared_capacity_relative_to_asset) return;
+        double total_proxy = 0.0;
+        for (const MultiAssetBookConfig& asset : config_.asset_configs) {
+            total_proxy += static_cast<double>(
+                asset.market_maker_quote_quantity);
+        }
+        const double mean_proxy = total_proxy
+            / static_cast<double>(config_.asset_count);
+        if (!(mean_proxy > 0.0) || !std::isfinite(mean_proxy)) {
+            throw std::invalid_argument(
+                "invalid empirical shared-capacity normalization");
+        }
+        for (std::size_t index = 0;
+             index < shared_capacity_weights_.size(); ++index) {
+            shared_capacity_weights_[index] = static_cast<double>(
+                config_.asset_configs[index].market_maker_quote_quantity)
+                / mean_proxy;
+        }
+    }
+
+    double shared_capacity_weight(BookId asset_id) const {
+        return shared_capacity_weights_.at(
+            static_cast<std::size_t>(asset_id));
+    }
+
+    double uncoupled_quote_scale(const LocalAsset& asset) const {
+        const double capacity = config_.shared_global_risk_limit_per_asset
+            * shared_capacity_weight(asset.asset_id);
+        const double utilization = std::abs(
+            asset.config.beta * static_cast<double>(asset.shared_inventory))
+            / capacity;
+        return detail::shared_capacity_quote_scale(
+            utilization,
+            config_.shared_capacity_threshold,
+            config_.shared_minimum_quote_scale,
+            true);
+    }
+
+    double local_inventory_scale(const LocalAsset& asset) const {
+        const double beta = std::max(1.0e-12, std::abs(asset.config.beta));
+        return config_.shared_local_inventory_scale
+            * shared_capacity_weight(asset.asset_id) / beta;
+    }
+
     void write_shock_targets(const std::vector<AssetResultWire>& assets) const {
         if (rank_ != 0 || config_.shock_targets_csv.empty()) return;
         std::vector<std::uint64_t> requested(
             static_cast<std::size_t>(config_.asset_count), 0U);
+        std::vector<std::int32_t> side_codes(
+            static_cast<std::size_t>(config_.asset_count), 0);
+        std::vector<std::int64_t> pre_shock_inventories(
+            static_cast<std::size_t>(config_.asset_count), 0);
         for (const AssetResultWire& asset : assets) {
             if (asset.asset_id >= static_cast<BookId>(config_.asset_count)) {
                 throw std::logic_error("invalid asset in shock target gather");
             }
             requested[static_cast<std::size_t>(asset.asset_id)] =
                 asset.shock_requested_quantity;
+            side_codes[static_cast<std::size_t>(asset.asset_id)] =
+                asset.shock_side_code;
+            pre_shock_inventories[static_cast<std::size_t>(asset.asset_id)] =
+                asset.shock_pre_shared_inventory;
         }
         const std::filesystem::path path(config_.shock_targets_csv);
         if (path.has_parent_path()) {
@@ -688,16 +810,31 @@ private:
                                      + path.string());
         }
         output << "asset_id,symbol,cluster_id,is_shock_target,shock_enabled,"
-                  "requested_sell_quantity,mask_seed\n";
+                  "requested_quantity,requested_sell_quantity,"
+                  "requested_buy_quantity,shock_side,"
+                  "pre_shock_shared_inventory,direction_rule,mask_seed\n";
         for (std::size_t index = 0; index < config_.asset_configs.size(); ++index) {
+            const bool enabled_target = shock_mask_[index]
+                && config_.enable_shock;
+            const std::uint64_t quantity = enabled_target
+                ? requested[index] : 0U;
+            const std::int32_t side_code = enabled_target
+                ? side_codes[index] : 0;
             output << index << ','
                    << config_.asset_configs[index].symbol << ','
                    << (config_.shock_cluster_ids.empty()
                        ? -1 : config_.shock_cluster_ids[index]) << ','
                    << (shock_mask_[index] ? 1 : 0) << ','
                    << (config_.enable_shock ? 1 : 0) << ','
-                   << (shock_mask_[index] && config_.enable_shock
-                       ? requested[index] : 0)
+                   << quantity << ','
+                   << (side_code == 2 ? quantity : 0U) << ','
+                   << (side_code == 1 ? quantity : 0U) << ','
+                   << (side_code == 1 ? "buy"
+                       : (side_code == 2 ? "sell" : "none")) << ','
+                   << (enabled_target
+                       ? pre_shock_inventories[index] : 0) << ','
+                   << (config_.shock_inventory_adverse
+                       ? "inventory_adverse" : "fixed_sell")
                    << ',' << config_.shock_target_seed
                    << '\n';
         }
@@ -742,9 +879,14 @@ private:
                 background.stochastic_baseline_origin_ns = 0;
                 background.stochastic_baseline_bin_width_ns =
                     fundamental_news_interval_ns;
+                const std::int64_t normalization_horizon =
+                    config_.stochastic_baseline_normalization_horizon_ns > 0
+                    ? config_.stochastic_baseline_normalization_horizon_ns
+                    : end_time_ns_;
                 background.stochastic_baseline_normalization_bins =
                     static_cast<std::uint64_t>(
-                        (end_time_ns_ + fundamental_news_interval_ns - 1)
+                        (normalization_horizon
+                            + fundamental_news_interval_ns - 1)
                         / fundamental_news_interval_ns);
             }
             auto asset = std::make_unique<LocalAsset>(
@@ -758,8 +900,16 @@ private:
             compute_baseline(*asset);
             if (config_.enable_shock
                 && shock_mask_[static_cast<std::size_t>(asset_index)]
-                && config_.shock_top_depth_multiple <= 0.0) {
-                const int shock_quantity = config_.shock_quantity_per_asset;
+                && config_.shock_top_depth_multiple <= 0.0
+                && !config_.shock_inventory_adverse) {
+                const int shock_quantity =
+                    config_.shock_reference_bid_depth_multiple > 0.0
+                    ? bounded_positive_quantity(
+                        config_.shock_reference_bid_depth_multiple
+                            * static_cast<double>(
+                                source.initial_best_bid_depth),
+                        "reference-depth sell-side stress quantity")
+                    : config_.shock_quantity_per_asset;
                 asset->shock_requested_quantity =
                     static_cast<std::uint64_t>(shock_quantity);
                 asset->shock_injected = true;
@@ -828,11 +978,24 @@ private:
             if (shock_seller || shock_buyer) {
                 asset.shock_executed_quantity +=
                     static_cast<std::uint64_t>(trade.quantity);
-                if ((shock_seller
-                     && trade.buyer_owner_id == shared_market_maker_owner)
-                    || (shock_buyer
-                        && trade.seller_owner_id == shared_market_maker_owner)) {
+                const std::int32_t counterparty = shock_seller
+                    ? trade.buyer_owner_id : trade.seller_owner_id;
+                if (counterparty == shared_market_maker_owner) {
                     asset.shock_shared_mm_quantity +=
+                        static_cast<std::uint64_t>(trade.quantity);
+                } else if (counterparty
+                           == local_market_maker_owner_id(asset.asset_id)) {
+                    asset.shock_local_mm_quantity +=
+                        static_cast<std::uint64_t>(trade.quantity);
+                } else if (counterparty
+                           == fundamental_value_owner_id(asset.asset_id)) {
+                    asset.shock_value_agent_quantity +=
+                        static_cast<std::uint64_t>(trade.quantity);
+                } else if (counterparty == 0) {
+                    asset.shock_background_quantity +=
+                        static_cast<std::uint64_t>(trade.quantity);
+                } else {
+                    asset.shock_other_quantity +=
                         static_cast<std::uint64_t>(trade.quantity);
                 }
             }
@@ -899,6 +1062,12 @@ private:
         if (order.book_id != asset.book.book_id) {
             throw std::logic_error("order targets a book outside its asset shard");
         }
+        if (order.owner_id == liquidity_shock_owner_id
+            && !asset.shock_pre_inventory_recorded) {
+            asset.shock_pre_shared_inventory = asset.shared_inventory;
+            asset.shock_side_code = order.side == Side::Buy ? 1 : 2;
+            asset.shock_pre_inventory_recorded = true;
+        }
         const ApplyResult result = apply_to_book(
             asset, order, std::max(0, order.quantity));
         if (order.action == OrderAction::ConservedLimit) {
@@ -925,7 +1094,8 @@ private:
                 asset.hawkes.peek_time_ns();
             const bool has_background = next_background_time < end_ns;
             const bool has_dynamic_shock = config_.enable_shock
-                && config_.shock_top_depth_multiple > 0.0
+                && (config_.shock_top_depth_multiple > 0.0
+                    || config_.shock_inventory_adverse)
                 && shock_mask_[static_cast<std::size_t>(asset.asset_id)]
                 && !asset.shock_injected
                 && config_.shock_time_ns >= start_ns
@@ -940,19 +1110,42 @@ private:
             const std::int64_t shock_time = has_dynamic_shock
                 ? config_.shock_time_ns : std::numeric_limits<std::int64_t>::max();
             if (shock_time <= pending_time && shock_time <= background_time) {
-                const int contemporaneous_bid_depth = std::max(
-                    1, asset.book.lob.best_bid_depth());
-                const int quantity = bounded_positive_quantity(
-                    config_.shock_top_depth_multiple
-                        * static_cast<double>(contemporaneous_bid_depth),
-                    "contemporaneous-depth sell-side stress quantity");
+                int quantity = config_.shock_quantity_per_asset;
+                if (config_.shock_top_depth_multiple > 0.0) {
+                    const Side depth_side = config_.shock_inventory_adverse
+                        ? detail::inventory_adverse_shock_side(
+                            asset.shared_inventory)
+                        : Side::Sell;
+                    const int contemporaneous_depth = std::max(
+                        1, depth_side == Side::Buy
+                            ? asset.book.lob.best_ask_depth()
+                            : asset.book.lob.best_bid_depth());
+                    quantity = bounded_positive_quantity(
+                        config_.shock_top_depth_multiple
+                            * static_cast<double>(contemporaneous_depth),
+                        "contemporaneous top-depth stress quantity");
+                } else if (config_.shock_reference_bid_depth_multiple > 0.0) {
+                    // Opening bid depth is a fixed dose unit even when the
+                    // state-contingent intervention is an aggressive buy.
+                    // This preserves an identical quantity vector across
+                    // global, uncoupled, and shared-dealer-absent mechanisms.
+                    quantity = bounded_positive_quantity(
+                        config_.shock_reference_bid_depth_multiple
+                            * static_cast<double>(
+                                asset.config.initial_best_bid_depth),
+                        "reference-depth inventory stress quantity");
+                }
+                const Side shock_side = config_.shock_inventory_adverse
+                    ? detail::inventory_adverse_shock_side(
+                        asset.shared_inventory)
+                    : Side::Sell;
                 asset.shock_requested_quantity =
                     static_cast<std::uint64_t>(quantity);
                 asset.shock_injected = true;
                 apply_order(asset, make_market_order(
                     asset.asset_id, config_.shock_time_ns,
                     liquidity_shock_owner_id, AgentKind::Institutional,
-                    Side::Sell, quantity,
+                    shock_side, quantity,
                     stable_sequence(liquidity_shock_entity(asset.asset_id), 1)));
                 continue;
             }
@@ -999,7 +1192,7 @@ private:
         }
     }
 
-    void append_quotes(LocalAsset& asset,
+    ScheduledQuoteDepth append_quotes(LocalAsset& asset,
                        LocalBook& book,
                        std::int64_t decision_time_ns,
                        std::uint64_t boundary_index,
@@ -1012,8 +1205,13 @@ private:
                        double maximum_improvement_probability,
                        bool quote_only_when_repairing,
                        bool conserve_empirical_liquidity,
+                       bool preserve_unchanged_priority,
                        double bid_scale,
-                       double ask_scale) {
+                       double ask_scale,
+                       std::uint64_t bid_total_limit =
+                           std::numeric_limits<std::uint64_t>::max(),
+                       std::uint64_t ask_total_limit =
+                           std::numeric_limits<std::uint64_t>::max()) {
         const std::int64_t arrival_time_ns = checked_add_time(
             decision_time_ns, agent_latency_ns);
         const MarketState state = book.lob.state(
@@ -1046,10 +1244,12 @@ private:
             // normal resting order until it fills or another repair replaces
             // it; unconditional cancellation would create on/off oscillation.
             if (!conserve_empirical_liquidity
-                && !quote_only_when_repairing) {
+                && !quote_only_when_repairing
+                && (!preserve_unchanged_priority
+                    || !book.lob.owner_resting_quotes(owner_id).empty())) {
                 make_order(OrderAction::CancelOwner, Side::Buy, 0, 0);
             }
-            return;
+            return {};
         }
 
         const std::int64_t tick = config_.tick_size;
@@ -1088,10 +1288,7 @@ private:
                 shallow_top,
                 wide_spread,
                 improve_wide_spread)) {
-            return;
-        }
-        if (!conserve_empirical_liquidity) {
-            make_order(OrderAction::CancelOwner, Side::Buy, 0, 0);
+            return {};
         }
         const detail::FragmentedQuotePrices prices =
             detail::fragmented_quote_prices(
@@ -1101,39 +1298,99 @@ private:
         const std::int64_t bid = prices.bid;
         const std::int64_t ask = prices.ask;
 
+        struct PlannedQuote {
+            Side side = Side::Buy;
+            int quantity = 0;
+            int price_ticks = 0;
+        };
+        std::vector<PlannedQuote> planned;
+        ScheduledQuoteDepth scheduled;
+        std::uint64_t bid_remaining = bid_total_limit;
+        std::uint64_t ask_remaining = ask_total_limit;
         for (int level = 0; level < levels; ++level) {
             const std::int64_t level_bid = bid - static_cast<std::int64_t>(level) * tick;
             const std::int64_t level_ask = ask + static_cast<std::int64_t>(level) * tick;
             // Inventory skew can enlarge one side of a shared quote.  Route
             // it through the same bounded conversion used for empirical quote
             // multipliers rather than narrowing an out-of-range double to int.
-            const int bid_quantity = bid_scale > 0.0
+            const int desired_bid_quantity = bid_scale > 0.0
                 ? bounded_positive_quantity(
                     static_cast<double>(base_quantity) * bid_scale,
                     "bid quote quantity")
                 : 0;
-            const int ask_quantity = ask_scale > 0.0
+            const int desired_ask_quantity = ask_scale > 0.0
                 ? bounded_positive_quantity(
                     static_cast<double>(base_quantity) * ask_scale,
                     "ask quote quantity")
                 : 0;
+            const int bid_quantity = static_cast<int>(std::min<std::uint64_t>(
+                static_cast<std::uint64_t>(desired_bid_quantity), bid_remaining));
+            const int ask_quantity = static_cast<int>(std::min<std::uint64_t>(
+                static_cast<std::uint64_t>(desired_ask_quantity), ask_remaining));
             if (level_bid > 0 && bid_quantity > 0
                 && level_bid <= std::numeric_limits<std::int32_t>::max()) {
-                make_order(conserve_empirical_liquidity
-                               ? OrderAction::ConservedLimit
-                               : OrderAction::Limit,
-                           Side::Buy, bid_quantity,
-                           static_cast<int>(level_bid));
+                planned.push_back(PlannedQuote{
+                    Side::Buy, bid_quantity, static_cast<int>(level_bid)});
+                scheduled.bid += static_cast<std::uint64_t>(bid_quantity);
+                bid_remaining -= static_cast<std::uint64_t>(bid_quantity);
             }
             if (level_ask > level_bid && ask_quantity > 0
                 && level_ask <= std::numeric_limits<std::int32_t>::max()) {
-                make_order(conserve_empirical_liquidity
-                               ? OrderAction::ConservedLimit
-                               : OrderAction::Limit,
-                           Side::Sell, ask_quantity,
-                           static_cast<int>(level_ask));
+                planned.push_back(PlannedQuote{
+                    Side::Sell, ask_quantity, static_cast<int>(level_ask)});
+                scheduled.ask += static_cast<std::uint64_t>(ask_quantity);
+                ask_remaining -= static_cast<std::uint64_t>(ask_quantity);
             }
         }
+
+        // A shared dealer that blindly cancels and recreates an unchanged BBO
+        // quote every decision window loses price--time priority every second.
+        // Preserve existing quantities at the desired prices and append only
+        // a top-up.  A price change or a required size reduction still uses a
+        // cancel/replace, matching normal exchange priority semantics.
+        std::map<std::pair<int, int>, std::int64_t> current;
+        bool reset_owner = !conserve_empirical_liquidity
+            && !quote_only_when_repairing;
+        if (reset_owner && preserve_unchanged_priority) {
+            reset_owner = false;
+            std::map<std::pair<int, int>, std::int64_t> desired;
+            for (const PlannedQuote& quote : planned) {
+                desired[{static_cast<int>(quote.side), quote.price_ticks}]
+                    += quote.quantity;
+            }
+            for (const OwnerRestingQuote& quote
+                    : book.lob.owner_resting_quotes(owner_id)) {
+                const auto key = std::make_pair(
+                    static_cast<int>(quote.side), quote.price_ticks);
+                current[key] += quote.quantity;
+            }
+            for (const auto& [key, quantity] : current) {
+                const auto found = desired.find(key);
+                if (found == desired.end() || quantity > found->second) {
+                    reset_owner = true;
+                    break;
+                }
+            }
+        }
+        if (reset_owner) {
+            make_order(OrderAction::CancelOwner, Side::Buy, 0, 0);
+            current.clear();
+        }
+        const OrderAction quote_action = conserve_empirical_liquidity
+            ? OrderAction::ConservedLimit : OrderAction::Limit;
+        for (const PlannedQuote& quote : planned) {
+            const auto key = std::make_pair(
+                static_cast<int>(quote.side), quote.price_ticks);
+            const std::int64_t existing = preserve_unchanged_priority
+                ? current[key] : 0;
+            const std::int64_t delta =
+                static_cast<std::int64_t>(quote.quantity) - existing;
+            if (delta > 0) {
+                make_order(quote_action, quote.side,
+                           static_cast<int>(delta), quote.price_ticks);
+            }
+        }
+        return scheduled;
     }
 
     void schedule_local_market_makers(std::int64_t decision_time_ns,
@@ -1147,7 +1404,7 @@ private:
                 config_.local_mm_quantity_multiplier * static_cast<double>(
                     asset.config.market_maker_quote_quantity),
                 "local market-maker quote quantity");
-            append_quotes(
+            (void)append_quotes(
                 asset, book, decision_time_ns, refresh_index,
                 local_market_maker_owner_id(asset.asset_id),
                 local_market_maker_entity_base, local_quantity, 1,
@@ -1155,6 +1412,7 @@ private:
                 config_.local_mm_spread_elasticity,
                 config_.local_mm_max_improvement_probability,
                 true,
+                false,
                 false,
                 1.0, 1.0);
         }
@@ -1208,14 +1466,6 @@ private:
         for (const std::unique_ptr<LocalAsset>& pointer : local_assets_) {
             LocalAsset& asset = *pointer;
             LocalBook& book = asset.book;
-            const double inventory_ratio = std::min(
-                0.75,
-                std::abs(static_cast<double>(asset.shared_inventory))
-                    / std::max(1.0, config_.shared_local_inventory_scale));
-            const double bid_inventory_scale = asset.shared_inventory > 0
-                ? 1.0 - inventory_ratio : 1.0 + inventory_ratio;
-            const double ask_inventory_scale = asset.shared_inventory < 0
-                ? 1.0 - inventory_ratio : 1.0 + inventory_ratio;
             const double shared_base_quantity =
                 config_.shared_quote_relative_to_asset
                 ? config_.shared_quote_multiplier * static_cast<double>(
@@ -1223,13 +1473,14 @@ private:
                 : static_cast<double>(config_.shared_quote_quantity);
             const int shared_book_quantity = bounded_positive_quantity(
                 shared_base_quantity, "shared market-maker quote quantity");
-            const double bid_scale = shared_quote_scale_ * bid_inventory_scale;
-            const double ask_scale = shared_quote_scale_ * ask_inventory_scale;
-            asset.shared_requested_quote_depth =
-                static_cast<double>(shared_book_quantity)
-                * static_cast<double>(config_.shared_quote_levels)
-                * (bid_scale + ask_scale);
-            append_quotes(
+            const detail::SharedQuotePlan plan =
+                detail::risk_managed_shared_quote_plan(
+                    asset.shared_inventory,
+                    config_.enable_global_shared_capacity
+                        ? shared_quote_scale_
+                        : uncoupled_quote_scale(asset),
+                    local_inventory_scale(asset));
+            const ScheduledQuoteDepth scheduled = append_quotes(
                 asset, book, decision_time_ns, boundary_index,
                 shared_market_maker_owner,
                 fragmented_shared_maker_entity,
@@ -1240,7 +1491,25 @@ private:
                 1.0,
                 false,
                 false,
-                bid_scale, ask_scale);
+                true,
+                plan.bid_scale, plan.ask_scale,
+                plan.bid_total_limit, plan.ask_total_limit);
+            asset.shared_requested_quote_depth = static_cast<double>(
+                scheduled.bid + scheduled.ask);
+            asset.shared_requested_bid_depth = static_cast<double>(scheduled.bid);
+            asset.shared_requested_ask_depth = static_cast<double>(scheduled.ask);
+            asset.shared_risk_reducing_requested_quote_depth = 0.0;
+            if (plan.bid_reduces_inventory) {
+                asset.shared_risk_reducing_requested_quote_depth +=
+                    static_cast<double>(scheduled.bid);
+            }
+            if (plan.ask_reduces_inventory) {
+                asset.shared_risk_reducing_requested_quote_depth +=
+                    static_cast<double>(scheduled.ask);
+            }
+            asset.shared_risk_increasing_requested_quote_depth =
+                asset.shared_requested_quote_depth
+                - asset.shared_risk_reducing_requested_quote_depth;
         }
         compute_seconds_ += MPI_Wtime() - compute_start;
     }
@@ -1443,11 +1712,28 @@ private:
         const double global_limit = config_.shared_global_risk_limit_per_asset
             * static_cast<double>(config_.asset_count);
         shared_utilization_ = shared_gross_exposure_ / global_limit;
-        const double threshold = config_.shared_capacity_threshold;
-        shared_quote_scale_ = !config_.enable_global_shared_capacity
-            || shared_utilization_ <= threshold
-            ? 1.0
-            : std::max(0.0, (1.0 - shared_utilization_) / (1.0 - threshold));
+        if (config_.enable_global_shared_capacity) {
+            shared_quote_scale_ = detail::shared_capacity_quote_scale(
+                shared_utilization_,
+                config_.shared_capacity_threshold,
+                config_.shared_minimum_quote_scale,
+                true);
+        } else {
+            double local_scale_sum = 0.0;
+            for (const std::unique_ptr<LocalAsset>& asset : local_assets_) {
+                local_scale_sum += uncoupled_quote_scale(*asset);
+            }
+            double global_scale_sum = 0.0;
+            const double scale_start = MPI_Wtime();
+            check_mpi(MPI_Allreduce(
+                          &local_scale_sum, &global_scale_sum, 1,
+                          MPI_DOUBLE, MPI_SUM, communicator_),
+                      "MPI_Allreduce(uncoupled quote-scale diagnostic)");
+            communication_seconds_ += MPI_Wtime() - scale_start;
+            ++collective_calls_;
+            shared_quote_scale_ = global_scale_sum
+                / static_cast<double>(config_.asset_count);
+        }
         minimum_shared_quote_scale_ = std::min(
             minimum_shared_quote_scale_, shared_quote_scale_);
         if (shared_quote_scale_ < 0.5) ++withdrawal_windows_;
@@ -1468,8 +1754,34 @@ private:
         AggregateMetricSums metrics;
         for (const std::unique_ptr<LocalAsset>& pointer : local_assets_) {
             const LocalAsset& asset = *pointer;
+            const double shared_bid_resting = static_cast<double>(
+                asset.book.lob.owner_resting_depth(
+                    shared_market_maker_owner, Side::Buy));
+            const double shared_ask_resting = static_cast<double>(
+                asset.book.lob.owner_resting_depth(
+                    shared_market_maker_owner, Side::Sell));
+            const double shared_resting = shared_bid_resting + shared_ask_resting;
+            const double shared_reducing_resting = asset.shared_inventory > 0
+                ? shared_ask_resting
+                : (asset.shared_inventory < 0 ? shared_bid_resting : 0.0);
+            const double shared_increasing_resting =
+                shared_resting - shared_reducing_resting;
             const MarketState state = asset.book.lob.state(
                 time_ns, asset.fundamental_value_ticks);
+            double shared_best_bid = 0.0;
+            double shared_best_ask = 0.0;
+            for (const OwnerRestingQuote& quote
+                    : asset.book.lob.owner_resting_quotes(
+                        shared_market_maker_owner)) {
+                if (quote.side == Side::Buy
+                    && quote.price_ticks == state.best_bid_ticks) {
+                    shared_best_bid += static_cast<double>(quote.quantity);
+                }
+                if (quote.side == Side::Sell
+                    && quote.price_ticks == state.best_ask_ticks) {
+                    shared_best_ask += static_cast<double>(quote.quantity);
+                }
+            }
             const bool two_sided = state.best_bid_ticks > 0
                 && state.best_ask_ticks > state.best_bid_ticks;
             const double asset_spread = two_sided
@@ -1495,6 +1807,12 @@ private:
                 metrics.shocked_top_depth_sum += asset_depth;
                 metrics.shocked_shared_inventory_sum +=
                     static_cast<double>(asset.shared_inventory);
+                metrics.shocked_bid_top_depth_sum +=
+                    static_cast<double>(state.best_bid_depth);
+                metrics.shocked_shared_bid_resting_depth_sum +=
+                    shared_best_bid;
+                metrics.shocked_shared_absolute_inventory_sum += std::abs(
+                    static_cast<double>(asset.shared_inventory));
                 if (affected) ++metrics.affected_shocked_asset_count;
                 if (two_sided) {
                     metrics.shocked_spread_sum_bps += asset_spread;
@@ -1505,6 +1823,7 @@ private:
                 metrics.unshocked_top_depth_sum += asset_depth;
                 metrics.unshocked_shared_quote_depth_sum +=
                     asset.shared_requested_quote_depth;
+                metrics.unshocked_shared_resting_depth_sum += shared_resting;
                 if (affected) ++metrics.affected_unshocked_asset_count;
                 if (two_sided) {
                     metrics.unshocked_spread_sum_bps += asset_spread;
@@ -1515,22 +1834,60 @@ private:
                 static_cast<double>(asset.value_order_count);
             metrics.value_requested_quantity +=
                 static_cast<double>(asset.value_requested_quantity);
+            metrics.shared_requested_quote_depth_sum +=
+                asset.shared_requested_quote_depth;
+            metrics.shared_risk_reducing_quote_depth_sum +=
+                asset.shared_risk_reducing_requested_quote_depth;
+            metrics.shared_risk_increasing_quote_depth_sum +=
+                asset.shared_risk_increasing_requested_quote_depth;
+            metrics.shared_resting_quote_depth_sum += shared_resting;
+            metrics.shared_best_bid_depth_sum += shared_best_bid;
+            metrics.shared_best_ask_depth_sum += shared_best_ask;
+            if (shared_best_bid > 0.0) {
+                ++metrics.shared_at_best_bid_asset_count;
+            }
+            if (shared_best_ask > 0.0) {
+                ++metrics.shared_at_best_ask_asset_count;
+            }
+            metrics.shared_risk_reducing_resting_depth_sum +=
+                shared_reducing_resting;
+            metrics.shared_risk_increasing_resting_depth_sum +=
+                shared_increasing_resting;
+            if (shared_resting > 0.0) {
+                ++metrics.shared_active_asset_count;
+            }
+            if (shared_bid_resting > 0.0 && shared_ask_resting > 0.0) {
+                ++metrics.shared_two_sided_active_asset_count;
+            }
+            if (asset.shared_inventory != 0) {
+                ++metrics.shared_nonzero_inventory_asset_count;
+            }
+            if (asset.shared_requested_quote_depth > 0.0) {
+                ++metrics.shared_requested_active_asset_count;
+            }
+            if (asset.shared_requested_bid_depth > 0.0
+                && asset.shared_requested_ask_depth > 0.0) {
+                ++metrics.shared_requested_two_sided_asset_count;
+            }
+            metrics.shared_absolute_inventory_sum += std::abs(
+                static_cast<double>(asset.shared_inventory));
         }
         return metrics;
     }
 
     void open_metrics_output() {
-        if (rank_ != 0 || config_.metrics_csv.empty()) return;
-        const std::filesystem::path path(config_.metrics_csv);
-        if (path.has_parent_path()) {
-            std::filesystem::create_directories(path.parent_path());
-        }
-        metrics_output_.open(path);
-        if (!metrics_output_) {
-            throw std::runtime_error("cannot open fragmented metrics CSV: "
-                                     + path.string());
-        }
-        metrics_output_
+        if (rank_ != 0) return;
+        if (!config_.metrics_csv.empty()) {
+            const std::filesystem::path path(config_.metrics_csv);
+            if (path.has_parent_path()) {
+                std::filesystem::create_directories(path.parent_path());
+            }
+            metrics_output_.open(path);
+            if (!metrics_output_) {
+                throw std::runtime_error("cannot open fragmented metrics CSV: "
+                                         + path.string());
+            }
+            metrics_output_
             << "time_seconds,mean_spread_bps,mean_top_depth,"
                "affected_asset_fraction,two_sided_book_fraction,"
                "affected_shocked_fraction,"
@@ -1540,12 +1897,113 @@ private:
                "shared_utilization,shared_quote_scale,"
                "unshocked_shared_requested_quote_depth,"
                "mean_shocked_shared_inventory,value_agent_order_count,"
-               "value_agent_requested_quantity\n";
+               "value_agent_requested_quantity,shared_requested_quote_depth,"
+               "shared_risk_reducing_requested_quote_depth,"
+               "shared_risk_increasing_requested_quote_depth,"
+               "shared_resting_quote_depth,"
+               "shared_risk_reducing_resting_quote_depth,"
+               "shared_risk_increasing_resting_quote_depth,"
+               "unshocked_shared_resting_quote_depth,"
+               "shared_active_asset_fraction,"
+               "shared_two_sided_active_asset_fraction,"
+               "shocked_bid_top_depth,"
+               "shocked_shared_bid_resting_depth,"
+               "shocked_shared_bid_participation,"
+               "shared_nonzero_inventory_asset_fraction,"
+               "mean_absolute_shared_inventory,"
+               "mean_absolute_shocked_shared_inventory,"
+               "shared_requested_active_asset_fraction,"
+               "shared_requested_two_sided_asset_fraction,"
+               "shared_best_bid_depth,shared_best_ask_depth,"
+                   "shared_at_best_bid_asset_fraction,"
+                   "shared_at_best_ask_asset_fraction,"
+                   "shared_bbo_depth_participation\n";
+        }
+        if (!config_.cluster_metrics_csv.empty()) {
+            const std::filesystem::path path(config_.cluster_metrics_csv);
+            if (path.has_parent_path()) {
+                std::filesystem::create_directories(path.parent_path());
+            }
+            cluster_metrics_output_.open(path);
+            if (!cluster_metrics_output_) {
+                throw std::runtime_error("cannot open cluster metrics CSV: "
+                                         + path.string());
+            }
+            cluster_metrics_output_
+                << "time_seconds,cluster_id,non_target_asset_count,"
+                   "two_sided_book_fraction,mean_spread_bps,mean_top_depth,"
+                   "affected_asset_fraction,shared_requested_quote_depth,"
+                   "shared_resting_quote_depth\n";
+        }
+    }
+
+    void observe_cluster_metrics(std::int64_t time_ns) {
+        if (config_.cluster_metrics_csv.empty()) return;
+        constexpr std::size_t fields_per_cluster = 7;
+        std::vector<double> local(
+            static_cast<std::size_t>(cluster_count_) * fields_per_cluster, 0.0);
+        for (const std::unique_ptr<LocalAsset>& pointer : local_assets_) {
+            const LocalAsset& asset = *pointer;
+            if (shock_mask_.at(static_cast<std::size_t>(asset.asset_id))) continue;
+            const int cluster = config_.shock_cluster_ids.at(
+                static_cast<std::size_t>(asset.asset_id));
+            const std::size_t offset = static_cast<std::size_t>(cluster)
+                * fields_per_cluster;
+            const MarketState state = asset.book.lob.state(
+                time_ns, asset.fundamental_value_ticks);
+            const bool two_sided = state.best_bid_ticks > 0
+                && state.best_ask_ticks > state.best_bid_ticks;
+            const double spread = two_sided
+                ? static_cast<double>(state.best_ask_ticks - state.best_bid_ticks)
+                    / asset.config.fundamental_price_ticks * 10'000.0
+                : 0.0;
+            const double depth = static_cast<double>(state.best_bid_depth)
+                + static_cast<double>(state.best_ask_depth);
+            const bool affected = !two_sided
+                || spread > 2.0 * asset.baseline_mean_spread_bps
+                || depth < 0.5 * asset.baseline_top_depth;
+            local[offset] += 1.0;
+            local[offset + 1U] += two_sided ? 1.0 : 0.0;
+            local[offset + 2U] += spread;
+            local[offset + 3U] += depth;
+            local[offset + 4U] += affected ? 1.0 : 0.0;
+            local[offset + 5U] += asset.shared_requested_quote_depth;
+            local[offset + 6U] += static_cast<double>(
+                asset.book.lob.owner_resting_depth(
+                    shared_market_maker_owner, Side::Buy)
+                + asset.book.lob.owner_resting_depth(
+                    shared_market_maker_owner, Side::Sell));
+        }
+        std::vector<double> global(local.size(), 0.0);
+        const double start = MPI_Wtime();
+        check_mpi(MPI_Allreduce(
+                      local.data(), global.data(),
+                      static_cast<int>(global.size()),
+                      MPI_DOUBLE, MPI_SUM, communicator_),
+                  "MPI_Allreduce(cluster metrics)");
+        communication_seconds_ += MPI_Wtime() - start;
+        ++collective_calls_;
+        if (rank_ != 0 || !cluster_metrics_output_) return;
+        for (int cluster = 0; cluster < cluster_count_; ++cluster) {
+            const std::size_t offset = static_cast<std::size_t>(cluster)
+                * fields_per_cluster;
+            const double count = global[offset];
+            const double two_sided = global[offset + 1U];
+            cluster_metrics_output_ << std::fixed << std::setprecision(9)
+                << static_cast<double>(time_ns) / 1e9 << ','
+                << cluster << ',' << count << ','
+                << (count > 0.0 ? two_sided / count : 0.0) << ','
+                << (two_sided > 0.0 ? global[offset + 2U] / two_sided : 0.0) << ','
+                << (count > 0.0 ? global[offset + 3U] / count : 0.0) << ','
+                << (count > 0.0 ? global[offset + 4U] / count : 0.0) << ','
+                << global[offset + 5U] << ','
+                << global[offset + 6U] << '\n';
+        }
     }
 
     void observe_global_metrics(std::int64_t time_ns) {
         const AggregateMetricSums local = local_metrics(time_ns);
-        const std::array<double, 18> send{{
+        const std::array<double, 38> send{{
             local.spread_sum_bps,
             local.top_depth_sum,
             local.affected_asset_count,
@@ -1563,8 +2021,28 @@ private:
             local.unshocked_shared_quote_depth_sum,
             local.shocked_shared_inventory_sum,
             local.value_order_count,
-            local.value_requested_quantity}};
-        std::array<double, 18> global{};
+            local.value_requested_quantity,
+            local.shared_requested_quote_depth_sum,
+            local.shared_risk_reducing_quote_depth_sum,
+            local.shared_risk_increasing_quote_depth_sum,
+            local.shared_active_asset_count,
+            local.shared_resting_quote_depth_sum,
+            local.shared_risk_reducing_resting_depth_sum,
+            local.shared_risk_increasing_resting_depth_sum,
+            local.unshocked_shared_resting_depth_sum,
+            local.shared_two_sided_active_asset_count,
+            local.shocked_bid_top_depth_sum,
+            local.shocked_shared_bid_resting_depth_sum,
+            local.shared_nonzero_inventory_asset_count,
+            local.shared_absolute_inventory_sum,
+            local.shocked_shared_absolute_inventory_sum,
+            local.shared_requested_active_asset_count,
+            local.shared_requested_two_sided_asset_count,
+            local.shared_best_bid_depth_sum,
+            local.shared_best_ask_depth_sum,
+            local.shared_at_best_bid_asset_count,
+            local.shared_at_best_ask_asset_count}};
+        std::array<double, 38> global{};
         const double start = MPI_Wtime();
         check_mpi(MPI_Allreduce(send.data(), global.data(),
                                 static_cast<int>(global.size()),
@@ -1623,8 +2101,33 @@ private:
                 << global[14] << ','
                 << (global[4] > 0.0 ? global[15] / global[4] : 0.0) << ','
                 << global[16] << ','
-                << global[17] << '\n';
+                << global[17] << ','
+                << global[18] << ','
+                << global[19] << ','
+                << global[20] << ','
+                << global[22] << ','
+                << global[23] << ','
+                << global[24] << ','
+                << global[25] << ','
+                << global[21] / static_cast<double>(config_.asset_count)
+                << ',' << global[26] / static_cast<double>(config_.asset_count)
+                << ',' << global[27]
+                << ',' << global[28]
+                << ',' << (global[27] > 0.0 ? global[28] / global[27] : 0.0)
+                << ',' << global[29] / static_cast<double>(config_.asset_count)
+                << ',' << global[30] / static_cast<double>(config_.asset_count)
+                << ',' << (global[4] > 0.0 ? global[31] / global[4] : 0.0)
+                << ',' << global[32] / static_cast<double>(config_.asset_count)
+                << ',' << global[33] / static_cast<double>(config_.asset_count)
+                << ',' << global[34]
+                << ',' << global[35]
+                << ',' << global[36] / static_cast<double>(config_.asset_count)
+                << ',' << global[37] / static_cast<double>(config_.asset_count)
+                << ',' << (global[1] > 0.0
+                    ? (global[34] + global[35]) / global[1] : 0.0)
+                << '\n';
         }
+        observe_cluster_metrics(time_ns);
     }
 
     template <typename Value>
@@ -1696,6 +2199,8 @@ private:
             local.push_back(AssetResultWire{
                 asset->asset_id, asset->shared_inventory, asset->value_inventory,
                 asset->shock_requested_quantity,
+                asset->shock_side_code,
+                asset->shock_pre_shared_inventory,
                 asset->fundamental_value_ticks,
                 asset->fundamental_log_variance,
                 asset->value_recheck_due_ns,
@@ -1918,6 +2423,8 @@ private:
             hash_integer(hash, wire.shared_inventory);
             hash_integer(hash, wire.value_inventory);
             hash_integer(hash, wire.shock_requested_quantity);
+            hash_integer(hash, wire.shock_side_code);
+            hash_integer(hash, wire.shock_pre_shared_inventory);
             hash_double(hash, wire.fundamental_value_ticks);
             const MultiAssetBookConfig& book_config =
                 config_.asset_configs[static_cast<std::size_t>(wire.asset_id)];
@@ -1949,15 +2456,19 @@ private:
 
     FragmentedMpiResult reduce_result(double local_wall,
                                       std::uint64_t state_hash) {
-        std::array<unsigned long long, 5> local_counts{};
+        std::array<unsigned long long, 9> local_counts{};
         for (const std::unique_ptr<LocalAsset>& asset : local_assets_) {
             local_counts[0] += asset->book.processed_orders;
             local_counts[1] += asset->book.trade_hasher.trade_count();
             local_counts[2] += asset->shock_executed_quantity;
             local_counts[3] += asset->shock_shared_mm_quantity;
             local_counts[4] += asset->shock_requested_quantity;
+            local_counts[5] += asset->shock_local_mm_quantity;
+            local_counts[6] += asset->shock_value_agent_quantity;
+            local_counts[7] += asset->shock_background_quantity;
+            local_counts[8] += asset->shock_other_quantity;
         }
-        std::array<unsigned long long, 5> global_counts{};
+        std::array<unsigned long long, 9> global_counts{};
         const double reduction_start = MPI_Wtime();
         check_mpi(MPI_Reduce(local_counts.data(), global_counts.data(),
                              static_cast<int>(local_counts.size()),
@@ -2040,6 +2551,25 @@ private:
             result.shock_executed_quantity = global_counts[2];
             result.shock_shared_mm_quantity = global_counts[3];
             result.shock_requested_quantity = global_counts[4];
+            result.shock_local_mm_quantity = global_counts[5];
+            result.shock_value_agent_quantity = global_counts[6];
+            result.shock_background_quantity = global_counts[7];
+            result.shock_other_quantity = global_counts[8];
+            if (result.shock_executed_quantity
+                    != result.shock_shared_mm_quantity
+                     + result.shock_local_mm_quantity
+                     + result.shock_value_agent_quantity
+                     + result.shock_background_quantity
+                     + result.shock_other_quantity) {
+                throw std::logic_error(
+                    "shock fill ownership does not sum to executed quantity: "
+                    + std::to_string(result.shock_executed_quantity) + " != "
+                    + std::to_string(result.shock_shared_mm_quantity) + "+"
+                    + std::to_string(result.shock_local_mm_quantity) + "+"
+                    + std::to_string(result.shock_value_agent_quantity) + "+"
+                    + std::to_string(result.shock_background_quantity) + "+"
+                    + std::to_string(result.shock_other_quantity));
+            }
             result.wall_seconds = global_times[0];
             result.max_initialization_seconds = global_times[1];
             result.max_compute_seconds = global_times[2];
@@ -2072,6 +2602,8 @@ private:
     std::vector<std::unique_ptr<LocalAsset>> local_assets_;
     FragmentedValueAgentPolicy default_value_agent_policy_;
     std::ofstream metrics_output_;
+    std::ofstream cluster_metrics_output_;
+    int cluster_count_ = 0;
 
     double compute_seconds_ = 0.0;
     double initialization_seconds_ = 0.0;
@@ -2080,6 +2612,7 @@ private:
     double shared_utilization_ = 0.0;
     double shared_quote_scale_ = 1.0;
     double minimum_shared_quote_scale_ = 1.0;
+    std::vector<double> shared_capacity_weights_;
     double peak_affected_fraction_ = 0.0;
     double peak_affected_unshocked_fraction_ = 0.0;
     double peak_mean_spread_bps_ = 0.0;

@@ -440,7 +440,7 @@ with path.open('w',newline='') as f:
         )
         self.assertEqual(
             freeze["selection"]["value_by_cluster"]["0"]["identifier"],
-            "value5_r0",
+            "value5_rechecks_0",
         )
         self.assertEqual(
             freeze["selection"]["value_by_cluster"]["0"]["gap_elasticity"],
@@ -918,7 +918,7 @@ with path.open('w',newline='') as f:
         variants = driver.full_day_value_variants(news, (4, 0, 2))
         self.assertEqual(
             [candidate.identifier for candidate in variants],
-            ["news_r0", "news_r2", "news_r4"],
+            ["news_rechecks_0", "news_rechecks_2", "news_rechecks_4"],
         )
         self.assertEqual(
             [candidate.maximum_news_rechecks for candidate in variants],

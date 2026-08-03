@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
-# Seagull launcher for the validated 1,480-book queue-reactive case study.
+# Seagull launcher for the 1,480-book liquidity-shock experiment.
 #
 # Submit from the project directory after creating ./slurm:
-#   sbatch --export=ALL,EXPERIMENT=preflight submit_queue_reactive_case_study.sh
-#   sbatch --export=ALL,EXPERIMENT=science   submit_queue_reactive_case_study.sh
-#   sbatch --export=ALL,EXPERIMENT=scaling   submit_queue_reactive_case_study.sh
+#   sbatch --export=ALL,EXPERIMENT=preflight  submit_queue_reactive_case_study.sh
+#   sbatch --export=ALL,EXPERIMENT=mechanism  submit_queue_reactive_case_study.sh
+#   sbatch --export=ALL,EXPERIMENT=financial  submit_queue_reactive_case_study.sh
+#   sbatch --nodes=2 --ntasks=32 --export=ALL,EXPERIMENT=performance submit_queue_reactive_case_study.sh
 #
-# EXPERIMENT=science always repeats the short rank-equivalence preflight before
-# starting the 40 predeclared full-day paths.  This script does not calibrate.
+# The performance and financial outputs are two views of the same frozen
+# shock experiment.  Before financial paths start, a full pre-shock mechanism
+# check proves that the shared dealer is active and exposed to the treatment.
+# This script does not calibrate.
 #SBATCH --job-name=lob-final-case
-#SBATCH --nodes=2
-#SBATCH --ntasks=32
+#SBATCH --nodes=1
+#SBATCH --ntasks=16
 #SBATCH --ntasks-per-node=16
 #SBATCH --cpus-per-task=1
 #SBATCH --time=2-00:00:00
@@ -38,31 +41,45 @@ RUN_TIMEOUT_SECONDS="${RUN_TIMEOUT_SECONDS:-21600}"
 readonly DURATION_SECONDS=23400
 readonly WINDOW_MS=1000
 readonly SHOCK_TIME_SECONDS=11700
-readonly SHOCK_FRACTION=0.01
+readonly SHOCK_FRACTION=0.10
 readonly SHOCK_TARGET_COUNT=0
 readonly SHOCK_TARGET_SEED=314159
-readonly SHOCK_TOP_DEPTH_MULTIPLE=1.0
-readonly SCIENCE_RANKS=32
-readonly SCIENCE_RISK_LIMITS="25,100"
-readonly REFERENCE_RISK_LIMIT=100
-readonly LOCAL_INVENTORY_LIMIT=100
+readonly SHOCK_TOP_DEPTH_MULTIPLE=0.0
+readonly SHOCK_REFERENCE_BID_DEPTH_MULTIPLE=3.0
+readonly PRODUCTION_RANKS=16
+# The dealer submits one empirical median limit-order equivalent per side:
+# the pooled symbol quote is one half of that median, hence multiplier two.
+# Capacity and local skew are scaled consistently with that participation.
+# The mechanism preflight below rejects either treatment if routine flow has
+# already consumed the declared economic headroom before the shock.
+readonly SHARED_QUOTE_MULTIPLIER=2.0
+readonly FINANCIAL_RISK_LIMITS="800,1600"
+readonly REFERENCE_RISK_LIMIT=1600
+readonly LOCAL_INVENTORY_LIMIT=800
 readonly CAPACITY_THRESHOLD=0.5
-readonly REPETITIONS=5
+readonly MINIMUM_SHARED_QUOTE_SCALE=0.05
+readonly REPETITIONS=20
 readonly BASE_SEED=20200130
 readonly POST_SHOCK_HORIZON_SECONDS=1800
 readonly SCALING_RANKS="1,2,4,8,16,32"
 readonly SCALING_REPETITIONS=3
 readonly PREFLIGHT_DURATION_SECONDS=300
+readonly MECHANISM_DURATION_SECONDS=11702
 
 case "${EXPERIMENT}" in
-    preflight|science|scaling|all) ;;
+    preflight|mechanism|financial|performance|all) ;;
     *)
-        echo "ERROR: EXPERIMENT must be preflight, science, scaling, or all." >&2
+        echo "ERROR: EXPERIMENT must be preflight, mechanism, financial, performance, or all." >&2
         exit 2
         ;;
 esac
-if (( SLURM_NTASKS < SCIENCE_RANKS )); then
-    echo "ERROR: this protocol requires at least ${SCIENCE_RANKS} allocated tasks." >&2
+scaling_max_rank="${SCALING_RANKS##*,}"
+required_ranks="${PRODUCTION_RANKS}"
+if [[ "${EXPERIMENT}" == "performance" || "${EXPERIMENT}" == "all" ]]; then
+    required_ranks="${scaling_max_rank}"
+fi
+if (( SLURM_NTASKS < required_ranks )); then
+    echo "ERROR: ${EXPERIMENT} requires at least ${required_ranks} allocated tasks." >&2
     exit 2
 fi
 
@@ -154,7 +171,7 @@ fi
 
 echo "== RELEVANT MODEL TESTS =="
 ctest --test-dir "${BUILD_DIR}" \
-    -R '^(background_hawkes_stream|fragmented_model_semantics)$' \
+    -R '^(background_hawkes_stream|fragmented_model_semantics|fragmented_shared_dealer_coverage|fragmented_horizon_prefix)$' \
     --output-on-failure
 
 PORTABLE_ROOT="${RESULT_DIR}/portable_case"
@@ -166,6 +183,7 @@ python3 "${PROJECT_DIR}/scripts/prepare_portable_queue_case.py" \
     --data-root "${DATA_ROOT}" \
     --executable "${EXECUTABLE}" \
     --output-root "${PORTABLE_ROOT}" \
+    --allow-post-validation-shared-dealer-amendment \
     | tee "${RESULT_DIR}/portable_case_preparation.json"
 
 CASE_ARTIFACT="${PORTABLE_ROOT}/portable_queue_reactive_case.json"
@@ -212,6 +230,7 @@ RUNNER=(
 )
 FROZEN_CONTROLS=(
     --window-ms "${WINDOW_MS}"
+    --stochastic-baseline-normalization-seconds "${DURATION_SECONDS}"
     --hawkes-activity-scales 0.3
     --local-mm-intervals-ms 1000
     --local-mm-quantity-multipliers 1.0
@@ -219,10 +238,14 @@ FROZEN_CONTROLS=(
     --local-mm-spread-elasticities 0.0
     --local-mm-max-improvement-probabilities 1.0
     --shared-quote-relative
-    --shared-quote-multiplier 1.0
-    --shared-quote-levels 1
+    --shared-quote-multiplier "${SHARED_QUOTE_MULTIPLIER}"
+    --shared-capacity-relative
+    # Three levels preserve the empirical BBO quantity while giving the
+    # inventory-adverse stress executable dealer depth beyond the first queue.
+    --shared-quote-levels 3
     --local-inventory-limit "${LOCAL_INVENTORY_LIMIT}"
     --capacity-thresholds "${CAPACITY_THRESHOLD}"
+    --minimum-shared-quote-scale "${MINIMUM_SHARED_QUOTE_SCALE}"
 )
 SHOCK_CONTROLS=(
     --shock-time-seconds "${SHOCK_TIME_SECONDS}"
@@ -231,6 +254,9 @@ SHOCK_CONTROLS=(
     --shock-target-seed "${SHOCK_TARGET_SEED}"
     --shock-cluster-csv "${CLUSTER_MAP}"
     --shock-top-depth-multiple "${SHOCK_TOP_DEPTH_MULTIPLE}"
+    --shock-reference-bid-depth-multiple \
+        "${SHOCK_REFERENCE_BID_DEPTH_MULTIPLE}"
+    --shock-inventory-adverse
 )
 
 checkpoint_flag() {
@@ -244,14 +270,20 @@ run_preflight() {
     local output="${RESULT_DIR}/rank_equivalence_raw.csv"
     local resume_flag
     resume_flag="$(checkpoint_flag "${output}")"
-    echo "== 300-SECOND 1-RANK/32-RANK STATE-HASH PREFLIGHT =="
-    "${RUNNER[@]}" "${FROZEN_CONTROLS[@]}" \
+    local preflight_ranks="1,${PRODUCTION_RANKS}"
+    if [[ "${EXPERIMENT}" == "performance" || "${EXPERIMENT}" == "all" ]]; then
+        preflight_ranks="${preflight_ranks},${scaling_max_rank}"
+    fi
+    echo "== 300-SECOND ${preflight_ranks}-RANK STATE-HASH PREFLIGHT =="
+    # Include the amended intervention in the rank-invariance proof.  The
+    # shorter shock time is confined to this source-only execution check.
+    "${RUNNER[@]}" "${FROZEN_CONTROLS[@]}" "${SHOCK_CONTROLS[@]}" \
         --duration-seconds "${PREFLIGHT_DURATION_SECONDS}" \
         --shock-time-seconds 150 \
-        --ranks "1,${SCIENCE_RANKS}" \
+        --ranks "${preflight_ranks}" \
         --risk-limits "${REFERENCE_RISK_LIMIT}" \
         --shared-mm-modes global \
-        --shock-modes off \
+        --shock-modes on \
         --repetitions 1 \
         --seed "${BASE_SEED}" \
         --seed-step 0 \
@@ -260,87 +292,136 @@ run_preflight() {
         ${resume_flag:+"${resume_flag}"}
 }
 
-run_scaling() {
-    local output="${RESULT_DIR}/final_model_scaling_raw.csv"
+run_performance() {
+    local output="${RESULT_DIR}/performance_raw.csv"
     local resume_flag
     resume_flag="$(checkpoint_flag "${output}")"
-    echo "== FINAL QUEUE-REACTIVE FULL-DAY STRONG SCALING =="
-    "${RUNNER[@]}" "${FROZEN_CONTROLS[@]}" \
+    echo "== FULL-DAY PERFORMANCE OF THE SHOCK-ENABLED EXPERIMENT =="
+    "${RUNNER[@]}" "${FROZEN_CONTROLS[@]}" "${SHOCK_CONTROLS[@]}" \
         --duration-seconds "${DURATION_SECONDS}" \
-        --shock-time-seconds "${SHOCK_TIME_SECONDS}" \
         --ranks "${SCALING_RANKS}" \
         --risk-limits "${REFERENCE_RISK_LIMIT}" \
         --shared-mm-modes global \
-        --shock-modes off \
+        --shock-modes on \
         --repetitions "${SCALING_REPETITIONS}" \
         --seed "${BASE_SEED}" \
         --seed-step 0 \
+        --metrics-dir "${RESULT_DIR}/performance_metrics" \
+        --cluster-metrics-dir "${RESULT_DIR}/performance_cluster_metrics" \
         --output "${output}" \
-        --summary "${RESULT_DIR}/final_model_scaling_summary.csv" \
+        --summary "${RESULT_DIR}/performance_summary.csv" \
         ${resume_flag:+"${resume_flag}"}
 }
 
-run_science() {
-    local global_output="${RESULT_DIR}/science_global_raw.csv"
-    local uncoupled_output="${RESULT_DIR}/science_uncoupled_raw.csv"
-    local off_output="${RESULT_DIR}/science_shared_off_raw.csv"
+run_mechanism_preflight() {
+    local output="${RESULT_DIR}/mechanism_preflight_raw.csv"
+    local resume_flag
+    resume_flag="$(checkpoint_flag "${output}")"
+    echo "== FULL-HORIZON SHARED-DEALER MECHANISM PREFLIGHT =="
+    "${RUNNER[@]}" "${FROZEN_CONTROLS[@]}" "${SHOCK_CONTROLS[@]}" \
+        --duration-seconds "${MECHANISM_DURATION_SECONDS}" \
+        --ranks "${PRODUCTION_RANKS}" \
+        --risk-limits "${FINANCIAL_RISK_LIMITS}" \
+        --shared-mm-modes global \
+        --shock-modes on,off \
+        --repetitions 1 \
+        --seed "${BASE_SEED}" \
+        --seed-step 0 \
+        --metrics-dir "${RESULT_DIR}/mechanism_preflight_metrics" \
+        --cluster-metrics-dir "${RESULT_DIR}/mechanism_preflight_cluster_metrics" \
+        --shock-targets-dir "${RESULT_DIR}/mechanism_preflight_targets" \
+        --output "${output}" \
+        --summary "${RESULT_DIR}/mechanism_preflight_summary.csv" \
+        ${resume_flag:+"${resume_flag}"}
+    # The inventory-adverse shock is mixed-side. Realized dealer absorption,
+    # not fixed bid-side depth, is its materiality gate.
+    python3 "${PROJECT_DIR}/scripts/validate_shared_dealer_preflight.py" \
+        --raw "${output}" \
+        --shock-time-seconds "${SHOCK_TIME_SECONDS}" \
+        --metrics-interval-seconds 1 \
+        --lookback-seconds 60 \
+        --minimum-quote-scale "${MINIMUM_SHARED_QUOTE_SCALE}" \
+        --minimum-economic-quote-scale 0.25 \
+        --maximum-pre-shock-utilization 0.90 \
+        --minimum-active-asset-fraction 1.0 \
+        --minimum-two-sided-active-asset-fraction 1.0 \
+        --minimum-resting-two-sided-active-asset-fraction 0.95 \
+        --minimum-target-bid-participation 0.0 \
+        --minimum-marketwide-bbo-participation 0.05 \
+        --minimum-inventory-asset-fraction 0.25 \
+        --minimum-shock-absorption-fraction 0.025 \
+        --output "${RESULT_DIR}/mechanism_preflight_certificate.json"
+}
+
+run_financial() {
+    local global_output="${RESULT_DIR}/financial_global_raw.csv"
+    local uncoupled_output="${RESULT_DIR}/financial_uncoupled_raw.csv"
+    local off_output="${RESULT_DIR}/financial_shared_off_raw.csv"
     local resume_flag
 
-    echo "== 20 PATHS: GLOBAL CAPACITY, TWO RISK LIMITS =="
+    echo "== 80 PATHS: GLOBAL CAPACITY, TWO RISK LIMITS =="
     resume_flag="$(checkpoint_flag "${global_output}")"
     "${RUNNER[@]}" "${FROZEN_CONTROLS[@]}" "${SHOCK_CONTROLS[@]}" \
         --duration-seconds "${DURATION_SECONDS}" \
-        --ranks "${SCIENCE_RANKS}" \
-        --risk-limits "${SCIENCE_RISK_LIMITS}" \
+        --ranks "${PRODUCTION_RANKS}" \
+        --risk-limits "${FINANCIAL_RISK_LIMITS}" \
         --shared-mm-modes global \
         --shock-modes on,off \
         --repetitions "${REPETITIONS}" \
         --seed "${BASE_SEED}" \
         --seed-step 1 \
-        --metrics-dir "${RESULT_DIR}/science_metrics/global" \
-        --shock-targets-dir "${RESULT_DIR}/science_targets/global" \
-        --asset-summary-dir "${RESULT_DIR}/science_asset_summaries/global" \
+        --metrics-dir "${RESULT_DIR}/financial_metrics/global" \
+        --cluster-metrics-dir "${RESULT_DIR}/financial_cluster_metrics/global" \
+        --shock-targets-dir "${RESULT_DIR}/financial_targets/global" \
+        --asset-summary-dir "${RESULT_DIR}/financial_asset_summaries/global" \
         --output "${global_output}" \
-        --summary "${RESULT_DIR}/science_global_summary.csv" \
+        --summary "${RESULT_DIR}/financial_global_summary.csv" \
         ${resume_flag:+"${resume_flag}"}
 
-    echo "== 10 PATHS: UNCOUPLED SHARED-LIQUIDITY CONTROL =="
+    echo "== 80 PATHS: CAPACITY-MATCHED UNCOUPLED CONTROL =="
     resume_flag="$(checkpoint_flag "${uncoupled_output}")"
     "${RUNNER[@]}" "${FROZEN_CONTROLS[@]}" "${SHOCK_CONTROLS[@]}" \
         --duration-seconds "${DURATION_SECONDS}" \
-        --ranks "${SCIENCE_RANKS}" \
-        --risk-limits "${REFERENCE_RISK_LIMIT}" \
+        --ranks "${PRODUCTION_RANKS}" \
+        --risk-limits "${FINANCIAL_RISK_LIMITS}" \
         --shared-mm-modes uncoupled \
         --shock-modes on,off \
         --repetitions "${REPETITIONS}" \
         --seed "${BASE_SEED}" \
         --seed-step 1 \
-        --metrics-dir "${RESULT_DIR}/science_metrics/uncoupled" \
-        --shock-targets-dir "${RESULT_DIR}/science_targets/uncoupled" \
-        --asset-summary-dir "${RESULT_DIR}/science_asset_summaries/uncoupled" \
+        --metrics-dir "${RESULT_DIR}/financial_metrics/uncoupled" \
+        --cluster-metrics-dir "${RESULT_DIR}/financial_cluster_metrics/uncoupled" \
+        --shock-targets-dir "${RESULT_DIR}/financial_targets/uncoupled" \
+        --asset-summary-dir "${RESULT_DIR}/financial_asset_summaries/uncoupled" \
         --output "${uncoupled_output}" \
-        --summary "${RESULT_DIR}/science_uncoupled_summary.csv" \
+        --summary "${RESULT_DIR}/financial_uncoupled_summary.csv" \
         ${resume_flag:+"${resume_flag}"}
 
-    echo "== 10 PATHS: SHARED MARKET MAKER ABSENT =="
+    echo "== 40 PATHS: SHARED MARKET MAKER ABSENT =="
     resume_flag="$(checkpoint_flag "${off_output}")"
     "${RUNNER[@]}" "${FROZEN_CONTROLS[@]}" "${SHOCK_CONTROLS[@]}" \
         --duration-seconds "${DURATION_SECONDS}" \
-        --ranks "${SCIENCE_RANKS}" \
+        --ranks "${PRODUCTION_RANKS}" \
         --risk-limits "${REFERENCE_RISK_LIMIT}" \
         --shared-mm-modes off \
         --shock-modes on,off \
         --repetitions "${REPETITIONS}" \
         --seed "${BASE_SEED}" \
         --seed-step 1 \
-        --metrics-dir "${RESULT_DIR}/science_metrics/shared_off" \
-        --shock-targets-dir "${RESULT_DIR}/science_targets/shared_off" \
-        --asset-summary-dir "${RESULT_DIR}/science_asset_summaries/shared_off" \
+        --metrics-dir "${RESULT_DIR}/financial_metrics/shared_off" \
+        --cluster-metrics-dir "${RESULT_DIR}/financial_cluster_metrics/shared_off" \
+        --shock-targets-dir "${RESULT_DIR}/financial_targets/shared_off" \
+        --asset-summary-dir "${RESULT_DIR}/financial_asset_summaries/shared_off" \
         --output "${off_output}" \
-        --summary "${RESULT_DIR}/science_shared_off_summary.csv" \
+        --summary "${RESULT_DIR}/financial_shared_off_summary.csv" \
         ${resume_flag:+"${resume_flag}"}
 
     echo "== PAIRED MARKET-WIDE AND CLUSTER ANALYSIS =="
+    python3 "${PROJECT_DIR}/scripts/validate_truncated_full_prefix.py" \
+        --short-raw "${RESULT_DIR}/mechanism_preflight_raw.csv" \
+        --full-raw "${global_output}" \
+        --output "${RESULT_DIR}/truncated_full_prefix_certificate.json"
+
     python3 "${PROJECT_DIR}/scripts/analyze_fragmented_shared_liquidity_case.py" \
         --global-raw "${global_output}" \
         --uncoupled-raw "${uncoupled_output}" \
@@ -348,8 +429,8 @@ run_science() {
         --universe-input "${CASE_ARTIFACT}" \
         --shock-time-seconds "${SHOCK_TIME_SECONDS}" \
         --horizon-seconds "${POST_SHOCK_HORIZON_SECONDS}" \
-        --rank "${SCIENCE_RANKS}" \
-        --output-dir "${RESULT_DIR}/science_analysis"
+        --rank "${PRODUCTION_RANKS}" \
+        --output-dir "${RESULT_DIR}/financial_analysis"
 
     python3 "${PROJECT_DIR}/scripts/analyze_cluster_liquidity_heterogeneity.py" \
         --global-raw "${global_output}" \
@@ -357,18 +438,28 @@ run_science() {
         --shared-off-raw "${off_output}" \
         --universe-config "${UNIVERSE_CONFIG}" \
         --cluster-assignments "${CLUSTER_MAP}" \
-        --rank "${SCIENCE_RANKS}" \
-        --output-dir "${RESULT_DIR}/science_cluster_analysis"
+        --shock-time-seconds "${SHOCK_TIME_SECONDS}" \
+        --horizon-seconds "${POST_SHOCK_HORIZON_SECONDS}" \
+        --rank "${PRODUCTION_RANKS}" \
+        --output-dir "${RESULT_DIR}/financial_cluster_analysis"
 }
 
 run_preflight
 case "${EXPERIMENT}" in
     preflight) ;;
-    science) run_science ;;
-    scaling) run_scaling ;;
+    mechanism) run_mechanism_preflight ;;
+    financial)
+        run_mechanism_preflight
+        run_financial
+        ;;
+    performance)
+        run_mechanism_preflight
+        run_performance
+        ;;
     all)
-        run_scaling
-        run_science
+        run_mechanism_preflight
+        run_performance
+        run_financial
         ;;
 esac
 
@@ -382,7 +473,12 @@ root = pathlib.Path(sys.argv[1]).resolve()
 artifact = pathlib.Path(sys.argv[2]).resolve()
 experiment = sys.argv[3]
 files = []
-for path in sorted(root.rglob("*.csv")):
+for path in sorted(
+    candidate for candidate in root.rglob("*")
+    if candidate.is_file()
+    and candidate.name != "case_job_completion.json"
+    and candidate.suffix in {".csv", ".json"}
+):
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     files.append({"path": str(path), "sha256": digest, "bytes": path.stat().st_size})
 payload = {
@@ -391,8 +487,8 @@ payload = {
     "experiment": experiment,
     "case_artifact": str(artifact),
     "case_artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
-    "csv_count": len(files),
-    "csv_artifacts": files,
+    "artifact_count": len(files),
+    "hash_bound_artifacts": files,
 }
 (root / "case_job_completion.json").write_text(
     json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"

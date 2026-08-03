@@ -206,6 +206,7 @@ class PortableQueueCaseTest(unittest.TestCase):
             data_root=self.data,
             executable=self.executable,
             output_root=output or self.output,
+            allow_post_validation_shared_dealer_amendment=False,
         )
 
     @mock.patch.object(MODULE.cohort, "validate_symbols")
@@ -221,6 +222,91 @@ class PortableQueueCaseTest(unittest.TestCase):
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
         self.assertEqual(payload["schema_version"], 5)
         self.assertEqual(payload["symbol_count"], 2)
+        protocol = payload["case_study_protocol"]
+        self.assertEqual(
+            protocol["profile_id"],
+            "systemic_liquidity_shock_queue_reactive",
+        )
+        self.assertEqual(protocol["production_ranks"], 16)
+        self.assertEqual(protocol["financial_risk_limits"], [800.0, 1600.0])
+        self.assertEqual(protocol["reference_risk_limit"], 1600.0)
+        self.assertEqual(protocol["shock_fraction"], 0.10)
+        self.assertEqual(protocol["shock_reference_bid_depth_multiple"], 3.0)
+        self.assertEqual(
+            protocol["shock_direction_rule"],
+            "inventory_adverse_at_left_limit",
+        )
+        self.assertTrue(protocol["shared_quote_relative"])
+        self.assertEqual(protocol["shared_quote_multiplier"], 2.0)
+        self.assertTrue(protocol["shared_capacity_relative"])
+        self.assertEqual(
+            protocol["stochastic_baseline_normalization_seconds"], 23400.0,
+        )
+        self.assertEqual(protocol["repetitions"], 20)
+        self.assertEqual(protocol["path_count"], 200)
+        self.assertEqual(
+            protocol["uncoupled_capacity_control"],
+            "asset_specific_equal_total_capacity",
+        )
+        self.assertEqual(
+            protocol["primary_outcome"],
+            "relative_non_target_top_depth_deterioration",
+        )
+        self.assertEqual(
+            protocol["reporting_horizons_seconds"], [1, 5, 30, 300, 1800],
+        )
+        self.assertTrue(protocol["asset_level_shock_dose_equality_required"])
+        self.assertTrue(protocol["shock_fill_ownership_required"])
+        self.assertTrue(protocol["truncated_full_prefix_equality_required"])
+        self.assertEqual(
+            protocol[
+                "required_pre_shock_requested_two_sided_book_fraction"
+            ],
+            1.0,
+        )
+        self.assertEqual(
+            protocol[
+                "minimum_pre_shock_resting_two_sided_book_fraction"
+            ],
+            0.95,
+        )
+        self.assertEqual(
+            protocol["minimum_pre_shock_bbo_depth_participation"], 0.05,
+        )
+        self.assertEqual(
+            protocol["minimum_shock_absorption_fraction"], 0.025,
+        )
+        self.assertEqual(protocol["shared_quote_levels"], 3)
+        self.assertTrue(
+            protocol[
+                "state_contingent_direction_rule_identical_across_mechanisms"
+            ]
+        )
+        self.assertTrue(
+            protocol[
+                "target_side_materiality_assessed_by_realized_shock_absorption"
+            ]
+        )
+        self.assertEqual(protocol["minimum_shared_quote_scale"], 0.05)
+        self.assertEqual(
+            payload["shared_market_maker"]["tight_risk_limit_per_asset"],
+            800.0,
+        )
+        self.assertEqual(
+            payload["shared_market_maker"]["reference_risk_limit_per_asset"],
+            1600.0,
+        )
+        self.assertEqual(
+            payload["shared_market_maker"]["minimum_quote_scale"], 0.05
+        )
+        self.assertFalse(
+            payload["executable_provenance"][
+                "post_validation_treatment_amendment"
+            ]
+        )
+        self.assertEqual(
+            payload["executable_provenance"]["amendment_scope"], "none"
+        )
         digest_payload = dict(payload)
         expected_digest = digest_payload.pop("artifact_sha256")
         self.assertEqual(MODULE.sha256_json(digest_payload), expected_digest)
@@ -243,6 +329,89 @@ class PortableQueueCaseTest(unittest.TestCase):
             MODULE.PreparationError, "rebuilt executable differs",
         ):
             MODULE.run(self.args(self.root / "bad-output"))
+
+    @mock.patch.object(MODULE.cohort, "validate_symbols")
+    def test_upgrades_legacy_heldout_schema_from_frozen_training_deployment(
+        self, validate: mock.Mock,
+    ) -> None:
+        validate.return_value = {"status": "exact_cohort_verified"}
+        fields, rows = MODULE.read_csv(self.heldout)
+        legacy_fields = fields[:-3]
+        MODULE.write_csv(self.heldout, legacy_fields, rows)
+        manifest_path = self.evidence / "development_validation/heldout_run_manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["simulation_config"] = record(self.heldout)
+        write_json(manifest_path, manifest)
+
+        output = self.root / "legacy-output"
+        MODULE.run(self.args(output))
+        output_fields, output_rows = MODULE.read_csv(
+            output / "heldout_20200130_queue_reactive_case.csv"
+        )
+        self.assertEqual(output_fields, list(MODULE.RUNTIME_FIELDS))
+        for field in MODULE.RUNTIME_FIELDS[-3:]:
+            self.assertEqual(output_rows[0][field], rows[0][field])
+        self.assertEqual(
+            float(output_rows[0]["fundamental_price_ticks"]), 10_010.0
+        )
+
+    @mock.patch.object(MODULE.cohort, "validate_symbols")
+    def test_projects_hash_bound_heldout_with_extra_validation_columns(
+        self, validate: mock.Mock,
+    ) -> None:
+        validate.return_value = {"status": "exact_cohort_verified"}
+        _, rows = MODULE.read_csv(self.heldout)
+        heldout_fields = [
+            "symbol", "book_id", "validation_only_score",
+            *MODULE.HELDOUT_OPENING_FIELDS,
+            "target_spread_ticks",
+        ]
+        for row in rows:
+            row["validation_only_score"] = "123.5"
+        MODULE.write_csv(self.heldout, heldout_fields, rows)
+        manifest_path = self.evidence / "development_validation/heldout_run_manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["simulation_config"] = record(self.heldout)
+        write_json(manifest_path, manifest)
+
+        output = self.root / "projected-output"
+        MODULE.run(self.args(output))
+        output_fields, output_rows = MODULE.read_csv(
+            output / "heldout_20200130_queue_reactive_case.csv"
+        )
+        self.assertEqual(output_fields, list(MODULE.RUNTIME_FIELDS))
+        self.assertNotIn("validation_only_score", output_fields)
+        self.assertEqual(
+            float(output_rows[0]["fundamental_price_ticks"]), 10_010.0
+        )
+
+    @mock.patch.object(MODULE.cohort, "validate_symbols")
+    def test_records_explicit_shared_dealer_amendment(
+        self, validate: mock.Mock,
+    ) -> None:
+        validate.return_value = {"status": "exact_cohort_verified"}
+        validated_hash = MODULE.sha256_file(self.executable)
+        self.executable.write_bytes(b"shared-dealer treatment amendment")
+        args = self.args(self.root / "amended-output")
+        args.allow_post_validation_shared_dealer_amendment = True
+        MODULE.run(args)
+        payload = json.loads((
+            args.output_root / "portable_queue_reactive_case.json"
+        ).read_text(encoding="utf-8"))
+        provenance = payload["executable_provenance"]
+        self.assertTrue(provenance["post_validation_treatment_amendment"])
+        self.assertEqual(
+            provenance["validated_baseline_executable_sha256"], validated_hash
+        )
+        self.assertEqual(
+            provenance["case_executable_sha256"],
+            MODULE.sha256_file(self.executable),
+        )
+        self.assertEqual(
+            provenance["amendment_scope"],
+            "shared_dealer_counterfactual_and_observation_only",
+        )
+        self.assertFalse(provenance["ordinary_market_validation_claim_extended"])
 
     @mock.patch.object(MODULE.cohort, "validate_symbols")
     def test_rejects_changed_nonopening_heldout_field(

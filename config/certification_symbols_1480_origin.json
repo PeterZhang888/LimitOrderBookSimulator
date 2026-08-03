@@ -10,8 +10,8 @@
   "heldout_target_values_used": false,
   "independent_final_holdout": false,
   "original_intersection_symbol_count": 1509,
-  "r16_pooled_training_universe_csv_sha256": "13fb1700643f408787708190d7af752d5bd7e107d1009e6b4f6a686c0dc155ef",
-  "r16_pooling_provenance_sha256": "ab908a56b5962f946c7f7fd4f2906876b1497a62f428960bfb7f71352032edca",
+  "pooled_training_universe_csv_sha256": "13fb1700643f408787708190d7af752d5bd7e107d1009e6b4f6a686c0dc155ef",
+  "pooling_provenance_sha256": "ab908a56b5962f946c7f7fd4f2906876b1497a62f428960bfb7f71352032edca",
   "schema_version": 1,
   "selection_role": "development_validation_balanced_panel"
 }

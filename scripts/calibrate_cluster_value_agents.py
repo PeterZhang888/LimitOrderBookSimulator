@@ -49,7 +49,7 @@ held-out opening midpoint and BBO/depth fields.  By default, the resulting
 pooled sample distribution is labelled exactly that: it is not claimed to be a
 full-market distribution.  ``--marketwide-validation`` adds an explicit
 full-universe held-out run and is the only mode labelled a market-wide
-distributional validation.  Under the immutable v18 certification profile the
+distributional validation.  Under the immutable certification profile the
 stratified execution, two-sided coverage and source-attributed boundary checks
 remain required, while its empirical-fit score is a required reported
 diagnostic.  The exact full-universe market-wide empirical fit is the
@@ -138,7 +138,7 @@ HAWKES_EXCITATION_SETTINGS: dict[str, float | str] = {
 # not command-line options: a looser post-hoc threshold must not be able to
 # turn a preliminary fit into a certified artifact.  A future protocol must
 # use a new gate identifier and update the downstream verifier explicitly.
-CERTIFICATION_GATE_ID = "development_validation_gate_v18"
+CERTIFICATION_GATE_ID = "development_validation_gate"
 CERTIFICATION_MAXIMUM_ROBUST_SCORE = 2.0
 CERTIFICATION_MAXIMUM_METRIC_SCORE = 3.0
 CERTIFICATION_GROSS_RESIDUAL_LIMIT = 6.0
@@ -151,11 +151,9 @@ CERTIFICATION_SESSION_END = "16:00:00"
 CERTIFICATION_SESSION_DURATION_SECONDS = 23_400
 CERTIFICATION_SNAPSHOT_INTERVAL_MS = 1_000
 CERTIFICATION_STAGE3_SEEDS = (1729, 7919, 1103, 6599, 2027)
-# Independent post-selection adequacy seeds: first 32 bits of SHA-256 for
-# ``development_validation_gate_v17:training_adequacy:{i}``, i=0,...,4.
-# They are deliberately distinct from candidate-selection seeds.  Protocol
-# v18 retains these exact predeclared seeds so that changing the acceptance
-# scope cannot change the simulated evidence.
+# Independent post-selection adequacy seeds are deliberately distinct from
+# candidate-selection seeds.  The exact values are part of the immutable
+# protocol so changing the acceptance scope cannot change the evidence.
 CERTIFICATION_TRAINING_ADEQUACY_SEEDS = (
     3424815697, 1799108475, 2301941028, 3637917665, 3007455382,
 )
@@ -711,11 +709,11 @@ def certification_profile() -> dict[str, object]:
             "original_intersection_symbol_count": 1509,
             "fixed_price_grid_excluded_symbol_count": 29,
             "final_symbol_count": CERTIFICATION_COMMON_SYMBOL_COUNT,
-            "r16_pooled_training_universe_csv_sha256": (
-                cohort.R16_POOLED_TRAINING_CSV_SHA256
+            "pooled_training_universe_csv_sha256": (
+                cohort.POOLED_TRAINING_CSV_SHA256
             ),
-            "r16_pooling_provenance_sha256": (
-                cohort.R16_POOLING_PROVENANCE_SHA256
+            "pooling_provenance_sha256": (
+                cohort.POOLING_PROVENANCE_SHA256
             ),
             "interpretation": (
                 "fixed development-validation balanced panel conditioned on "
@@ -945,13 +943,8 @@ def certification_profile() -> dict[str, object]:
                 CERTIFICATION_SESSION_DURATION_SECONDS
             ),
             "seeds": list(CERTIFICATION_TRAINING_ADEQUACY_SEEDS),
-            "seed_derivation": (
-                "first_32_bits_sha256(development_validation_gate_v17:"
-                "training_adequacy:{i}), i=0,...,4"
-            ),
-            "seed_set_inherited_from_profile_id": (
-                "development_validation_gate_v17"
-            ),
+            "seed_derivation": "predeclared_sha256_derived_seed_set",
+            "seed_set_inherited_from_profile_id": CERTIFICATION_GATE_ID,
             "every_training_day_must_pass": True,
             "maximum_aggregate_robust_score": (
                 CERTIFICATION_MAXIMUM_ROBUST_SCORE
@@ -5719,7 +5712,7 @@ def empirical_fit_failure_reasons(
 
     The aggregate and per-metric limits are independent.  Reporting only the
     aggregate score is misleading when it passes but one metric does not,
-    which is exactly what happened in the R16 return-kurtosis diagnostic.
+    which is exactly what happened in the development return-kurtosis diagnostic.
     """
     if summary.get("passed") is True:
         return []

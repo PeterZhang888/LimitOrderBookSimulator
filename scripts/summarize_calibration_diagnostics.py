@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize an R4 calibration failure from its persistent JSON artifacts.
+"""Summarize a calibration failure from its persistent JSON artifacts.
 
 This is a read-only diagnostic utility.  It does not rerun candidates, alter
 eligibility gates, or select a policy.  Outputs use only Python's standard
@@ -78,7 +78,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--calibration-root", required=True,
-        help="R4 calibration directory containing calibration_progress.json",
+        help="calibration directory containing calibration_progress.json",
     )
     parser.add_argument(
         "--output-dir", required=True,
@@ -694,7 +694,7 @@ def summarize(args: argparse.Namespace) -> dict[str, Any]:
     summary_path = output_dir / "diagnostic_summary.json"
     summary: dict[str, Any] = {
         "schema_version": 1,
-        "artifact_role": "r4_calibration_failure_diagnostic_summary",
+        "artifact_role": "calibration_failure_diagnostic_summary",
         "calibration_root": str(root),
         "terminal_failure": failure,
         "progress": (

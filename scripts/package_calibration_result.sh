@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Package one completed/failed R9 calibration result inside a Slurm allocation.
+# Package one completed or failed calibration result inside a Slurm allocation.
 
 set -Eeuo pipefail
 
@@ -27,10 +27,10 @@ ERR_REL="slurm/lob-cluster-cal-${CAL_JOB}.err"
 [[ -d "${PROJECT_DIR}/${RESULT_REL}" ]] \
     || fail "calibration result directory is missing: ${PROJECT_DIR}/${RESULT_REL}"
 
-PACKAGE_REVISION="${PACKAGE_REVISION:-r9}"
-[[ "${PACKAGE_REVISION}" =~ ^r[0-9]+$ ]] \
-    || fail "PACKAGE_REVISION must have the form r followed by digits"
-PACKAGE_NAME="calibration_${CAL_JOB}_${PACKAGE_REVISION}_complete.tar.gz"
+PACKAGE_LABEL="${PACKAGE_LABEL:-complete}"
+[[ "${PACKAGE_LABEL}" =~ ^[a-z][a-z0-9_-]*$ ]] \
+    || fail "PACKAGE_LABEL must start with a lowercase letter and contain only lowercase letters, digits, underscores or hyphens"
+PACKAGE_NAME="calibration_${CAL_JOB}_${PACKAGE_LABEL}.tar.gz"
 PACKAGE_PATH="${OUTPUT_DIR}/${PACKAGE_NAME}"
 CHECKSUM_PATH="${PACKAGE_PATH}.sha256"
 [[ ! -e "${PACKAGE_PATH}" && ! -e "${CHECKSUM_PATH}" ]] \

@@ -20,6 +20,17 @@ struct ApplyResult {
     int boundary_truncated_quantity = 0;
 };
 
+// Aggregated resting quantity owned by one participant at one price.  The
+// simulator uses this read-only view to avoid cancelling and recreating an
+// unchanged market-maker quote.  Preserving an unchanged order is essential
+// in a price--time-priority book: a gratuitous refresh would otherwise send
+// the participant to the back of the queue every decision window.
+struct OwnerRestingQuote {
+    Side side = Side::Buy;
+    int price_ticks = 0;
+    std::int64_t quantity = 0;
+};
+
 class DistributedLimitOrderBook {
 public:
     explicit DistributedLimitOrderBook(int tick_size, BookId book_id = 0);
@@ -50,6 +61,9 @@ public:
     std::int64_t total_ask_depth() const;
     std::int64_t total_background_bid_depth() const;
     std::int64_t total_background_ask_depth() const;
+    std::int64_t owner_resting_depth(std::int32_t owner_id, Side side) const;
+    std::vector<OwnerRestingQuote> owner_resting_quotes(
+        std::int32_t owner_id) const;
     double mid_price() const;
 
 private:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve and verify the frozen R21 model used by the financial case study.
+"""Resolve and verify the frozen queue-reactive model used by the financial case study.
 
 The normal input is ``heldout_run_manifest.json`` from the separate held-out
 evaluation.  The resolver verifies that evaluation, the training freeze it
@@ -282,7 +282,7 @@ def resolve_artifact(
         or freeze.get("ordinary_market_shared_mm_disabled") is not True
         or not (one_rank_execution or multi_rank_execution)
     ):
-        raise ArtifactError("training freeze does not satisfy the R21 freeze contract")
+        raise ArtifactError("training freeze does not satisfy the queue-reactive freeze contract")
     training_gate_protocol = str(
         freeze.get("training_adequacy_protocol", STRICT_NINE_PROTOCOL)
     )

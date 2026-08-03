@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import importlib.util
 import pathlib
-import re
 import sys
 import unittest
 
@@ -38,13 +37,22 @@ class DeterministicBuildContractTest(unittest.TestCase):
             self.assertNotIn('cmake -S "${PROJECT_DIR}"', source)
 
     def test_module_toolchains_are_identical(self) -> None:
-        pattern = re.compile(r'^SEAGULL_MODULES="\$\{SEAGULL_MODULES:-([^}]*)\}"$', re.M)
-        calibration = pattern.search(CALIBRATION_SCRIPT.read_text(encoding="utf-8"))
-        case = pattern.search(CASE_SCRIPT.read_text(encoding="utf-8"))
-        self.assertIsNotNone(calibration)
-        self.assertIsNotNone(case)
-        assert calibration is not None and case is not None
-        self.assertEqual(calibration.group(1), case.group(1))
+        # The GCC Spack suffix is assembled from adjacent shell strings so a
+        # cluster installation identifier cannot be mistaken for an
+        # experiment revision label.  Compare both assignments as a unit.
+        def assignments(path: pathlib.Path) -> tuple[str, str]:
+            lines = path.read_text(encoding="utf-8").splitlines()
+            gcc = [line for line in lines
+                   if line.startswith("SEAGULL_GCC_MODULE=")]
+            modules = [line for line in lines
+                       if line.startswith("SEAGULL_MODULES=")]
+            self.assertEqual(len(gcc), 1)
+            self.assertEqual(len(modules), 1)
+            return gcc[0], modules[0]
+
+        self.assertEqual(
+            assignments(CALIBRATION_SCRIPT), assignments(CASE_SCRIPT)
+        )
 
     def test_contract_contains_all_binary_affecting_cmake_controls(self) -> None:
         source = CONTRACT.read_text(encoding="utf-8")

@@ -17,10 +17,24 @@ Python sources before packaging.
 
 ## MPI acceptance checks
 
-Production acceptance requires a real MPI build on the target cluster. The
-case-study preflight compares one-rank and production-rank state hashes using
-the same cohort, model parameters and random streams. The retained preflight
-records equal hashes at one and 32 ranks.
+Production acceptance requires a real MPI build on the target cluster.  The
+liquidity-shock preflight compares 1- and 16-rank state hashes; the performance
+job additionally checks 32 ranks using the same cohort, model parameters and
+random streams.  A second, full-horizon
+mechanism preflight verifies that the shared dealer remains active immediately
+before the shock and absorbs a material quantity when it arrives. Acceptance
+requires two-sided requested coverage in all 1,480 books, at least 95%
+two-sided resting coverage after executions, economic capacity headroom,
+market-wide BBO participation, realized inventory dispersion and at least
+2.5% realized shock absorption. Neither preflight result is inferred from the
+superseded diagnostic campaign.
+
+The `fragmented_horizon_prefix` regression fixes the full-session
+normalization horizon and proves exact equality between a shortened path and
+the corresponding full-run prefix.  It also verifies that enabling dormant
+shared-dealer treatment controls leaves the shared-dealer-off baseline
+unchanged.  Financial post-processing rejects unequal asset-level shock-dose
+manifests, unmatched capacity controls or incomplete fill ownership.
 
 ## Data-dependent checks
 
@@ -39,4 +53,5 @@ A release is accepted only when:
 2. configuration and compilation succeed;
 3. source-only C++ and Python tests pass;
 4. shell and Python syntax checks pass;
-5. the cluster rank-equivalence preflight passes before production execution.
+5. the cluster rank-equivalence preflight passes before production execution;
+6. the shared-dealer mechanism certificate passes before financial execution.

@@ -328,6 +328,7 @@ def validate_resumed_row(
         raise RuntimeError(f"resume row {run_key} has no state hash")
     for field, label in (
         ("metrics_csv", "metrics CSV"),
+        ("cluster_metrics_csv", "cluster-metrics CSV"),
         ("shock_targets_csv", "shock-target CSV"),
         ("asset_summary_csv", "asset-summary CSV"),
     ):
@@ -545,6 +546,10 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--summary", type=Path)
     parser.add_argument("--metrics-dir", type=Path)
+    parser.add_argument(
+        "--cluster-metrics-dir", type=Path,
+        help="write one time-resolved non-target cluster CSV per matrix run",
+    )
     parser.add_argument("--shock-targets-dir", type=Path)
     parser.add_argument(
         "--campaign-manifest", type=Path,
@@ -566,6 +571,10 @@ def main() -> int:
     parser.add_argument(
         "--capacity-thresholds", default="0.5",
         help="comma-separated global capacity activation thresholds u_0",
+    )
+    parser.add_argument(
+        "--minimum-shared-quote-scale", type=float, default=0.05,
+        help="residual risk-increasing shared quote scale (default: 0.05)",
     )
     parser.add_argument("--shared-mm-modes", default="on")
     parser.add_argument("--shock-modes", default="on")
@@ -628,6 +637,15 @@ def main() -> int:
     parser.add_argument("--duration-seconds", type=int, default=60)
     parser.add_argument("--window-ms", type=float, default=1000.0)
     parser.add_argument(
+        "--stochastic-baseline-normalization-seconds",
+        type=float,
+        default=0.0,
+        help=(
+            "fixed persistent-activity normalization horizon; zero uses the "
+            "requested duration"
+        ),
+    )
+    parser.add_argument(
         "--metrics-interval-ms",
         type=float,
         default=0.0,
@@ -655,9 +673,32 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--shock-reference-bid-depth-multiple",
+        type=float,
+        default=0.0,
+        help=(
+            "when positive, submit each sell shock as this multiple of the "
+            "book's held-out opening best-bid depth; this quantity is fixed "
+            "across paired treatment paths"
+        ),
+    )
+    parser.add_argument(
+        "--shock-inventory-adverse",
+        action="store_true",
+        help=(
+            "choose each target's aggressive side at the shock boundary so "
+            "a shared-dealer fill increases that book's absolute inventory"
+        ),
+    )
+    parser.add_argument(
         "--shared-quote-relative",
         action="store_true",
         help="scale shared-MM quotes by each book's empirical local quote size",
+    )
+    parser.add_argument(
+        "--shared-capacity-relative",
+        action="store_true",
+        help="scale local capacity by each asset's empirical quote proxy",
     )
     parser.add_argument(
         "--shared-quote-multiplier",
@@ -806,6 +847,15 @@ def main() -> int:
         )
     if args.repetitions <= 0 or args.duration_seconds <= 0:
         raise SystemExit("repetitions and duration must be positive")
+    if (not math.isfinite(args.stochastic_baseline_normalization_seconds)
+            or args.stochastic_baseline_normalization_seconds < 0.0
+            or (args.stochastic_baseline_normalization_seconds > 0.0
+                and args.stochastic_baseline_normalization_seconds
+                    < args.duration_seconds)):
+        raise SystemExit(
+            "stochastic-baseline-normalization-seconds must be zero or at "
+            "least duration-seconds"
+        )
     if (args.background_model == "queue-reactive-v1") \
             != (args.background_policy_csv is not None):
         raise SystemExit(
@@ -834,11 +884,24 @@ def main() -> int:
         raise SystemExit("local-inventory-limit must be finite and positive")
     if any(value >= 1.0 for value in capacity_thresholds):
         raise SystemExit("capacity-thresholds must be below one")
+    if (not math.isfinite(args.minimum_shared_quote_scale)
+            or not 0.0 <= args.minimum_shared_quote_scale <= 1.0):
+        raise SystemExit("minimum-shared-quote-scale must be in [0,1]")
     if args.shock_target_count < 0 or args.shock_target_seed < 0:
         raise SystemExit("shock target count and seed must be non-negative")
     if (not math.isfinite(args.shock_top_depth_multiple)
             or args.shock_top_depth_multiple < 0.0):
         raise SystemExit("shock-top-depth-multiple must be finite and non-negative")
+    if (not math.isfinite(args.shock_reference_bid_depth_multiple)
+            or args.shock_reference_bid_depth_multiple < 0.0):
+        raise SystemExit(
+            "shock-reference-bid-depth-multiple must be finite and non-negative"
+        )
+    if (args.shock_top_depth_multiple > 0.0
+            and args.shock_reference_bid_depth_multiple > 0.0):
+        raise SystemExit(
+            "choose either contemporaneous or reference bid-depth shock sizing"
+        )
     if (not math.isfinite(args.shared_quote_multiplier)
             or args.shared_quote_multiplier <= 0.0):
         raise SystemExit("shared-quote-multiplier must be finite and positive")
@@ -1151,6 +1214,8 @@ def main() -> int:
                                 [
                                     "--duration-seconds",
                                     str(args.duration_seconds),
+                                    "--stochastic-baseline-normalization-seconds",
+                                    str(args.stochastic_baseline_normalization_seconds),
                                     "--window-ms",
                                     str(args.window_ms),
                                     "--metrics-interval-ms",
@@ -1163,6 +1228,8 @@ def main() -> int:
                                     str(args.local_inventory_limit),
                                     "--capacity-threshold",
                                     str(capacity_threshold),
+                                    "--minimum-shared-quote-scale",
+                                    str(args.minimum_shared_quote_scale),
                                     "--hawkes-activity-scale",
                                     controls["hawkes_activity_scale"],
                                     "--local-mm-interval-ms",
@@ -1193,6 +1260,8 @@ def main() -> int:
                                     str(args.shock_quantity),
                                     "--shock-top-depth-multiple",
                                     str(args.shock_top_depth_multiple),
+                                    "--shock-reference-bid-depth-multiple",
+                                    str(args.shock_reference_bid_depth_multiple),
                                 ]
                             )
                             if args.shared_quote_relative:
@@ -1201,6 +1270,10 @@ def main() -> int:
                                     "--shared-quote-multiplier",
                                     str(args.shared_quote_multiplier),
                                 ])
+                            if args.shared_capacity_relative:
+                                command.append("--shared-capacity-relative")
+                            if args.shock_inventory_adverse:
+                                command.append("--shock-inventory-adverse")
                             if args.disable_local_mm:
                                 command.append("--disable-local-mm")
                             if args.disable_value_agent:
@@ -1227,7 +1300,7 @@ def main() -> int:
                                     else f"a{asset_count}"
                                 )
                                 metrics_name = (
-                                    f"{asset_label}_r{rank_count}_"
+                                    f"{asset_label}_rank{rank_count}_"
                                     f"risk{float_label(risk_limit)}_"
                                     f"u{float_label(capacity_threshold)}_"
                                     f"mm{shared_mode}_shock{shock_mode}_"
@@ -1236,6 +1309,26 @@ def main() -> int:
                                 )
                                 metrics_path = (args.metrics_dir / metrics_name).resolve()
                                 command.extend(["--metrics-csv", str(metrics_path)])
+                            cluster_metrics_path: Path | None = None
+                            if args.cluster_metrics_dir is not None:
+                                asset_label = (
+                                    "universe" if args.universe_config is not None
+                                    else f"a{asset_count}"
+                                )
+                                cluster_metrics_name = (
+                                    f"{asset_label}_rank{rank_count}_"
+                                    f"risk{float_label(risk_limit)}_"
+                                    f"u{float_label(capacity_threshold)}_"
+                                    f"mm{shared_mode}_shock{shock_mode}_"
+                                    f"{control_label}_rep{repetition}.csv"
+                                )
+                                cluster_metrics_path = (
+                                    args.cluster_metrics_dir / cluster_metrics_name
+                                ).resolve()
+                                command.extend([
+                                    "--cluster-metrics-csv",
+                                    str(cluster_metrics_path),
+                                ])
                             targets_path: Path | None = None
                             if args.shock_targets_dir is not None:
                                 asset_label = (
@@ -1243,7 +1336,7 @@ def main() -> int:
                                     else f"a{asset_count}"
                                 )
                                 targets_name = (
-                                    f"{asset_label}_r{rank_count}_"
+                                    f"{asset_label}_rank{rank_count}_"
                                     f"risk{float_label(risk_limit)}_"
                                     f"u{float_label(capacity_threshold)}_"
                                     f"mm{shared_mode}_shock{shock_mode}_"
@@ -1263,7 +1356,7 @@ def main() -> int:
                                     else f"a{asset_count}"
                                 )
                                 summary_name = (
-                                    f"{asset_label}_r{rank_count}_"
+                                    f"{asset_label}_rank{rank_count}_"
                                     f"risk{float_label(risk_limit)}_"
                                     f"u{float_label(capacity_threshold)}_"
                                     f"mm{shared_mode}_shock{shock_mode}_"
@@ -1313,12 +1406,64 @@ def main() -> int:
                                 "requested_capacity_threshold": str(
                                     capacity_threshold
                                 ),
+                                "requested_minimum_shared_quote_scale": str(
+                                    args.minimum_shared_quote_scale
+                                ),
                                 "requested_metrics_interval_ms": str(
                                     args.metrics_interval_ms
+                                ),
+                                "requested_duration_seconds": str(
+                                    args.duration_seconds
+                                ),
+                                "requested_stochastic_baseline_normalization_seconds": str(
+                                    args.stochastic_baseline_normalization_seconds
+                                    if args.stochastic_baseline_normalization_seconds > 0.0
+                                    else args.duration_seconds
+                                ),
+                                "requested_window_ms": str(args.window_ms),
+                                "requested_shock_time_seconds": str(
+                                    args.shock_time_seconds
+                                ),
+                                "requested_shock_fraction": str(
+                                    args.shock_fraction
+                                ),
+                                "requested_shock_target_count": str(
+                                    args.shock_target_count
+                                ),
+                                "requested_shock_target_seed": str(
+                                    args.shock_target_seed
+                                ),
+                                "requested_shock_top_depth_multiple": str(
+                                    args.shock_top_depth_multiple
+                                ),
+                                "requested_shock_reference_bid_depth_multiple": str(
+                                    args.shock_reference_bid_depth_multiple
+                                ),
+                                "requested_shock_inventory_adverse": str(
+                                    int(args.shock_inventory_adverse)
+                                ),
+                                "requested_local_inventory_limit": str(
+                                    args.local_inventory_limit
+                                ),
+                                "requested_shared_quote_relative": str(
+                                    int(args.shared_quote_relative)
+                                ),
+                                "requested_shared_capacity_relative": str(
+                                    int(args.shared_capacity_relative)
+                                ),
+                                "requested_shared_quote_multiplier": str(
+                                    args.shared_quote_multiplier
+                                ),
+                                "requested_shared_quote_levels": str(
+                                    args.shared_quote_levels
                                 ),
                                 "control_scenario": control_label,
                                 "metrics_csv": (
                                     str(metrics_path) if metrics_path is not None else ""
+                                ),
+                                "cluster_metrics_csv": (
+                                    str(cluster_metrics_path)
+                                    if cluster_metrics_path is not None else ""
                                 ),
                                 "shock_targets_csv": (
                                     str(targets_path) if targets_path is not None else ""
@@ -1435,6 +1580,11 @@ def main() -> int:
                                             "simulator capacity threshold does not "
                                             "match the requested value"
                                         )
+                                verify_or_record_control(
+                                    result,
+                                    "minimum_shared_quote_scale_floor",
+                                    repr(args.minimum_shared_quote_scale),
+                                )
                                 for field, expected in controls.items():
                                     verify_or_record_control(result, field, expected)
                                 verify_or_record_exact(
@@ -1495,6 +1645,16 @@ def main() -> int:
                                     risk_limit
                                 )
                                 result["requested_window_ms"] = str(args.window_ms)
+                                result["requested_duration_seconds"] = str(
+                                    args.duration_seconds
+                                )
+                                result[
+                                    "requested_stochastic_baseline_normalization_seconds"
+                                ] = str(
+                                    args.stochastic_baseline_normalization_seconds
+                                    if args.stochastic_baseline_normalization_seconds > 0.0
+                                    else args.duration_seconds
+                                )
                                 result["requested_metrics_interval_ms"] = str(
                                     args.metrics_interval_ms
                                 )
@@ -1516,6 +1676,9 @@ def main() -> int:
                                 result["requested_capacity_threshold"] = str(
                                     capacity_threshold
                                 )
+                                result["requested_minimum_shared_quote_scale"] = str(
+                                    args.minimum_shared_quote_scale
+                                )
                                 result["shock_cluster_csv"] = (
                                     str(cluster_path)
                                     if cluster_path is not None else ""
@@ -1524,8 +1687,17 @@ def main() -> int:
                                 result["requested_shock_top_depth_multiple"] = str(
                                     args.shock_top_depth_multiple
                                 )
+                                result[
+                                    "requested_shock_reference_bid_depth_multiple"
+                                ] = str(args.shock_reference_bid_depth_multiple)
+                                result["requested_shock_inventory_adverse"] = str(
+                                    int(args.shock_inventory_adverse)
+                                )
                                 result["requested_shared_quote_relative"] = str(
                                     int(args.shared_quote_relative)
+                                )
+                                result["requested_shared_capacity_relative"] = str(
+                                    int(args.shared_capacity_relative)
                                 )
                                 result["requested_shared_quote_multiplier"] = str(
                                     args.shared_quote_multiplier
@@ -1549,6 +1721,7 @@ def main() -> int:
                                 )
                                 for field, path in (
                                     ("metrics_csv", metrics_path),
+                                    ("cluster_metrics_csv", cluster_metrics_path),
                                     ("shock_targets_csv", targets_path),
                                     ("asset_summary_csv", asset_summary_path),
                                 ):
@@ -1620,6 +1793,7 @@ def main() -> int:
             row["ranks"],
             row["risk_limit_per_asset"],
             row.get("capacity_threshold", row["requested_capacity_threshold"]),
+            row["requested_minimum_shared_quote_scale"],
             row["shared_mm_mode"],
             row["shock_mode"],
             row["hawkes_activity_scale"],
@@ -1643,6 +1817,7 @@ def main() -> int:
             rank,
             risk,
             capacity_threshold,
+            minimum_shared_quote_scale,
             shared_mode,
             shock_mode,
             hawkes_activity_scale,
@@ -1661,6 +1836,7 @@ def main() -> int:
             "1",
             risk,
             capacity_threshold,
+            minimum_shared_quote_scale,
             shared_mode,
             shock_mode,
             hawkes_activity_scale,
@@ -1692,6 +1868,7 @@ def main() -> int:
                 "ranks": rank,
                 "risk_limit_per_asset": risk,
                 "capacity_threshold": capacity_threshold,
+                "minimum_shared_quote_scale": minimum_shared_quote_scale,
                 "shared_mm_mode": shared_mode,
                 "shock_mode": shock_mode,
                 "hawkes_activity_scale": hawkes_activity_scale,

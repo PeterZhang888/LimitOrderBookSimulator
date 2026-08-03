@@ -1625,7 +1625,7 @@ class RealUniverseCaseStudySubmissionContractTest(unittest.TestCase):
         self.assertEqual(pathlib.Path(values[10].decode()), self.heldout.resolve())
         self.assertEqual(values[11].decode(), sha256(self.heldout))
 
-    def test_v18_accepts_stratified_fit_failure_when_structure_and_market_pass(
+    def test_accepts_stratified_fit_failure_when_structure_and_market_pass(
         self,
     ) -> None:
         report = json.loads(self.report.read_text(encoding="utf-8"))

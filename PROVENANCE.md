@@ -36,9 +36,10 @@ compact result summaries. See `DATA.md` for the required local layout.
 ## Result evidence
 
 `results/final-case-study/` contains the compact outputs retained from the
-completed campaign. `docs/case-study/analysis_manifest.json` records the source
-archive digest and generated analysis products. Absolute cluster paths are not
-required to interpret the published summary statistics.
+completed campaign. `results/final-case-study/evidence_manifest.json` records
+the source and evidence archive digests, executed commit and campaign size.
+Absolute cluster paths are not required to interpret the published summary
+statistics.
 
 ## Dependencies
 

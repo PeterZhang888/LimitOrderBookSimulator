@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independently certify one complete V18 calibration output.
+"""Independently certify one complete calibration output.
 
 This program is deliberately a *read-only* verifier.  It does not infer
 success from ``passed`` booleans in the calibration report.  Instead it
@@ -9,7 +9,7 @@ finite-boundary gates, and checks that every persisted status agrees with the
 recomputed evidence.
 
 The only successful input is a real ``calibration_handoff.json`` produced by
-the immutable ``development_validation_gate_v18`` profile.  A preliminary
+the immutable ``development_validation_gate`` profile.  A preliminary
 result, a smoke/pilot output, a count-only 1,480-symbol approximation, or a
 partially copied result cannot pass.
 """
@@ -37,9 +37,9 @@ import calibrate_cluster_value_agents as calibration  # noqa: E402
 import certification_cohort as cohort  # noqa: E402
 
 
-PINNED_PROFILE_ID = "development_validation_gate_v18"
+PINNED_PROFILE_ID = "development_validation_gate"
 PINNED_PROFILE_SHA256 = (
-    "38a52e86eaa5cfed6a039c68b0cda471b60a1b0255e62d26a6ddcbde700bb475"
+    "a6d6b7b4c673a174251c8a2f7d80de9a0f5dcceb17391c58ca07ea7d416892ab"
 )
 PINNED_COHORT_SHA256 = (
     "2f57f37762772d9523fb9916fe2376a9578e337d20971fe39aa44d578f5691d3"
@@ -234,7 +234,7 @@ def sequence(value: object, label: str) -> Sequence[object]:
 
 def require_equal(observed: object, expected: object, label: str) -> None:
     if observed != expected:
-        fail(f"{label} disagrees with the immutable V18 contract")
+        fail(f"{label} disagrees with the immutable certification contract")
 
 
 def require_hash(path: pathlib.Path, expected: object, label: str) -> str:

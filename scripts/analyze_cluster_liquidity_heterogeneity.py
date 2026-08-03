@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-"""Describe full-session liquidity effects across the ten frozen clusters.
+"""Estimate post-shock liquidity effects across the ten frozen clusters.
 
-The primary financial endpoint remains the 30-minute market-wide time series
-written by ``analyze_fragmented_shared_liquidity_case.py``.  This script uses
-per-asset fixed-clock summaries to show whether the paired effect is larger in
-some predeclared liquidity clusters.  Because each summary averages the full
-session, including the pre-shock half, these estimates are descriptive and
-diluted relative to the primary post-shock endpoint.
+The simulator records non-target spread and depth by cluster at the same fixed
+clock as the market-wide endpoint.  The analysis therefore uses the declared
+post-shock window directly; it does not dilute the effect with a full-session
+asset average.
 """
 
 from __future__ import annotations
@@ -126,54 +124,67 @@ def target_mask(row: Mapping[str, str], expected: set[str]) -> set[str]:
     return targets
 
 
-def cluster_snapshot(
-    row: Mapping[str, str], midpoints: Mapping[str, float],
-    clusters: Mapping[str, int], targets: set[str],
+def cluster_post_shock_window(
+    row: Mapping[str, str], *, shock_time: float, horizon: float,
 ) -> dict[int, dict[str, float]]:
-    path = require_artifact(row, "asset_summary_csv")
+    path = require_artifact(row, "cluster_metrics_csv")
     grouped: dict[int, dict[str, list[float]]] = defaultdict(
-        lambda: {"depth": [], "spread_bps": []}
+        lambda: {"depth": [], "spread_bps": [], "asset_count": []}
     )
-    observed: set[str] = set()
     for number, item in enumerate(read_csv(path), start=2):
-        symbol = item.get("symbol", "").strip()
-        if symbol in observed or symbol not in midpoints:
-            raise ClusterAnalysisError(
-                f"duplicate or unexpected asset at {path}:{number}"
-            )
-        observed.add(symbol)
-        if symbol in targets:
-            continue
         try:
-            depth = float(item["mean_bid_depth"]) + float(item["mean_ask_depth"])
-            spread_ticks = float(item["mean_spread_ticks"])
+            time_seconds = float(item["time_seconds"])
+            cluster = int(item["cluster_id"])
+            asset_count = float(item["non_target_asset_count"])
+            depth = float(item["mean_top_depth"])
+            spread = float(item["mean_spread_bps"])
         except (KeyError, ValueError) as error:
             raise ClusterAnalysisError(
-                f"invalid liquidity moment at {path}:{number}"
+                f"invalid cluster metric at {path}:{number}"
             ) from error
-        if not all(math.isfinite(value) for value in (depth, spread_ticks)):
-            raise ClusterAnalysisError(f"non-finite liquidity moment for {symbol}")
-        cluster = clusters[symbol]
-        grouped[cluster]["depth"].append(depth)
-        grouped[cluster]["spread_bps"].append(
-            10_000.0 * spread_ticks / midpoints[symbol]
+        if not all(math.isfinite(value) for value in (
+            time_seconds, asset_count, depth, spread,
+        )):
+            raise ClusterAnalysisError(
+                f"non-finite cluster metric at {path}:{number}"
+            )
+        if cluster not in range(10):
+            raise ClusterAnalysisError(
+                f"out-of-range cluster at {path}:{number}"
+            )
+        if shock_time < time_seconds <= shock_time + horizon:
+            grouped[cluster]["depth"].append(depth)
+            grouped[cluster]["spread_bps"].append(spread)
+            grouped[cluster]["asset_count"].append(asset_count)
+    if set(grouped) != set(range(10)):
+        raise ClusterAnalysisError(
+            f"cluster series lacks the complete post-shock window: {path}"
         )
-    if observed != set(midpoints) or set(grouped) != set(range(10)):
-        raise ClusterAnalysisError(f"asset summary is incomplete: {path}")
-    return {
-        cluster: {
-            "symbol_count": float(len(values["depth"])),
+    result: dict[int, dict[str, float]] = {}
+    for cluster, values in grouped.items():
+        counts = values["asset_count"]
+        if not counts or any(value != counts[0] for value in counts):
+            raise ClusterAnalysisError(
+                f"non-target cluster membership changes within {path}"
+            )
+        result[cluster] = {
+            "symbol_count": counts[0],
             "mean_top_depth": statistics.fmean(values["depth"]),
             "mean_spread_bps": statistics.fmean(values["spread_bps"]),
         }
-        for cluster, values in grouped.items()
-    }
+    return result
 
 
 def summarize(values: list[float]) -> dict[str, float]:
+    sample_sd = statistics.stdev(values) if len(values) > 1 else 0.0
+    mcse = sample_sd / math.sqrt(len(values))
     return {
         "mean": statistics.fmean(values),
-        "sample_sd": statistics.stdev(values) if len(values) > 1 else 0.0,
+        "median": statistics.median(values),
+        "sample_sd": sample_sd,
+        "mcse": mcse,
+        "normal_95_ci_lower": statistics.fmean(values) - 1.96 * mcse,
+        "normal_95_ci_upper": statistics.fmean(values) + 1.96 * mcse,
         "minimum": min(values),
         "maximum": max(values),
     }
@@ -186,11 +197,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--shared-off-raw", type=pathlib.Path, required=True)
     parser.add_argument("--universe-config", type=pathlib.Path, required=True)
     parser.add_argument("--cluster-assignments", type=pathlib.Path, required=True)
+    parser.add_argument("--shock-time-seconds", type=float, required=True)
+    parser.add_argument("--horizon-seconds", type=float, required=True)
     parser.add_argument("--rank", type=int, required=True)
     parser.add_argument("--output-dir", type=pathlib.Path, required=True)
     args = parser.parse_args(argv)
     if args.rank <= 0:
         raise SystemExit("--rank must be positive")
+    if args.shock_time_seconds < 0.0 or args.horizon_seconds <= 0.0:
+        raise SystemExit("shock time must be non-negative and horizon positive")
 
     try:
         global_cases = primary.read_raw(args.global_raw.resolve(), "global", args.rank)
@@ -221,7 +236,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         clusters = load_clusters(cluster_path, set(midpoints))
 
         global_index = primary.unique_cases(global_cases, "global")
-        uncoupled_index = primary.unique_off_cases(uncoupled_cases)
+        uncoupled_index = primary.unique_cases(
+            uncoupled_cases, "capacity-matched uncoupled"
+        )
         off_index = primary.unique_off_cases(off_cases)
         risks = sorted(
             {primary.canonical_risk(case.risk_limit) for case in global_cases},
@@ -243,8 +260,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                     canonical_targets = targets
                 elif targets != canonical_targets:
                     raise ClusterAnalysisError("target mask differs across paired paths")
-                snapshot_cache[key] = cluster_snapshot(
-                    case.row, midpoints, clusters, targets
+                snapshot_cache[key] = cluster_post_shock_window(
+                    case.row,
+                    shock_time=args.shock_time_seconds,
+                    horizon=args.horizon_seconds,
                 )
             return snapshot_cache[key]
 
@@ -254,8 +273,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 cases = {
                     "global_control": global_index.get((risk, seed, False)),
                     "global_shock": global_index.get((risk, seed, True)),
-                    "uncoupled_control": uncoupled_index.get((seed, False)),
-                    "uncoupled_shock": uncoupled_index.get((seed, True)),
+                    "uncoupled_control": uncoupled_index.get((risk, seed, False)),
+                    "uncoupled_shock": uncoupled_index.get((risk, seed, True)),
                     "off_control": off_index.get((seed, False)),
                     "off_shock": off_index.get((seed, True)),
                 }
@@ -275,6 +294,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                     uncoupled_depth = uc["mean_top_depth"] - us["mean_top_depth"]
                     global_spread = gs["mean_spread_bps"] - gc["mean_spread_bps"]
                     uncoupled_spread = us["mean_spread_bps"] - uc["mean_spread_bps"]
+                    depth_did = global_depth - uncoupled_depth
+                    spread_did = global_spread - uncoupled_spread
+                    relative_depth_did_percent = 100.0 * (
+                        global_depth / gc["mean_top_depth"]
+                        - uncoupled_depth / uc["mean_top_depth"]
+                    ) if (gc["mean_top_depth"] > 0.0
+                          and uc["mean_top_depth"] > 0.0) else 0.0
+                    relative_spread_did_percent = 100.0 * (
+                        global_spread / gc["mean_spread_bps"]
+                        - uncoupled_spread / uc["mean_spread_bps"]
+                    ) if (gc["mean_spread_bps"] > 0.0
+                          and uc["mean_spread_bps"] > 0.0) else 0.0
                     per_seed.append({
                         "risk_limit_per_asset": risk,
                         "seed": seed,
@@ -284,13 +315,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "baseline_uncoupled_spread_bps": uc["mean_spread_bps"],
                         "global_depth_deterioration": global_depth,
                         "uncoupled_depth_deterioration": uncoupled_depth,
-                        "depth_difference_in_differences": (
-                            global_depth - uncoupled_depth
+                        "depth_difference_in_differences": depth_did,
+                        "depth_difference_in_differences_percent_of_baseline": (
+                            relative_depth_did_percent
                         ),
                         "global_spread_deterioration_bps": global_spread,
                         "uncoupled_spread_deterioration_bps": uncoupled_spread,
-                        "spread_difference_in_differences_bps": (
-                            global_spread - uncoupled_spread
+                        "spread_difference_in_differences_bps": spread_did,
+                        "spread_difference_in_differences_percent_of_baseline": (
+                            relative_spread_did_percent
                         ),
                         "shared_off_depth_deterioration": (
                             oc["mean_top_depth"] - os["mean_top_depth"]
@@ -322,7 +355,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 }
                 for field in (
                     "depth_difference_in_differences",
+                    "depth_difference_in_differences_percent_of_baseline",
                     "spread_difference_in_differences_bps",
+                    "spread_difference_in_differences_percent_of_baseline",
                 ):
                     for label, value in summarize(
                         [float(row[field]) for row in rows]
@@ -346,13 +381,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         manifest = {
             "schema_version": 1,
-            "analysis_role": "descriptive_full_session_cluster_heterogeneity",
-            "primary_endpoint": False,
+            "analysis_role": "post_shock_cluster_heterogeneity",
+            "primary_endpoint": True,
             "interpretation": (
-                "Full-session fixed-clock effects in non-target books; diluted "
-                "by the pre-shock half and not a replacement for the 30-minute "
-                "market-wide endpoint."
+                "Fixed-clock effects in non-target books over the same declared "
+                "post-shock horizon as the market-wide endpoint."
             ),
+            "shock_time_seconds": args.shock_time_seconds,
+            "horizon_seconds": args.horizon_seconds,
             "cluster_count": 10,
             "seed_count": len(seeds),
             "target_symbol_count": len(canonical_targets or set()),

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression tests for persistent failure diagnostics and R9 packaging."""
+"""Regression tests for persistent failure diagnostics and result packaging."""
 
 from __future__ import annotations
 
@@ -303,7 +303,7 @@ class FailedCalibrationPackagingTest(unittest.TestCase):
             subprocess.run([
                 "bash", str(PACKAGER), str(project), "45249", str(output),
             ], check=True, text=True, stdout=subprocess.PIPE)
-            archive = output / "calibration_45249_r9_complete.tar.gz"
+            archive = output / "calibration_45249_complete.tar.gz"
             self.assertTrue(archive.is_file())
             with tarfile.open(archive, "r:gz") as package:
                 names = set(package.getnames())

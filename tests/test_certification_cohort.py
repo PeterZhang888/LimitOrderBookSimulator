@@ -43,11 +43,11 @@ class CertificationCohortTest(unittest.TestCase):
         self.assertTrue(cohort_path.read_bytes().endswith(b"\n"))
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         self.assertEqual(
-            manifest["r16_pooled_training_universe_csv_sha256"],
+            manifest["pooled_training_universe_csv_sha256"],
             "13fb1700643f408787708190d7af752d5bd7e107d1009e6b4f6a686c0dc155ef",
         )
         self.assertEqual(
-            manifest["r16_pooling_provenance_sha256"],
+            manifest["pooling_provenance_sha256"],
             "ab908a56b5962f946c7f7fd4f2906876b1497a62f428960bfb7f71352032edca",
         )
 
@@ -55,6 +55,7 @@ class CertificationCohortTest(unittest.TestCase):
         identity = COHORT.validate_symbols(
             self.symbols, label="exact cohort", project_root=ROOT,
         )
+        self.assertEqual(identity["schema_version"], 1)
         self.assertEqual(identity["status"], "exact_cohort_verified")
         self.assertEqual(identity["symbol_count"], 1480)
         self.assertEqual(
@@ -63,11 +64,10 @@ class CertificationCohortTest(unittest.TestCase):
         )
         self.assertFalse(identity["heldout_target_values_used"])
         self.assertFalse(identity["independent_final_holdout"])
-        persisted = {"schema_version": 1, **identity}
         self.assertIs(COHORT.require_identity_record(
-            persisted, label="persisted identity",
-        ), persisted)
-        forged = dict(persisted)
+            identity, label="persisted identity",
+        ), identity)
+        forged = dict(identity)
         forged["origin_manifest_sha256"] = "0" * 64
         with self.assertRaisesRegex(
             COHORT.CohortIdentityError, "bundled immutable artifact",
@@ -141,7 +141,7 @@ class CertificationCohortTest(unittest.TestCase):
             "QQQ",
             *sorted(
                 set(self.symbols).union(
-                    COHORT.R16_FIXED_PRICE_GRID_EXCLUDED_SYMBOLS
+                    COHORT.FIXED_PRICE_GRID_EXCLUDED_SYMBOLS
                 ) - {"QQQ"}
             ),
         )
@@ -174,7 +174,7 @@ class CertificationCohortTest(unittest.TestCase):
         legacy = self.legacy_intersection()
         record = COHORT.certification_pool_input_selection(
             source_sessions=self.source_sessions(legacy),
-            excluded_symbols=COHORT.R16_FIXED_PRICE_GRID_EXCLUDED_SYMBOLS,
+            excluded_symbols=COHORT.FIXED_PRICE_GRID_EXCLUDED_SYMBOLS,
             final_symbols=self.symbols,
             project_root=ROOT,
         )
@@ -195,7 +195,7 @@ class CertificationCohortTest(unittest.TestCase):
             *self.symbols[:-1], "ZZZZZZ",
         )
         wrong_legacy_exclusions = (
-            *COHORT.R16_FIXED_PRICE_GRID_EXCLUDED_SYMBOLS[:-1], "ZZZZZZ",
+            *COHORT.FIXED_PRICE_GRID_EXCLUDED_SYMBOLS[:-1], "ZZZZZZ",
         )
         prefiltered_with_one_session_extra = self.source_sessions(self.symbols)
         extra_session = COHORT.CERTIFICATION_SESSION_LABELS[0]
@@ -212,7 +212,7 @@ class CertificationCohortTest(unittest.TestCase):
             "prefiltered-with-legacy-exclusions": {
                 "source_sessions": self.source_sessions(self.symbols),
                 "excluded_symbols": (
-                    COHORT.R16_FIXED_PRICE_GRID_EXCLUDED_SYMBOLS
+                    COHORT.FIXED_PRICE_GRID_EXCLUDED_SYMBOLS
                 ),
                 "final_symbols": self.symbols,
             },

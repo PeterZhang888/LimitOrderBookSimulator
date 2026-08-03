@@ -43,10 +43,32 @@ REQUIRED_METRIC_FIELDS = frozenset(
         "shared_gross_exposure",
         "shared_utilization",
         "shared_quote_scale",
+        "shared_requested_quote_depth",
+        "shared_risk_reducing_requested_quote_depth",
+        "shared_risk_increasing_requested_quote_depth",
+        "shared_resting_quote_depth",
+        "shared_risk_reducing_resting_quote_depth",
+        "shared_risk_increasing_resting_quote_depth",
+        "unshocked_shared_resting_quote_depth",
+        "shared_active_asset_fraction",
+        "shared_two_sided_active_asset_fraction",
         "unshocked_shared_requested_quote_depth",
         "mean_shocked_shared_inventory",
         "value_agent_order_count",
         "value_agent_requested_quantity",
+        "shocked_bid_top_depth",
+        "shocked_shared_bid_resting_depth",
+        "shocked_shared_bid_participation",
+        "shared_nonzero_inventory_asset_fraction",
+        "mean_absolute_shared_inventory",
+        "mean_absolute_shocked_shared_inventory",
+        "shared_requested_active_asset_fraction",
+        "shared_requested_two_sided_asset_fraction",
+        "shared_best_bid_depth",
+        "shared_best_ask_depth",
+        "shared_at_best_bid_asset_fraction",
+        "shared_at_best_ask_asset_fraction",
+        "shared_bbo_depth_participation",
     }
 )
 
@@ -89,6 +111,13 @@ def positive_int(value: str, field: str) -> int:
     return int(result)
 
 
+def nonnegative_int(value: str, field: str) -> int:
+    result = finite_float(value, field)
+    if result < 0.0 or not result.is_integer():
+        raise AnalysisError(f"{field} must be a non-negative integer: {value!r}")
+    return int(result)
+
+
 def canonical_risk(value: float) -> str:
     return format(value, ".12g")
 
@@ -109,12 +138,18 @@ def read_raw(path: pathlib.Path, expected_mm_mode: str, rank: int | None) -> lis
         "metrics_csv_sha256", "executable", "executable_sha256",
         "campaign_manifest", "campaign_manifest_sha256",
         "input_config_sha256", "requested_window_ms",
+        "requested_duration_seconds",
+        "requested_stochastic_baseline_normalization_seconds",
         "requested_shock_time_seconds", "requested_shock_fraction",
         "requested_shock_top_depth_multiple",
+        "requested_shock_reference_bid_depth_multiple",
+        "requested_shock_inventory_adverse",
         "requested_shock_target_count",
         "requested_shock_target_seed", "requested_local_inventory_limit",
-        "requested_capacity_threshold", "shock_cluster_sha256",
+        "requested_capacity_threshold",
+        "requested_minimum_shared_quote_scale", "shock_cluster_sha256",
         "requested_shared_quote_relative", "requested_shared_quote_multiplier",
+        "requested_shared_capacity_relative",
         "requested_shared_quote_levels", "requested_local_mm_enabled",
         "requested_value_agent_enabled", "hawkes_activity_scale",
         "local_mm_interval_ms", "local_mm_quantity_multiplier",
@@ -122,6 +157,11 @@ def read_raw(path: pathlib.Path, expected_mm_mode: str, rank: int | None) -> lis
         "local_mm_spread_elasticity",
         "local_mm_max_improvement_probability",
         "shared_quote_quantity", "value_agent_policy_sha256",
+        "shock_requested_quantity", "shock_executed_quantity",
+        "shock_shared_mm_quantity", "shock_local_mm_quantity",
+        "shock_value_agent_quantity", "shock_background_quantity",
+        "shock_other_quantity", "shock_targets_csv",
+        "shock_targets_csv_sha256",
     }
     missing = required.difference(rows[0])
     if missing:
@@ -206,15 +246,21 @@ def ensure_common_metadata(cases: Iterable[RawCase]) -> dict[str, str]:
         "campaign_manifest_sha256",
         "input_config_sha256",
         "requested_window_ms",
+        "requested_duration_seconds",
+        "requested_stochastic_baseline_normalization_seconds",
         "requested_shock_time_seconds",
         "requested_shock_fraction",
         "requested_shock_top_depth_multiple",
+        "requested_shock_reference_bid_depth_multiple",
+        "requested_shock_inventory_adverse",
         "requested_shock_target_count",
         "requested_shock_target_seed",
         "requested_local_inventory_limit",
         "requested_capacity_threshold",
+        "requested_minimum_shared_quote_scale",
         "shock_cluster_sha256",
         "requested_shared_quote_relative",
+        "requested_shared_capacity_relative",
         "requested_shared_quote_multiplier",
         "requested_shared_quote_levels",
         "requested_local_mm_enabled",
@@ -275,6 +321,155 @@ def read_metrics(path: pathlib.Path) -> dict[str, dict[str, float]]:
     if not result:
         raise AnalysisError(f"metrics CSV is empty: {path}")
     return result
+
+
+def read_shock_manifest(case: RawCase) -> tuple[tuple[int, str, int], ...]:
+    """Return the exact target/dose vector for one shock-enabled path."""
+    if not case.shock:
+        raise AnalysisError("shock-dose manifests apply only to shock paths")
+    path_text = case.row.get("shock_targets_csv", "").strip()
+    if not path_text:
+        raise AnalysisError("shock path lacks shock_targets_csv")
+    path = pathlib.Path(path_text)
+    if not path.is_file():
+        raise AnalysisError(f"shock-target CSV is missing: {path}")
+    expected_hash = case.row.get("shock_targets_csv_sha256", "")
+    if not expected_hash or sha256_file(path) != expected_hash:
+        raise AnalysisError(f"shock-target CSV SHA-256 mismatch: {path}")
+    try:
+        with path.open(newline="", encoding="utf-8") as source:
+            reader = csv.DictReader(source)
+            required = {
+                "asset_id", "symbol", "is_shock_target", "shock_enabled",
+            }
+            missing = required.difference(reader.fieldnames or ())
+            if missing:
+                raise AnalysisError(
+                    f"shock-target CSV {path} is missing: "
+                    + ", ".join(sorted(missing))
+                )
+            fields = set(reader.fieldnames or ())
+            quantity_field = (
+                "requested_quantity"
+                if "requested_quantity" in fields
+                else "requested_sell_quantity"
+            )
+            if quantity_field not in fields:
+                raise AnalysisError(
+                    f"shock-target CSV {path} lacks a requested quantity"
+                )
+            result: list[tuple[int, str, int]] = []
+            observed_asset_ids: set[int] = set()
+            observed_symbols: set[str] = set()
+            observed_total = 0
+            for line_number, row in enumerate(reader, start=2):
+                asset_id = nonnegative_int(
+                    row.get("asset_id", ""),
+                    f"{path}:{line_number}:asset_id",
+                )
+                target = row.get("is_shock_target", "")
+                enabled = row.get("shock_enabled", "")
+                if target not in {"0", "1"} or enabled != "1":
+                    raise AnalysisError(
+                        f"invalid shock flags in {path}:{line_number}"
+                    )
+                quantity_value = finite_float(
+                    row.get(quantity_field, ""),
+                    f"{path}:{line_number}:{quantity_field}",
+                )
+                if quantity_value < 0.0 or not quantity_value.is_integer():
+                    raise AnalysisError(
+                        f"invalid shock quantity in {path}:{line_number}"
+                    )
+                quantity = int(quantity_value)
+                if (target == "1") != (quantity > 0):
+                    raise AnalysisError(
+                        f"target and quantity disagree in {path}:{line_number}"
+                    )
+                if "shock_side" in fields:
+                    side = row.get("shock_side", "")
+                    expected_sides = {"buy", "sell"} if target == "1" else {"none"}
+                    if side not in expected_sides:
+                        raise AnalysisError(
+                            f"invalid realized shock side in {path}:{line_number}"
+                        )
+                    if target == "1":
+                        if "pre_shock_shared_inventory" not in fields:
+                            raise AnalysisError(
+                                f"shock-target CSV {path} records a side without "
+                                "left-limit inventory"
+                            )
+                        try:
+                            pre_inventory = int(
+                                row.get("pre_shock_shared_inventory", "")
+                            )
+                        except (TypeError, ValueError) as error:
+                            raise AnalysisError(
+                                f"invalid pre-shock shared inventory in "
+                                f"{path}:{line_number}"
+                            ) from error
+                        direction_rule = row.get("direction_rule", "")
+                        if direction_rule == "inventory_adverse":
+                            expected_side = "buy" if pre_inventory < 0 else "sell"
+                            if side != expected_side:
+                                raise AnalysisError(
+                                    f"shock side is not inventory-adverse in "
+                                    f"{path}:{line_number}"
+                                )
+                        elif direction_rule == "fixed_sell":
+                            if side != "sell":
+                                raise AnalysisError(
+                                    f"fixed-sell shock has side={side!r} in "
+                                    f"{path}:{line_number}"
+                                )
+                        else:
+                            raise AnalysisError(
+                                f"unknown shock direction rule in "
+                                f"{path}:{line_number}: {direction_rule!r}"
+                            )
+                if {"requested_buy_quantity", "requested_sell_quantity"}.issubset(fields):
+                    buy = nonnegative_int(
+                        row.get("requested_buy_quantity", ""),
+                        f"{path}:{line_number}:requested_buy_quantity",
+                    )
+                    sell = nonnegative_int(
+                        row.get("requested_sell_quantity", ""),
+                        f"{path}:{line_number}:requested_sell_quantity",
+                    )
+                    if buy + sell != quantity:
+                        raise AnalysisError(
+                            f"directional shock quantities disagree in "
+                            f"{path}:{line_number}"
+                        )
+                symbol = row.get("symbol", "").strip()
+                if not symbol:
+                    raise AnalysisError(
+                        f"empty symbol in {path}:{line_number}"
+                    )
+                if asset_id in observed_asset_ids or symbol in observed_symbols:
+                    raise AnalysisError(
+                        f"duplicate asset identity in {path}:{line_number}"
+                    )
+                observed_asset_ids.add(asset_id)
+                observed_symbols.add(symbol)
+                result.append((asset_id, symbol, quantity))
+                observed_total += quantity
+    except OSError as error:
+        raise AnalysisError(f"cannot read shock-target CSV {path}: {error}") from error
+    if sorted(observed_asset_ids) != list(range(len(result))):
+        raise AnalysisError(
+            f"shock manifest asset IDs are not canonical 0..N-1: {path}"
+        )
+    declared_total = finite_float(
+        case.row.get("shock_requested_quantity", ""),
+        "shock_requested_quantity",
+    )
+    if observed_total != declared_total:
+        raise AnalysisError(
+            f"shock manifest total {observed_total} differs from raw result "
+            f"{declared_total:.12g}: {path}"
+        )
+    return tuple(result)
 
 
 def atomic_csv(path: pathlib.Path,
@@ -364,6 +559,55 @@ def percentile(values: Sequence[float], probability: float, label: str) -> float
     return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
 
 
+def validate_shared_dealer_coverage(
+    series: Mapping[str, Mapping[str, float]],
+    *,
+    label: str,
+    shock_time_seconds: float,
+    lookback_seconds: float = 60.0,
+    minimum_resting_fraction: float = 0.95,
+) -> None:
+    """Require universal quote intent and broad executable resting coverage.
+
+    Requested coverage is the policy-level claim that the shared dealer quotes
+    both sides in all 1,480 books. Resting coverage is necessarily lower when
+    a quote is immediately executed before the observation boundary, so it is
+    assessed against a separately declared 95% material-presence threshold.
+    """
+    lower = shock_time_seconds - lookback_seconds
+    lookback = [
+        values for time, values in series.items()
+        if lower < float(time) <= shock_time_seconds
+    ]
+    if not lookback:
+        raise AnalysisError(f"{label} has no observations in the coverage lookback")
+    minimum_requested = min(
+        values["shared_requested_two_sided_asset_fraction"]
+        for values in lookback
+    )
+    if not math.isclose(minimum_requested, 1.0, rel_tol=0.0, abs_tol=1.0e-12):
+        raise AnalysisError(
+            f"{label} shared-dealer policy did not quote both sides of every "
+            f"book before the shock: minimum fraction={minimum_requested:.12g}"
+        )
+    shock_key = format(shock_time_seconds, ".12g")
+    try:
+        shock_observation = series[shock_key]
+    except KeyError as error:
+        raise AnalysisError(
+            f"{label} lacks the pre-intervention observation at t_s"
+        ) from error
+    resting_fraction = shock_observation[
+        "shared_two_sided_active_asset_fraction"
+    ]
+    if resting_fraction < minimum_resting_fraction:
+        raise AnalysisError(
+            f"{label} two-sided resting dealer coverage at the shock boundary "
+            f"is below {minimum_resting_fraction:.12g}: "
+            f"fraction={resting_fraction:.12g}"
+        )
+
+
 def build_analysis(global_cases: list[RawCase],
                    uncoupled_cases: list[RawCase],
                    off_cases: list[RawCase],
@@ -374,7 +618,9 @@ def build_analysis(global_cases: list[RawCase],
                        list[dict[str, object]],
                    ]:
     global_index = unique_cases(global_cases, "globally constrained shared MM")
-    uncoupled_index = unique_off_cases(uncoupled_cases)
+    uncoupled_index = unique_cases(
+        uncoupled_cases, "capacity-matched uncoupled shared MM"
+    )
     off_index = unique_off_cases(off_cases)
     risks = sorted({canonical_risk(case.risk_limit) for case in global_cases}, key=float)
     seeds = sorted({case.seed for case in global_cases})
@@ -391,6 +637,13 @@ def build_analysis(global_cases: list[RawCase],
             metrics_cache[case.metrics_path] = read_metrics(case.metrics_path)
         return metrics_cache[case.metrics_path]
 
+    shock_manifest_cache: dict[pathlib.Path, tuple[tuple[int, str, int], ...]] = {}
+    def shock_manifest(case: RawCase) -> tuple[tuple[int, str, int], ...]:
+        path = pathlib.Path(case.row.get("shock_targets_csv", ""))
+        if path not in shock_manifest_cache:
+            shock_manifest_cache[path] = read_shock_manifest(case)
+        return shock_manifest_cache[path]
+
     per_time: list[dict[str, object]] = []
     per_seed: list[dict[str, object]] = []
     for risk in risks:
@@ -399,7 +652,8 @@ def build_analysis(global_cases: list[RawCase],
                 shock: global_index.get((risk, seed, shock)) for shock in (False, True)
             }
             required_uncoupled = {
-                shock: uncoupled_index.get((seed, shock)) for shock in (False, True)
+                shock: uncoupled_index.get((risk, seed, shock))
+                for shock in (False, True)
             }
             required_off = {
                 shock: off_index.get((seed, shock)) for shock in (False, True)
@@ -407,7 +661,10 @@ def build_analysis(global_cases: list[RawCase],
             if any(case is None for case in required_global.values()):
                 raise AnalysisError(f"missing global shock/control pair for risk={risk}, seed={seed}")
             if any(case is None for case in required_uncoupled.values()):
-                raise AnalysisError(f"missing uncoupled shock/control pair for seed={seed}")
+                raise AnalysisError(
+                    "missing capacity-matched uncoupled shock/control pair "
+                    f"for risk={risk}, seed={seed}"
+                )
             if any(case is None for case in required_off.values()):
                 raise AnalysisError(f"missing shared-MM-off shock/control pair for seed={seed}")
             global_control, global_shock = required_global[False], required_global[True]
@@ -418,10 +675,32 @@ def build_analysis(global_cases: list[RawCase],
             assert (global_control and global_shock and uncoupled_control
                     and uncoupled_shock and off_control and off_shock)
 
+            matched_dose = shock_manifest(global_shock)
+            for label, candidate in (
+                ("capacity-matched uncoupled", uncoupled_shock),
+                ("shared-MM absent", off_shock),
+            ):
+                if shock_manifest(candidate) != matched_dose:
+                    raise AnalysisError(
+                        f"{label} shock target/dose vector differs from the "
+                        f"global path for risk={risk}, seed={seed}"
+                    )
+
             series = [metrics(case) for case in (
                 global_control, global_shock, uncoupled_control,
                 uncoupled_shock, off_control, off_shock,
             )]
+            for index, coverage_label in (
+                (0, f"global control risk={risk} seed={seed}"),
+                (1, f"global shock risk={risk} seed={seed}"),
+                (2, f"uncoupled control risk={risk} seed={seed}"),
+                (3, f"uncoupled shock risk={risk} seed={seed}"),
+            ):
+                validate_shared_dealer_coverage(
+                    series[index],
+                    label=coverage_label,
+                    shock_time_seconds=shock_time_seconds,
+                )
             reference_times = set(series[0])
             if any(set(candidate) != reference_times for candidate in series[1:]):
                 raise AnalysisError(
@@ -431,6 +710,9 @@ def build_analysis(global_cases: list[RawCase],
                 (0, 1, "global"), (2, 3, "uncoupled"), (4, 5, "off"),
             ):
                 for time_key in reference_times:
+                    # A boundary observation at t_s precedes processing of
+                    # events stamped t_s, so it remains part of the matched
+                    # pre-intervention path.
                     if float(time_key) > shock_time_seconds:
                         continue
                     for field in REQUIRED_METRIC_FIELDS:
@@ -450,6 +732,7 @@ def build_analysis(global_cases: list[RawCase],
                     f"no decision times fall in the requested post-shock horizon for risk={risk}, seed={seed}"
                 )
             depth_did_values: list[float] = []
+            relative_depth_did_values: list[float] = []
             spread_did_values: list[float] = []
             affected_did_values: list[float] = []
             global_depth_values: list[float] = []
@@ -457,6 +740,8 @@ def build_analysis(global_cases: list[RawCase],
             off_delta_values: list[float] = []
             global_two_sided_shock: list[float] = []
             global_quote_scale_shock: list[float] = []
+            checkpoint_effects: dict[int, tuple[float, float, float]] = {}
+            checkpoint_seconds = {1, 5, 30, 300, 1800}
             for time_value in post_times:
                 time_key = format(time_value, ".12g")
                 (global_control_values, global_shock_values,
@@ -492,9 +777,29 @@ def build_analysis(global_cases: list[RawCase],
                     off_control_values["affected_unshocked_fraction"]
                 )
                 depth_did = global_depth - uncoupled_depth
+                global_depth_denominator = global_control_values[
+                    "unshocked_mean_top_depth"
+                ]
+                uncoupled_depth_denominator = uncoupled_control_values[
+                    "unshocked_mean_top_depth"
+                ]
+                if (global_depth_denominator <= 0.0
+                        or uncoupled_depth_denominator <= 0.0):
+                    raise AnalysisError(
+                        "non-positive matched-control top depth for relative "
+                        f"effect at risk={risk}, seed={seed}, time={time_key}"
+                    )
+                global_relative_depth = global_depth / global_depth_denominator
+                uncoupled_relative_depth = (
+                    uncoupled_depth / uncoupled_depth_denominator
+                )
+                relative_depth_did = (
+                    global_relative_depth - uncoupled_relative_depth
+                )
                 spread_did = global_spread - uncoupled_spread
                 affected_did = global_affected - uncoupled_affected
                 depth_did_values.append(depth_did)
+                relative_depth_did_values.append(relative_depth_did)
                 spread_did_values.append(spread_did)
                 affected_did_values.append(affected_did)
                 global_depth_values.append(global_depth)
@@ -504,6 +809,13 @@ def build_analysis(global_cases: list[RawCase],
                     global_shock_values["two_sided_book_fraction"]
                 )
                 global_quote_scale_shock.append(global_shock_values["shared_quote_scale"])
+                elapsed = int(round(time_value - shock_time_seconds))
+                if elapsed in checkpoint_seconds and math.isclose(
+                        time_value - shock_time_seconds, elapsed,
+                        rel_tol=0.0, abs_tol=1.0e-9):
+                    checkpoint_effects[elapsed] = (
+                        depth_did, spread_did, affected_did,
+                    )
                 per_time.append({
                     "risk_limit_per_asset": risk,
                     "seed": seed,
@@ -511,6 +823,13 @@ def build_analysis(global_cases: list[RawCase],
                     "global_depth_deterioration": global_depth,
                     "uncoupled_depth_deterioration": uncoupled_depth,
                     "depth_difference_in_differences": depth_did,
+                    "global_relative_depth_deterioration": global_relative_depth,
+                    "uncoupled_relative_depth_deterioration": (
+                        uncoupled_relative_depth
+                    ),
+                    "relative_depth_difference_in_differences": (
+                        relative_depth_did
+                    ),
                     "global_spread_deterioration_bps": global_spread,
                     "uncoupled_spread_deterioration_bps": uncoupled_spread,
                     "spread_difference_in_differences_bps": spread_did,
@@ -522,6 +841,66 @@ def build_analysis(global_cases: list[RawCase],
                         "shared_utilization"],
                     "global_shock_shared_quote_scale": global_shock_values[
                         "shared_quote_scale"],
+                    "global_shock_shared_active_asset_fraction": (
+                        global_shock_values["shared_active_asset_fraction"]
+                    ),
+                    "global_shock_shared_two_sided_active_asset_fraction": (
+                        global_shock_values[
+                            "shared_two_sided_active_asset_fraction"
+                        ]
+                    ),
+                    "global_shock_shared_at_best_bid_asset_fraction": (
+                        global_shock_values[
+                            "shared_at_best_bid_asset_fraction"
+                        ]
+                    ),
+                    "global_shock_shared_at_best_ask_asset_fraction": (
+                        global_shock_values[
+                            "shared_at_best_ask_asset_fraction"
+                        ]
+                    ),
+                    "global_shock_shared_best_bid_depth": (
+                        global_shock_values["shared_best_bid_depth"]
+                    ),
+                    "global_shock_shared_best_ask_depth": (
+                        global_shock_values["shared_best_ask_depth"]
+                    ),
+                    "global_shock_shared_bbo_depth_participation": (
+                        global_shock_values[
+                            "shared_bbo_depth_participation"
+                        ]
+                    ),
+                    "global_shock_shared_requested_quote_depth": (
+                        global_shock_values["shared_requested_quote_depth"]
+                    ),
+                    "global_shock_shared_risk_reducing_quote_depth": (
+                        global_shock_values[
+                            "shared_risk_reducing_requested_quote_depth"
+                        ]
+                    ),
+                    "global_shock_shared_risk_increasing_quote_depth": (
+                        global_shock_values[
+                            "shared_risk_increasing_requested_quote_depth"
+                        ]
+                    ),
+                    "global_shock_shared_resting_quote_depth": (
+                        global_shock_values["shared_resting_quote_depth"]
+                    ),
+                    "global_shock_shared_risk_reducing_resting_quote_depth": (
+                        global_shock_values[
+                            "shared_risk_reducing_resting_quote_depth"
+                        ]
+                    ),
+                    "global_shock_shared_risk_increasing_resting_quote_depth": (
+                        global_shock_values[
+                            "shared_risk_increasing_resting_quote_depth"
+                        ]
+                    ),
+                    "global_shock_unshocked_shared_resting_quote_depth": (
+                        global_shock_values[
+                            "unshocked_shared_resting_quote_depth"
+                        ]
+                    ),
                     "global_shock_shared_gross_exposure": global_shock_values[
                         "shared_gross_exposure"],
                     "global_shock_unshocked_shared_requested_quote_depth": (
@@ -558,13 +937,50 @@ def build_analysis(global_cases: list[RawCase],
                 global_shock.row.get("shock_shared_mm_quantity", ""),
                 "shock_shared_mm_quantity",
             )
-            per_seed.append({
+            first_post_key = format(post_times[0], ".12g")
+            first_global_control = series[0][first_post_key]
+            first_global_shock = series[1][first_post_key]
+            pre_shock_key = format(shock_time_seconds, ".12g")
+            pre_global_control = series[0][pre_shock_key]
+            pre_uncoupled_control = series[2][pre_shock_key]
+            pre_global_depth = pre_global_control["unshocked_mean_top_depth"]
+            pre_uncoupled_depth = pre_uncoupled_control[
+                "unshocked_mean_top_depth"
+            ]
+            pre_global_spread = pre_global_control[
+                "unshocked_mean_spread_bps"
+            ]
+            pre_uncoupled_spread = pre_uncoupled_control[
+                "unshocked_mean_spread_bps"
+            ]
+            peak_depth = max(depth_did_values)
+            peak_depth_index = depth_did_values.index(peak_depth)
+            peak_depth_elapsed = post_times[peak_depth_index] - shock_time_seconds
+            recovery_seconds: object = ""
+            if peak_depth > 0.0:
+                recovery_level = 0.1 * peak_depth
+                for index in range(peak_depth_index, len(depth_did_values)):
+                    if depth_did_values[index] <= recovery_level:
+                        recovery_seconds = (
+                            post_times[index] - shock_time_seconds
+                        )
+                        break
+            else:
+                recovery_seconds = 0.0
+            seed_row: dict[str, object] = {
                 "risk_limit_per_asset": risk,
                 "seed": seed,
                 "post_shock_horizon_seconds": horizon_seconds,
                 "post_shock_observations": len(post_times),
                 "mean_depth_difference_in_differences": mean(depth_did_values, "mean depth DID"),
-                "peak_depth_difference_in_differences": max(depth_did_values),
+                "mean_relative_depth_difference_in_differences": mean(
+                    relative_depth_did_values, "mean relative depth DID"
+                ),
+                "peak_depth_difference_in_differences": peak_depth,
+                "peak_depth_difference_in_differences_seconds_after_shock": (
+                    peak_depth_elapsed
+                ),
+                "depth_recovery_to_10pct_peak_seconds": recovery_seconds,
                 "integrated_depth_difference_in_differences": sum(depth_did_values)
                     * horizon_seconds / len(depth_did_values),
                 "mean_spread_difference_in_differences_bps": mean(
@@ -583,11 +999,81 @@ def build_analysis(global_cases: list[RawCase],
                 "shock_requested_quantity": requested,
                 "shock_executed_quantity": executed,
                 "shock_shared_mm_quantity": shared_absorbed,
+                "shock_local_mm_quantity": finite_float(
+                    global_shock.row.get("shock_local_mm_quantity", ""),
+                    "shock_local_mm_quantity",
+                ),
+                "shock_value_agent_quantity": finite_float(
+                    global_shock.row.get("shock_value_agent_quantity", ""),
+                    "shock_value_agent_quantity",
+                ),
+                "shock_background_quantity": finite_float(
+                    global_shock.row.get("shock_background_quantity", ""),
+                    "shock_background_quantity",
+                ),
+                "shock_other_quantity": finite_float(
+                    global_shock.row.get("shock_other_quantity", ""),
+                    "shock_other_quantity",
+                ),
                 "shock_execution_fraction": executed / requested if requested > 0.0 else 0.0,
                 "shared_mm_absorption_fraction": (
                     shared_absorbed / executed if executed > 0.0 else 0.0
                 ),
-            })
+                "immediate_shock_minus_control_gross_exposure": (
+                    first_global_shock["shared_gross_exposure"]
+                    - first_global_control["shared_gross_exposure"]
+                ),
+                "immediate_shock_minus_control_utilization": (
+                    first_global_shock["shared_utilization"]
+                    - first_global_control["shared_utilization"]
+                ),
+                "immediate_shock_minus_control_quote_scale": (
+                    first_global_shock["shared_quote_scale"]
+                    - first_global_control["shared_quote_scale"]
+                ),
+                "immediate_target_inventory_shock_minus_control": (
+                    first_global_shock["mean_shocked_shared_inventory"]
+                    - first_global_control["mean_shocked_shared_inventory"]
+                ),
+                "pre_shock_shared_at_best_bid_asset_fraction": (
+                    series[1][format(shock_time_seconds, ".12g")][
+                        "shared_at_best_bid_asset_fraction"
+                    ]
+                ),
+                "pre_shock_shared_at_best_ask_asset_fraction": (
+                    series[1][format(shock_time_seconds, ".12g")][
+                        "shared_at_best_ask_asset_fraction"
+                    ]
+                ),
+                "pre_shock_shared_bbo_depth_participation": (
+                    series[1][format(shock_time_seconds, ".12g")][
+                        "shared_bbo_depth_participation"
+                    ]
+                ),
+                "pre_shock_global_minus_uncoupled_top_depth": (
+                    pre_global_depth - pre_uncoupled_depth
+                ),
+                "pre_shock_global_minus_uncoupled_top_depth_fraction": (
+                    (pre_global_depth - pre_uncoupled_depth)
+                    / pre_uncoupled_depth if pre_uncoupled_depth > 0.0 else 0.0
+                ),
+                "pre_shock_global_minus_uncoupled_spread_bps": (
+                    pre_global_spread - pre_uncoupled_spread
+                ),
+            }
+            for checkpoint in (1, 5, 30, 300, 1800):
+                if checkpoint > horizon_seconds:
+                    continue
+                if checkpoint not in checkpoint_effects:
+                    raise AnalysisError(
+                        f"missing exact {checkpoint}-second causal checkpoint "
+                        f"for risk={risk}, seed={seed}"
+                    )
+                depth, spread, affected = checkpoint_effects[checkpoint]
+                seed_row[f"depth_did_at_{checkpoint}s"] = depth
+                seed_row[f"spread_did_bps_at_{checkpoint}s"] = spread
+                seed_row[f"affected_fraction_did_at_{checkpoint}s"] = affected
+            per_seed.append(seed_row)
 
     summaries: list[dict[str, object]] = []
     by_risk: dict[str, list[dict[str, object]]] = defaultdict(list)
@@ -598,6 +1084,10 @@ def build_analysis(global_cases: list[RawCase],
         depth_effects = [
             float(row["mean_depth_difference_in_differences"]) for row in rows
         ]
+        relative_depth_effects = [
+            float(row["mean_relative_depth_difference_in_differences"])
+            for row in rows
+        ]
         spread_effects = [
             float(row["mean_spread_difference_in_differences_bps"]) for row in rows
         ]
@@ -605,12 +1095,28 @@ def build_analysis(global_cases: list[RawCase],
             float(row["mean_affected_fraction_difference_in_differences"])
             for row in rows
         ]
+        depth_sd = sample_standard_deviation(depth_effects)
+        relative_depth_sd = sample_standard_deviation(relative_depth_effects)
+        spread_sd = sample_standard_deviation(spread_effects)
+        affected_sd = sample_standard_deviation(affected_effects)
+        depth_mcse = depth_sd / math.sqrt(len(depth_effects))
+        relative_depth_mcse = relative_depth_sd / math.sqrt(
+            len(relative_depth_effects)
+        )
+        spread_mcse = spread_sd / math.sqrt(len(spread_effects))
+        affected_mcse = affected_sd / math.sqrt(len(affected_effects))
         summaries.append({
             "risk_limit_per_asset": risk,
             "seed_count": len(rows),
             "mean_depth_difference_in_differences": mean(depth_effects, "summary depth DID"),
-            "sample_sd_depth_difference_in_differences": sample_standard_deviation(
-                depth_effects
+            "median_depth_difference_in_differences": statistics.median(depth_effects),
+            "sample_sd_depth_difference_in_differences": depth_sd,
+            "mcse_depth_difference_in_differences": depth_mcse,
+            "normal_95_ci_lower_depth_difference_in_differences": (
+                mean(depth_effects, "summary depth DID") - 1.96 * depth_mcse
+            ),
+            "normal_95_ci_upper_depth_difference_in_differences": (
+                mean(depth_effects, "summary depth DID") + 1.96 * depth_mcse
             ),
             "percentile_2p5_depth_difference_in_differences": percentile(
                 depth_effects, 0.025, "depth DID percentile"
@@ -624,11 +1130,53 @@ def build_analysis(global_cases: list[RawCase],
             "maximum_seed_mean_depth_difference_in_differences": max(
                 depth_effects
             ),
+            "mean_relative_depth_difference_in_differences": mean(
+                relative_depth_effects, "summary relative depth DID"
+            ),
+            "median_relative_depth_difference_in_differences": (
+                statistics.median(relative_depth_effects)
+            ),
+            "sample_sd_relative_depth_difference_in_differences": (
+                relative_depth_sd
+            ),
+            "mcse_relative_depth_difference_in_differences": (
+                relative_depth_mcse
+            ),
+            "normal_95_ci_lower_relative_depth_difference_in_differences": (
+                mean(relative_depth_effects, "summary relative depth DID")
+                - 1.96 * relative_depth_mcse
+            ),
+            "normal_95_ci_upper_relative_depth_difference_in_differences": (
+                mean(relative_depth_effects, "summary relative depth DID")
+                + 1.96 * relative_depth_mcse
+            ),
+            "percentile_2p5_relative_depth_difference_in_differences": (
+                percentile(
+                    relative_depth_effects, 0.025,
+                    "relative depth DID percentile",
+                )
+            ),
+            "percentile_97p5_relative_depth_difference_in_differences": (
+                percentile(
+                    relative_depth_effects, 0.975,
+                    "relative depth DID percentile",
+                )
+            ),
             "mean_spread_difference_in_differences_bps": mean(
                 spread_effects, "summary spread DID"
             ),
-            "sample_sd_spread_difference_in_differences_bps": (
-                sample_standard_deviation(spread_effects)
+            "median_spread_difference_in_differences_bps": statistics.median(
+                spread_effects
+            ),
+            "sample_sd_spread_difference_in_differences_bps": spread_sd,
+            "mcse_spread_difference_in_differences_bps": spread_mcse,
+            "normal_95_ci_lower_spread_difference_in_differences_bps": (
+                mean(spread_effects, "summary spread DID")
+                - 1.96 * spread_mcse
+            ),
+            "normal_95_ci_upper_spread_difference_in_differences_bps": (
+                mean(spread_effects, "summary spread DID")
+                + 1.96 * spread_mcse
             ),
             "percentile_2p5_spread_difference_in_differences_bps": percentile(
                 spread_effects, 0.025, "spread DID percentile"
@@ -639,8 +1187,22 @@ def build_analysis(global_cases: list[RawCase],
             "mean_affected_fraction_difference_in_differences": mean(
                 affected_effects, "summary affected-fraction DID"
             ),
-            "sample_sd_affected_fraction_difference_in_differences": (
-                sample_standard_deviation(affected_effects)
+            "median_affected_fraction_difference_in_differences": (
+                statistics.median(affected_effects)
+            ),
+            "sample_sd_affected_fraction_difference_in_differences": affected_sd,
+            "mcse_affected_fraction_difference_in_differences": affected_mcse,
+            "percentile_2p5_affected_fraction_difference_in_differences": (
+                percentile(
+                    affected_effects, 0.025,
+                    "affected-fraction DID percentile",
+                )
+            ),
+            "percentile_97p5_affected_fraction_difference_in_differences": (
+                percentile(
+                    affected_effects, 0.975,
+                    "affected-fraction DID percentile",
+                )
             ),
             "mean_peak_depth_difference_in_differences": mean(
                 [float(row["peak_depth_difference_in_differences"]) for row in rows], "summary peak DID"
@@ -781,6 +1343,25 @@ def validate_universe_input(
     if config_fields != expected_runtime_fields or not config_rows:
         raise AnalysisError("universe configuration has an unsupported runtime schema")
     project_root = pathlib.Path(__file__).resolve().parents[1]
+    cohort_identity_value = payload.get("cohort_identity")
+    cohort_identity_projection = "none"
+    if (
+        payload.get("schema_version") == 5
+        and isinstance(cohort_identity_value, Mapping)
+        and "schema_version" not in cohort_identity_value
+    ):
+        # The first portable schema-5 producer emitted every immutable cohort
+        # field and artifact hash but omitted only the identity record's own
+        # schema tag.  The configuration below is independently checked
+        # against the bundled 1,480-symbol sequence, so supplying that tag in
+        # memory changes no scientific identity or hash-bound input.
+        cohort_identity_value = {
+            "schema_version": 1,
+            **cohort_identity_value,
+        }
+        cohort_identity_projection = (
+            "schema_version_1_supplied_for_portable_schema_5"
+        )
     try:
         observed_cohort = cohort.validate_symbols(
             (row.get("symbol", "") for row in config_rows),
@@ -788,7 +1369,7 @@ def validate_universe_input(
             project_root=project_root,
         )
         persisted_cohort = cohort.require_identity_record(
-            payload.get("cohort_identity"),
+            cohort_identity_value,
             label="universe-input cohort identity",
         )
     except cohort.CohortIdentityError as error:
@@ -799,6 +1380,9 @@ def validate_universe_input(
         raise AnalysisError(
             "universe-input manifest does not bind the exact certification cohort"
         )
+    payload["_analysis_cohort_identity_projection"] = (
+        cohort_identity_projection
+    )
     for line_number, row in enumerate(config_rows, start=2):
         for field in (
                 "target_spread_ticks", "target_mean_bid_depth",
@@ -862,13 +1446,42 @@ def validate_universe_input(
     if (payload.get("case_executable_sha256") != executable_hash
             or metadata.get("executable_sha256") != executable_hash):
         raise AnalysisError("case executable hash disagrees across artifacts")
+    executable_provenance = payload.get("executable_provenance")
+    if not isinstance(executable_provenance, dict):
+        raise AnalysisError("universe-input lacks executable provenance")
+    if executable_provenance.get("case_executable_sha256") != executable_hash:
+        raise AnalysisError("executable provenance does not bind the case executable")
+    validated_hash = executable_provenance.get(
+        "validated_baseline_executable_sha256"
+    )
+    if not isinstance(validated_hash, str) or len(validated_hash) != 64:
+        raise AnalysisError("executable provenance lacks the validated baseline hash")
+    amended = executable_provenance.get(
+        "post_validation_treatment_amendment"
+    )
+    if not isinstance(amended, bool):
+        raise AnalysisError("executable provenance has an invalid amendment flag")
+    expected_scope = (
+        "shared_dealer_counterfactual_and_observation_only"
+        if amended else "none"
+    )
+    if executable_provenance.get("amendment_scope") != expected_scope:
+        raise AnalysisError("executable provenance has an invalid amendment scope")
+    if (
+        executable_provenance.get(
+            "ordinary_market_calibration_parameters_changed"
+        ) is not False
+        or executable_provenance.get(
+            "ordinary_market_validation_claim_extended"
+        ) is not False
+    ):
+        raise AnalysisError(
+            "case manifest improperly extends the ordinary-market validation claim"
+        )
     profile = payload.get("case_study_protocol")
     if (
         not isinstance(profile, dict)
-        or profile.get("profile_id") not in {
-            "systemic_liquidity_case_v1",
-            "systemic_liquidity_case_v2_queue_reactive",
-        }
+        or profile.get("profile_id") != "systemic_liquidity_shock_queue_reactive"
     ):
         raise AnalysisError("universe-input lacks the canonical case-study profile")
     encoded = json.dumps(
@@ -876,16 +1489,70 @@ def validate_universe_input(
     ).encode("utf-8")
     if payload.get("case_study_protocol_sha256") != hashlib.sha256(encoded).hexdigest():
         raise AnalysisError("case-study protocol hash is invalid")
+    required_protocol = {
+        "primary_outcome": "relative_non_target_top_depth_deterioration",
+        "secondary_outcome": "non_target_spread_deterioration_bps",
+        "reporting_horizons_seconds": [1, 5, 30, 300, 1800],
+        "uncoupled_capacity_control": "asset_specific_equal_total_capacity",
+        "asset_level_shock_dose_equality_required": True,
+        "shock_direction_rule": "inventory_adverse_at_left_limit",
+        "state_contingent_direction_rule_identical_across_mechanisms": True,
+        "shock_fill_ownership_required": True,
+        "truncated_full_prefix_equality_required": True,
+        "shared_off_treatment_isolation_required": True,
+        "required_pre_shock_requested_two_sided_book_fraction": 1.0,
+        "minimum_pre_shock_resting_two_sided_book_fraction": 0.95,
+        "mechanism_preflight_lookback_seconds": 60.0,
+        "minimum_pre_shock_economic_quote_scale": 0.25,
+        "maximum_pre_shock_utilization": 0.90,
+        "minimum_pre_shock_bbo_depth_participation": 0.05,
+        "target_side_materiality_assessed_by_realized_shock_absorption": True,
+        "minimum_nonzero_inventory_asset_fraction": 0.25,
+        "minimum_shock_absorption_fraction": 0.025,
+        "preflight_threshold_status": (
+            "fixed_after_mechanism_pilot_before_financial_paths"
+        ),
+    }
+    for field, expected in required_protocol.items():
+        if profile.get(field) != expected:
+            raise AnalysisError(
+                f"case-study protocol has invalid {field}: "
+                f"{profile.get(field)!r}"
+            )
     expected_metadata = {
+        "requested_duration_seconds": profile.get("duration_seconds"),
         "requested_shock_time_seconds": profile.get("shock_time_seconds"),
+        "requested_stochastic_baseline_normalization_seconds": profile.get(
+            "stochastic_baseline_normalization_seconds"
+        ),
         "requested_shock_fraction": profile.get("shock_fraction"),
         "requested_shock_top_depth_multiple": profile.get(
             "shock_top_depth_multiple"
+        ),
+        "requested_shock_reference_bid_depth_multiple": profile.get(
+            "shock_reference_bid_depth_multiple"
+        ),
+        "requested_shock_inventory_adverse": int(
+            profile.get("shock_direction_rule")
+            == "inventory_adverse_at_left_limit"
         ),
         "requested_shock_target_count": profile.get("shock_target_count"),
         "requested_shock_target_seed": profile.get("shock_target_seed"),
         "requested_local_inventory_limit": profile.get("local_inventory_limit"),
         "requested_capacity_threshold": profile.get("capacity_threshold"),
+        "requested_minimum_shared_quote_scale": profile.get(
+            "minimum_shared_quote_scale"
+        ),
+        "requested_shared_quote_relative": int(bool(profile.get(
+            "shared_quote_relative"
+        ))),
+        "requested_shared_capacity_relative": int(bool(profile.get(
+            "shared_capacity_relative"
+        ))),
+        "requested_shared_quote_multiplier": profile.get(
+            "shared_quote_multiplier"
+        ),
+        "requested_shared_quote_levels": profile.get("shared_quote_levels"),
         "local_mm_spread_elasticity": profile.get(
             "local_mm_spread_elasticity"
         ),
@@ -962,14 +1629,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         universe_input = validate_universe_input(universe_input_path, metadata)
         profile = universe_input["case_study_protocol"]
         assert isinstance(profile, dict)
-        if args.rank is None or args.rank != int(profile["science_ranks"]):
+        if args.rank is None or args.rank != int(profile["production_ranks"]):
             raise AnalysisError(
                 "analysis rank does not match the canonical campaign profile"
             )
         global_risks = sorted({case.risk_limit for case in global_cases})
-        science_risks = sorted(float(value) for value in profile["science_risk_limits"])
+        financial_risks = sorted(
+            float(value) for value in profile["financial_risk_limits"]
+        )
         reference_risk = float(profile["reference_risk_limit"])
-        permitted_risk_sets = [science_risks]
+        permitted_risk_sets = [financial_risks]
         if profile.get("experiment") in {"cadence", "all"}:
             permitted_risk_sets.append([reference_risk])
         if not any(
@@ -981,11 +1650,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise AnalysisError(
                 "global risk-limit cases do not match the canonical campaign profile"
             )
+        uncoupled_risks = sorted({case.risk_limit for case in uncoupled_cases})
+        if (len(uncoupled_risks) != len(financial_risks)
+                or any(not math.isclose(
+                    left, right, rel_tol=0.0, abs_tol=1.0e-12
+                ) for left, right in zip(uncoupled_risks, financial_risks))):
+            raise AnalysisError(
+                "uncoupled controls are not capacity matched to global risks"
+            )
         if any(not math.isclose(
                 case.risk_limit, reference_risk, rel_tol=0.0, abs_tol=1.0e-12
-        ) for case in [*uncoupled_cases, *off_cases]):
+        ) for case in off_cases):
             raise AnalysisError(
-                "uncoupled/off controls do not use the canonical reference risk limit"
+                "shared-MM-off controls do not use the canonical reference risk limit"
             )
         expected_seeds = {
             int(profile["base_seed"]) + offset
@@ -1053,6 +1730,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 ],
                 "case_executable_sha256": universe_input[
                     "case_executable_sha256"
+                ],
+                "cohort_identity_projection": universe_input[
+                    "_analysis_cohort_identity_projection"
                 ],
             },
             "seed_count": len({case.seed for case in global_cases}),

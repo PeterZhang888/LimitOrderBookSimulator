@@ -32,14 +32,14 @@ CALIBRATION = VERIFIER.calibration
 
 
 class GlobalCertificationVerifierTests(unittest.TestCase):
-    def test_profile_digest_is_pinned_to_v18(self) -> None:
+    def test_profile_digest_is_pinned(self) -> None:
         self.assertEqual(
             CALIBRATION.certification_profile_sha256(),
             VERIFIER.PINNED_PROFILE_SHA256,
         )
         self.assertEqual(
             CALIBRATION.certification_profile()["profile_id"],
-            "development_validation_gate_v18",
+            "development_validation_gate",
         )
 
     def test_verifier_is_bound_by_every_workflow_digest(self) -> None:

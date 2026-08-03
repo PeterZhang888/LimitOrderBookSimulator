@@ -2,7 +2,7 @@
   "analysis": "paired_post_shock_difference_in_differences",
   "formula": "(global_shock - global_control) - (uncoupled_shock - uncoupled_control)",
   "global_raw": {
-    "path": "/home/users/mschpc/2025/czhang4/coupled_lob_final_case_study/results/seagull/queue_case_45498/science_global_raw.csv",
+    "path": "/home/users/mschpc/2025/czhang4/coupled_lob_final_case_study/results/seagull/queue_case_45498/financial_global_raw.csv",
     "sha256": "45e105a9fbb4c38c25024c37149bfb74b4ff58a2ef5efb0072b2c3cfc253f49f"
   },
   "outputs": {
@@ -51,12 +51,12 @@
   "schema_version": 3,
   "seed_count": 5,
   "shared_off_raw": {
-    "path": "/home/users/mschpc/2025/czhang4/coupled_lob_final_case_study/results/seagull/queue_case_45498/science_shared_off_raw.csv",
+    "path": "/home/users/mschpc/2025/czhang4/coupled_lob_final_case_study/results/seagull/queue_case_45498/financial_shared_off_raw.csv",
     "sha256": "a70407e94dc958cb28890fe1c2da12c576642491a304d4bc617f605e80d87592"
   },
   "shock_time_seconds": 11700.0,
   "uncoupled_raw": {
-    "path": "/home/users/mschpc/2025/czhang4/coupled_lob_final_case_study/results/seagull/queue_case_45498/science_uncoupled_raw.csv",
+    "path": "/home/users/mschpc/2025/czhang4/coupled_lob_final_case_study/results/seagull/queue_case_45498/financial_uncoupled_raw.csv",
     "sha256": "8634ccf5d8c4bff6dd97df9b89ac5b21856906c83791bfc14dfeca678fbe01af"
   },
   "universe_input": {

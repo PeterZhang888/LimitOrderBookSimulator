@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail-closed identity contract for the fixed 1,480-symbol cohort.
 
-The development-validation cohort was selected once from the R16 balanced
+The development-validation cohort was selected once from the fixed balanced
 panel.  This module deliberately distinguishes *which* symbols are used from
 the weaker statement that a configuration merely contains 1,480 rows.
 """
@@ -19,22 +19,22 @@ REQUIRED_SYMBOL_COUNT = 1_480
 REQUIRED_SYMBOL_ORDER_SHA256 = (
     "2f57f37762772d9523fb9916fe2376a9578e337d20971fe39aa44d578f5691d3"
 )
-R16_POOLED_TRAINING_CSV_SHA256 = (
+POOLED_TRAINING_CSV_SHA256 = (
     "13fb1700643f408787708190d7af752d5bd7e107d1009e6b4f6a686c0dc155ef"
 )
-R16_POOLING_PROVENANCE_SHA256 = (
+POOLING_PROVENANCE_SHA256 = (
     "ab908a56b5962f946c7f7fd4f2906876b1497a62f428960bfb7f71352032edca"
 )
 ORIGIN_MANIFEST_SHA256 = (
-    "022e413f1eacd56238c4f814ea449c08d60c6de4497fda8527831ab0ab7be5ef"
+    "d0c881e8b01c89e4bc1ee99d0766484fb1031f434a01c26d492b074ca089a4de"
 )
 COHORT_RELATIVE_PATH = pathlib.Path("config/certification_symbols_1480.txt")
 ORIGIN_MANIFEST_RELATIVE_PATH = pathlib.Path(
     "config/certification_symbols_1480_origin.json"
 )
 
-# The historical R16 panel was obtained by applying the fixed one-cent opening
-# price-domain screen to a 1,509-symbol six-session intersection.  Fresh R17
+# The fixed balanced panel was obtained by applying the fixed one-cent opening
+# price-domain screen to a 1,509-symbol six-session intersection.  Fresh
 # extraction may instead predeclare the already-screened 1,480-symbol panel on
 # every session.  Certification admits exactly these two input shapes and no
 # count-only approximation of either one.
@@ -46,7 +46,7 @@ CERTIFICATION_SESSION_LABELS = (
     "2019-01-30", "2019-03-27", "2019-07-30", "2019-10-30",
     "2019-12-30", "2020-01-30",
 )
-R16_FIXED_PRICE_GRID_EXCLUDED_SYMBOLS = (
+FIXED_PRICE_GRID_EXCLUDED_SYMBOLS = (
     "ABUS", "ACHV", "ACST", "ADRO", "AEZS", "ALOT", "ASPU", "ASRT",
     "AYTU", "BLCM", "BSQR", "CHCI", "CMLS", "CSSE", "EAST", "EXFO",
     "FORD", "GLBS", "HSDT", "INAP", "INFI", "INVE", "MBRX", "MFNC",
@@ -156,8 +156,8 @@ def load_required_symbols(project_root: pathlib.Path) -> tuple[str, ...]:
         "original_intersection_symbol_count": 1_509,
         "fixed_price_grid_excluded_symbol_count": 29,
         "final_symbol_count": REQUIRED_SYMBOL_COUNT,
-        "r16_pooled_training_universe_csv_sha256": R16_POOLED_TRAINING_CSV_SHA256,
-        "r16_pooling_provenance_sha256": R16_POOLING_PROVENANCE_SHA256,
+        "pooled_training_universe_csv_sha256": POOLED_TRAINING_CSV_SHA256,
+        "pooling_provenance_sha256": POOLING_PROVENANCE_SHA256,
     }
     if manifest != expected:
         raise CohortIdentityError(
@@ -183,6 +183,7 @@ def validate_symbols(
         )
     cohort_path, manifest_path = project_paths(project_root)
     return {
+        "schema_version": 1,
         "status": "exact_cohort_verified",
         "symbol_count": len(observed),
         "symbol_order_sha256": observed_hash,
@@ -319,14 +320,14 @@ def certification_pool_input_selection(
         (
             "QQQ",
             *sorted(
-                set(required).union(R16_FIXED_PRICE_GRID_EXCLUDED_SYMBOLS)
+                set(required).union(FIXED_PRICE_GRID_EXCLUDED_SYMBOLS)
                 - {"QQQ"}
             ),
         ),
-        label="recorded R16 pre-screen intersection",
+        label="recorded pre-screen intersection",
     )
     if (intersection == legacy_intersection
-            and excluded == R16_FIXED_PRICE_GRID_EXCLUDED_SYMBOLS):
+            and excluded == FIXED_PRICE_GRID_EXCLUDED_SYMBOLS):
         mode = LEGACY_UNSCREENED_INPUT_MODE
         every_source_is_exact_cohort = False
     elif intersection == required and not excluded:
@@ -348,7 +349,7 @@ def certification_pool_input_selection(
         raise CohortIdentityError(
             "unsupported certification pool input shape: "
             f"intersection={len(intersection)} exclusions={len(excluded)}; "
-            "expected the recorded 1509-to-1480 R16 screen or six exact "
+            "expected the recorded 1509-to-1480 fixed-grid screen or six exact "
             "prefiltered 1480-symbol sessions"
         )
 

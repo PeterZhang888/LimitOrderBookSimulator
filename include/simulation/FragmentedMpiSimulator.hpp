@@ -62,6 +62,10 @@ struct FragmentedMpiConfig {
     int duration_seconds = 60;
     int asset_count = 101;
     std::int64_t decision_window_ns = 1'000'000'000LL;
+    // Zero normalizes the persistent activity path over duration_seconds.
+    // A longer fixed horizon makes a truncated diagnostic an exact prefix of
+    // the corresponding full-session realization.
+    std::int64_t stochastic_baseline_normalization_horizon_ns = 0;
     std::uint64_t seed = 20200130;
     int tick_size = 100;
     double initial_depth_scale = 1.0;
@@ -113,9 +117,10 @@ struct FragmentedMpiConfig {
     std::vector<FragmentedValueAgentPolicy> value_agent_policies;
 
     bool enable_shared_market_maker = true;
-    // When false, the shared supplier remains present and retains its local
-    // inventory skew, but the market-wide capacity multiplier is fixed at
-    // one.  This is the clean mechanism control for the stress experiment.
+    // When false, the shared supplier remains present but applies the same
+    // capacity function independently to each asset.  Global and uncoupled
+    // treatments therefore have equal nominal aggregate capacity; only
+    // cross-asset pooling differs.
     bool enable_global_shared_capacity = true;
     int shared_quote_quantity = 200;
     int shared_quote_levels = 1;
@@ -124,6 +129,10 @@ struct FragmentedMpiConfig {
     // calibrated local quote size instead.
     bool shared_quote_relative_to_asset = false;
     double shared_quote_multiplier = 1.0;
+    // Scale per-asset local and uncoupled capacity by the same empirical quote
+    // proxy used for relative quote size, normalized to mean one.  The global
+    // capacity sum remains L times asset_count.
+    bool shared_capacity_relative_to_asset = false;
     // Asset-specific inventory skew and market-wide capacity are deliberately
     // separate.  Changing the latter must not silently change local quoting.
     double shared_local_inventory_scale = 100.0;
@@ -133,6 +142,9 @@ struct FragmentedMpiConfig {
     // Capacity activation point u_0 in phi(u;u_0).  It is a scenario
     // assumption, not a calibrated value-agent threshold.
     double shared_capacity_threshold = 0.5;
+    // Residual participation prevents complete market exit. Inventory-aware
+    // side selection still makes risk-reducing quotes dominant near capacity.
+    double shared_minimum_quote_scale = 0.05;
 
     bool enable_shock = false;
     std::int64_t shock_time_ns = 30'000'000'000LL;
@@ -150,8 +162,26 @@ struct FragmentedMpiConfig {
     // intervention is a sell order, so this is its immediately executable
     // liquidity rather than an opening or bid-plus-ask proxy.
     double shock_top_depth_multiple = 0.0;
+    // Treatment-independent alternative: scale each target's sell order by
+    // its observed held-out opening best-bid depth.  Unlike contemporaneous
+    // depth, this reference is identical in global-capacity, uncoupled and
+    // no-shared-dealer paths, so paired effects do not confound the treatment
+    // with a different intervention quantity.
+    double shock_reference_bid_depth_multiple = 0.0;
+    // When enabled, the stress side is selected at t_s from the shared
+    // dealer's left-limit inventory in each target book.  A non-negative
+    // inventory receives an aggressive sell (the dealer buys more); a
+    // negative inventory receives an aggressive buy (the dealer sells more).
+    // Thus any dealer fill weakly increases |q_a|.  This is a state-dependent
+    // intervention rule applied identically in every capacity mechanism, not
+    // an ex-post choice based on the observed outcome.
+    bool shock_inventory_adverse = false;
 
     std::string metrics_csv;
+    // Optional time-resolved non-target liquidity by predeclared cluster.
+    // This supports post-shock heterogeneity estimates without storing a
+    // prohibitively large asset-by-second panel.
+    std::string cluster_metrics_csv;
     // Global market-wide monitoring is an observation, not a causal input.
     // It may therefore be sampled less frequently than shared-risk updates.
     // Zero means "match decision_window_ns", preserving historical output.
@@ -216,6 +246,10 @@ struct FragmentedMpiResult {
     double minimum_two_sided_book_fraction = 1.0;
     std::uint64_t shock_executed_quantity = 0;
     std::uint64_t shock_shared_mm_quantity = 0;
+    std::uint64_t shock_local_mm_quantity = 0;
+    std::uint64_t shock_value_agent_quantity = 0;
+    std::uint64_t shock_background_quantity = 0;
+    std::uint64_t shock_other_quantity = 0;
     std::uint64_t shock_requested_quantity = 0;
     std::uint64_t state_hash = 0;
 };

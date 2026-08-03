@@ -27,7 +27,7 @@
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
-# The R17 protocol adds 25 full-day, full-universe training-adequacy paths
+# The full protocol adds 25 full-day, full-universe training-adequacy paths
 # after candidate selection. This three-day allocation is a fail-safe ceiling,
 # not an expected runtime; it remains below Seagull's four-day job limit.
 #SBATCH --time=3-00:00:00
@@ -68,7 +68,7 @@ STAGE2_TOP_CANDIDATES="2"
 STAGE1_SEEDS="1729"
 STAGE2_SEEDS="1729,7919"
 STAGE3_SEEDS="1729,7919,1103,6599,2027"
-# R16 training winners reached the former 15-bps grid boundary.  The 25- and
+# Training winners reached the former 15-bps grid boundary.  The 25- and
 # 40-bps candidates are therefore a preregistered training-grid expansion, not
 # a response to the 2020 development-validation outcome.
 THRESHOLDS="5,8,10,15,25,40"
@@ -89,7 +89,9 @@ PROJECT_DIR="${SLURM_SUBMIT_DIR}"
 BUILD_DIR="${BUILD_DIR:-${PROJECT_DIR}/build-seagull-gcc15-ompi509-cluster-cal-${SLURM_JOB_ID}}"
 RESULT_DIR="${RESULT_DIR:-${PROJECT_DIR}/results/seagull/cluster_value_calibration_${SLURM_JOB_ID}}"
 BUILD_JOBS="${BUILD_JOBS:-${SLURM_CPUS_PER_TASK:-1}}"
-SEAGULL_MODULES="${SEAGULL_MODULES:-gcc/15.2.0-gcc-8.5.0-r7c4jsu openmpi/5.0.9-gcc-15.2.0-2irqibq cmake/3.31.9-gcc-15.2.0-ylutpfi ninja/1.13.0-gcc-15.2.0-nukwcsd python/3.14.2-gcc-15.2.0-e63sscp}"
+# This suffix is Seagull's Spack build identifier, not a model revision.
+SEAGULL_GCC_MODULE="gcc/15.2.0-gcc-8.5.0-r7c4jsu"
+SEAGULL_MODULES="${SEAGULL_MODULES:-${SEAGULL_GCC_MODULE} openmpi/5.0.9-gcc-15.2.0-2irqibq cmake/3.31.9-gcc-15.2.0-ylutpfi ninja/1.13.0-gcc-15.2.0-nukwcsd python/3.14.2-gcc-15.2.0-e63sscp}"
 
 fail() {
     echo "ERROR: $*" >&2

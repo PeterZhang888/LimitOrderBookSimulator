@@ -160,6 +160,63 @@ std::int64_t DistributedLimitOrderBook::total_background_ask_depth() const {
     return background_ask_quantity_;
 }
 
+std::int64_t DistributedLimitOrderBook::owner_resting_depth(
+    std::int32_t owner_id, Side side) const {
+    const auto& owner_prices = side == Side::Buy
+        ? owner_bid_prices_ : owner_ask_prices_;
+    const auto indexed = owner_prices.find(owner_id);
+    if (indexed == owner_prices.end()) return 0;
+    std::int64_t total = 0;
+    const auto accumulate = [&](const auto& levels) {
+        for (const int price : indexed->second) {
+            const auto level = levels.find(price);
+            if (level == levels.end()) continue;
+            for (const RestingOrder& order : level->second) {
+                if (order.owner_id != owner_id || order.quantity <= 0) continue;
+                if (total > std::numeric_limits<std::int64_t>::max()
+                        - order.quantity) {
+                    throw std::overflow_error("owner resting depth overflow");
+                }
+                total += order.quantity;
+            }
+        }
+    };
+    if (side == Side::Buy) accumulate(bids_);
+    else accumulate(asks_);
+    return total;
+}
+
+std::vector<OwnerRestingQuote>
+DistributedLimitOrderBook::owner_resting_quotes(std::int32_t owner_id) const {
+    std::vector<OwnerRestingQuote> result;
+    const auto append = [&](Side side, const auto& owner_prices,
+                            const auto& levels) {
+        const auto indexed = owner_prices.find(owner_id);
+        if (indexed == owner_prices.end()) return;
+        for (const int price : indexed->second) {
+            const auto level = levels.find(price);
+            if (level == levels.end()) continue;
+            std::int64_t quantity = 0;
+            for (const RestingOrder& order : level->second) {
+                if (order.owner_id != owner_id || order.quantity <= 0) continue;
+                if (quantity > std::numeric_limits<std::int64_t>::max()
+                        - order.quantity) {
+                    throw std::overflow_error(
+                        "owner quote quantity overflow");
+                }
+                quantity += order.quantity;
+            }
+            if (quantity > 0) {
+                result.push_back(OwnerRestingQuote{
+                    side, price, quantity});
+            }
+        }
+    };
+    append(Side::Buy, owner_bid_prices_, bids_);
+    append(Side::Sell, owner_ask_prices_, asks_);
+    return result;
+}
+
 void DistributedLimitOrderBook::record_fill(std::int32_t owner_id,
                                              std::uint64_t order_sequence,
                                              OrderAction action,

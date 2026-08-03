@@ -89,8 +89,8 @@ int main() {
     assert(detail::local_mm_effective_improvement_probability(
         0.25, 0.6, 800, 200, 1.0) == 0.6);
 
-    // Repair-only local quoting must not recreate the continuous synthetic
-    // depth floor rejected by job 45271.
+    // Repair-only local quoting must not recreate a continuous synthetic
+    // depth floor.
     assert(!detail::fragmented_quote_required(
         true, false, false, false, false));
     assert(!detail::fragmented_quote_required(
@@ -103,6 +103,41 @@ int main() {
         true, true, false, false, false));
     assert(detail::fragmented_quote_required(
         false, false, false, false, false));
+
+    assert(std::abs(detail::shared_capacity_quote_scale(
+        0.25, 0.5, 0.05, true) - 1.0) < 1.0e-12);
+    assert(std::abs(detail::shared_capacity_quote_scale(
+        0.75, 0.5, 0.05, true) - 0.5) < 1.0e-12);
+    assert(std::abs(detail::shared_capacity_quote_scale(
+        2.0, 0.5, 0.05, true) - 0.05) < 1.0e-12);
+    assert(std::abs(detail::shared_capacity_quote_scale(
+        2.0, 0.5, 0.05, false) - 1.0) < 1.0e-12);
+    assert(detail::inventory_adverse_shock_side(-1) == Side::Buy);
+    assert(detail::inventory_adverse_shock_side(0) == Side::Sell);
+    assert(detail::inventory_adverse_shock_side(1) == Side::Sell);
+
+    // Global capacity constrains only risk-increasing quotes.  A long dealer
+    // may still sell at zero global scale and a short dealer may still buy;
+    // the reducing side is capped at current inventory to prevent overshoot.
+    const detail::SharedQuotePlan flat =
+        detail::risk_managed_shared_quote_plan(0, 0.0, 100.0);
+    assert(flat.bid_scale == 0.0 && flat.ask_scale == 0.0);
+    const detail::SharedQuotePlan long_position =
+        detail::risk_managed_shared_quote_plan(40, 0.0, 100.0);
+    assert(long_position.bid_scale == 0.0);
+    assert(long_position.ask_scale == 1.4);
+    assert(long_position.ask_reduces_inventory);
+    assert(long_position.ask_total_limit == 40);
+    const detail::SharedQuotePlan short_position =
+        detail::risk_managed_shared_quote_plan(-25, 0.0, 100.0);
+    assert(short_position.bid_scale == 1.25);
+    assert(short_position.ask_scale == 0.0);
+    assert(short_position.bid_reduces_inventory);
+    assert(short_position.bid_total_limit == 25);
+    const detail::SharedQuotePlan partially_constrained =
+        detail::risk_managed_shared_quote_plan(20, 0.5, 100.0);
+    assert(partially_constrained.bid_scale == 0.4);
+    assert(partially_constrained.ask_scale == 1.2);
 
     // A wide spread that straddles value is not an executable mispricing,
     // even when its midpoint lies away from value.

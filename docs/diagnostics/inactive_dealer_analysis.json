@@ -2337,12 +2337,12 @@
     "rank32_wall_seconds_300s": 0.637591831,
     "rank_equivalence_processed_orders": 3100370,
     "rank_equivalence_state_hash": "0x4b00d4faf6373b08",
-    "science_maximum_path_wall_seconds": 471.023024301,
-    "science_median_path_wall_seconds": 14.707077159,
-    "science_path_count": 40,
-    "science_paths_over_60_seconds": 14,
-    "science_sum_path_wall_seconds": 6235.152267027999,
-    "science_total_processed_orders": 6030761053
+    "financial_maximum_path_wall_seconds": 471.023024301,
+    "financial_median_path_wall_seconds": 14.707077159,
+    "financial_path_count": 40,
+    "financial_paths_over_60_seconds": 14,
+    "financial_sum_path_wall_seconds": 6235.152267027999,
+    "financial_total_processed_orders": 6030761053
   },
   "schema_version": 1,
   "source_archive_sha256": "8355e6a788a9f0feeae14cdd2b31358eee7210c7100acb7be378f781d62682d9",

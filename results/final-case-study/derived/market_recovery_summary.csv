@@ -1,0 +1,11 @@
+risk_limit_per_asset,metric,onset_seconds,initial_episode_last_significant_seconds,recovery_seconds,significant_seconds_1_30,mean_half_decay_seconds,mean_tenth_decay_seconds
+800,relative_depth_deterioration_percent,2,13,14,11,,
+800,requested_depth_reduction,2,20,21,19,12.0,31.0
+800,resting_depth_reduction,2,20,21,19,,
+800,exposure_change,1,19,20,19,10.0,24.0
+800,quote_scale_change,1,19,20,19,10.0,24.0
+1600,relative_depth_deterioration_percent,2,24,25,11,,
+1600,requested_depth_reduction,2,26,27,25,15.0,53.0
+1600,resting_depth_reduction,2,28,29,26,,
+1600,exposure_change,1,27,28,27,13.0,32.0
+1600,quote_scale_change,1,27,28,27,13.0,32.0

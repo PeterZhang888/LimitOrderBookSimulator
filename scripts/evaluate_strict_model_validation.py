@@ -176,7 +176,7 @@ def aggregation_duration_seconds(
     """Resolve and cross-check the full-session observation duration.
 
     New extractor manifests carry an explicit top-level duration.  Schema-2
-    queue artifacts created during the R21 repair predate that compatibility
+    queue artifacts created during the queue-policy repair predate that compatibility
     field but contain three independent exact sources: session clocks, the
     queue-exposure audit, and the full-window target record.  Accept those
     artifacts only when every available source agrees; never guess a default.

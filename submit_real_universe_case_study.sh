@@ -126,7 +126,8 @@ BUILD_JOBS="${BUILD_JOBS:-16}"
 
 # Exact compatible Seagull modules.  This job uses mpirun rather than direct
 # srun/PMIx launch because the latter previously crashed in PMIx on Seagull.
-SEAGULL_MODULES="${SEAGULL_MODULES:-gcc/15.2.0-gcc-8.5.0-r7c4jsu openmpi/5.0.9-gcc-15.2.0-2irqibq cmake/3.31.9-gcc-15.2.0-ylutpfi ninja/1.13.0-gcc-15.2.0-nukwcsd python/3.14.2-gcc-15.2.0-e63sscp}"
+SEAGULL_GCC_MODULE="gcc/15.2.0-gcc-8.5.0-r7c4jsu"
+SEAGULL_MODULES="${SEAGULL_MODULES:-${SEAGULL_GCC_MODULE} openmpi/5.0.9-gcc-15.2.0-2irqibq cmake/3.31.9-gcc-15.2.0-ylutpfi ninja/1.13.0-gcc-15.2.0-nukwcsd python/3.14.2-gcc-15.2.0-e63sscp}"
 
 validate_positive_integer() {
     local name="$1"
@@ -984,7 +985,7 @@ def empirical_bundle_digest(config: pathlib.Path) -> str:
     return value.hexdigest()
 
 CANONICAL_CERTIFICATION_PROFILE = {
-    "profile_id": "development_validation_gate_v18",
+    "profile_id": "development_validation_gate",
     "certification_profile_enforced": True,
     "validation_role": "development_validation_after_protocol_revision",
     "independent_final_holdout": False,
@@ -1012,10 +1013,10 @@ CANONICAL_CERTIFICATION_PROFILE = {
         "original_intersection_symbol_count": 1509,
         "fixed_price_grid_excluded_symbol_count": 29,
         "final_symbol_count": 1480,
-        "r16_pooled_training_universe_csv_sha256": (
+        "pooled_training_universe_csv_sha256": (
             "13fb1700643f408787708190d7af752d5bd7e107d1009e6b4f6a686c0dc155ef"
         ),
-        "r16_pooling_provenance_sha256": (
+        "pooling_provenance_sha256": (
             "ab908a56b5962f946c7f7fd4f2906876b1497a62f428960bfb7f71352032edca"
         ),
         "interpretation": (
@@ -1221,12 +1222,9 @@ CANONICAL_CERTIFICATION_PROFILE = {
             3424815697, 1799108475, 2301941028,
             3637917665, 3007455382,
         ],
-        "seed_derivation": (
-            "first_32_bits_sha256(development_validation_gate_v17:"
-            "training_adequacy:{i}), i=0,...,4"
-        ),
+        "seed_derivation": "predeclared_sha256_derived_seed_set",
         "seed_set_inherited_from_profile_id": (
-            "development_validation_gate_v17"
+            "development_validation_gate"
         ),
         "every_training_day_must_pass": True,
         "maximum_aggregate_robust_score": 2.0,

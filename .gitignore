@@ -10,6 +10,8 @@ compile_commands.json
 
 # Runtime outputs
 results/*
+!results/superseded-mechanism-audit/
+!results/superseded-mechanism-audit/**
 !results/final-case-study/
 !results/final-case-study/**
 slurm/

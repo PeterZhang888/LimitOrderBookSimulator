@@ -1,0 +1,59 @@
+{
+  "comparison_count": 4,
+  "comparisons": [
+    {
+      "full_metrics_csv": "/home/users/mschpc/2025/czhang4/LimitOrderBookSimulator-final-inventory-stress-20260803/results/seagull/queue_case_45706/financial_metrics/global/universe_rank16_risk800p0_u0p5_mmglobal_shockon_hawkes0p3_localms1000p0_localq1p0_localp0p25_locale0p0_localcap1p0_sharedq200_rep1.csv",
+      "full_metrics_sha256": "ebd2eed1d8f7725d54ba11597da0a0f00dfc5b56712b1b2b47917a95f605357d",
+      "last_matched_time_seconds": "11702.000000000",
+      "matched_observations": 11703,
+      "risk_limit_per_asset": "800.000000000",
+      "seed": 20200130,
+      "shared_mm_mode": "global",
+      "shock_mode": "on",
+      "short_metrics_csv": "/home/users/mschpc/2025/czhang4/LimitOrderBookSimulator-final-inventory-stress-20260803/results/seagull/queue_case_45706/mechanism_preflight_metrics/universe_rank16_risk800p0_u0p5_mmglobal_shockon_hawkes0p3_localms1000p0_localq1p0_localp0p25_locale0p0_localcap1p0_sharedq200_rep1.csv",
+      "short_metrics_sha256": "36e670cd524820ae5bf3853c0849382fab67feb7fa53ad0b48c6e865b478cf45"
+    },
+    {
+      "full_metrics_csv": "/home/users/mschpc/2025/czhang4/LimitOrderBookSimulator-final-inventory-stress-20260803/results/seagull/queue_case_45706/financial_metrics/global/universe_rank16_risk800p0_u0p5_mmglobal_shockoff_hawkes0p3_localms1000p0_localq1p0_localp0p25_locale0p0_localcap1p0_sharedq200_rep1.csv",
+      "full_metrics_sha256": "f01d9b255efe82e4908834e0943bed133613ae402a318d55b6a788885ada0d77",
+      "last_matched_time_seconds": "11702.000000000",
+      "matched_observations": 11703,
+      "risk_limit_per_asset": "800.000000000",
+      "seed": 20200130,
+      "shared_mm_mode": "global",
+      "shock_mode": "off",
+      "short_metrics_csv": "/home/users/mschpc/2025/czhang4/LimitOrderBookSimulator-final-inventory-stress-20260803/results/seagull/queue_case_45706/mechanism_preflight_metrics/universe_rank16_risk800p0_u0p5_mmglobal_shockoff_hawkes0p3_localms1000p0_localq1p0_localp0p25_locale0p0_localcap1p0_sharedq200_rep1.csv",
+      "short_metrics_sha256": "8ccb9158cf6dc275efc9657ea60c6172326c824ec1a96871fe7d22dc2b609c7f"
+    },
+    {
+      "full_metrics_csv": "/home/users/mschpc/2025/czhang4/LimitOrderBookSimulator-final-inventory-stress-20260803/results/seagull/queue_case_45706/financial_metrics/global/universe_rank16_risk1600p0_u0p5_mmglobal_shockon_hawkes0p3_localms1000p0_localq1p0_localp0p25_locale0p0_localcap1p0_sharedq200_rep1.csv",
+      "full_metrics_sha256": "cca10f8b19bc57e4cb9198a1522cef82d92d0beaf3fa096c0877bbcd175c36ab",
+      "last_matched_time_seconds": "11702.000000000",
+      "matched_observations": 11703,
+      "risk_limit_per_asset": "1600.000000000",
+      "seed": 20200130,
+      "shared_mm_mode": "global",
+      "shock_mode": "on",
+      "short_metrics_csv": "/home/users/mschpc/2025/czhang4/LimitOrderBookSimulator-final-inventory-stress-20260803/results/seagull/queue_case_45706/mechanism_preflight_metrics/universe_rank16_risk1600p0_u0p5_mmglobal_shockon_hawkes0p3_localms1000p0_localq1p0_localp0p25_locale0p0_localcap1p0_sharedq200_rep1.csv",
+      "short_metrics_sha256": "da8d98e3c3734e52378e9d16fd2a63f3d5e8e8d03c5a1c1a1b60b5425c67bbd4"
+    },
+    {
+      "full_metrics_csv": "/home/users/mschpc/2025/czhang4/LimitOrderBookSimulator-final-inventory-stress-20260803/results/seagull/queue_case_45706/financial_metrics/global/universe_rank16_risk1600p0_u0p5_mmglobal_shockoff_hawkes0p3_localms1000p0_localq1p0_localp0p25_locale0p0_localcap1p0_sharedq200_rep1.csv",
+      "full_metrics_sha256": "be154eda06f877d607e917e2534a5b6e31dec7ea2a86c8160ba87242d599f356",
+      "last_matched_time_seconds": "11702.000000000",
+      "matched_observations": 11703,
+      "risk_limit_per_asset": "1600.000000000",
+      "seed": 20200130,
+      "shared_mm_mode": "global",
+      "shock_mode": "off",
+      "short_metrics_csv": "/home/users/mschpc/2025/czhang4/LimitOrderBookSimulator-final-inventory-stress-20260803/results/seagull/queue_case_45706/mechanism_preflight_metrics/universe_rank16_risk1600p0_u0p5_mmglobal_shockoff_hawkes0p3_localms1000p0_localq1p0_localp0p25_locale0p0_localcap1p0_sharedq200_rep1.csv",
+      "short_metrics_sha256": "846b40d5e2803a001f6a05cc5841cc046f4f82b3f9f4f9f44f10fac4a9c0b9d4"
+    }
+  ],
+  "full_raw": "/home/users/mschpc/2025/czhang4/LimitOrderBookSimulator-final-inventory-stress-20260803/results/seagull/queue_case_45706/financial_global_raw.csv",
+  "full_raw_sha256": "0525df0776afcec180902660105b9ff9460efd56213597f8434616b1e8e23b13",
+  "schema_version": 1,
+  "short_raw": "/home/users/mschpc/2025/czhang4/LimitOrderBookSimulator-final-inventory-stress-20260803/results/seagull/queue_case_45706/mechanism_preflight_raw.csv",
+  "short_raw_sha256": "da90b38e495162091979e2d40e7f4504abb1dd820bf055752fd0df229ce01e98",
+  "status": "exact_truncated_full_prefix_passed"
+}

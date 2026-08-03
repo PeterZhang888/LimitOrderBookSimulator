@@ -4,8 +4,8 @@
 set -Eeuo pipefail
 
 [[ $# -eq 1 ]] || { echo "Usage: $0 /absolute/GRID_ROOT" >&2; exit 2; }
-: "${SELECTION_ROOT:?export the same passed R27 selection root}"
-: "${POOL_ROOT:?export the same completed R26 pool root}"
+: "${SELECTION_ROOT:?export the same passed selection root}"
+: "${POOL_ROOT:?export the same completed pool root}"
 command -v sbatch >/dev/null 2>&1 || { echo "ERROR: sbatch is unavailable" >&2; exit 2; }
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"

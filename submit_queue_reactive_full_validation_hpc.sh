@@ -39,7 +39,8 @@ BUILD_JOBS="${BUILD_JOBS:-16}"
 RESUME="${RESUME:-off}"
 PILOT_ONLY="${PILOT_ONLY:-on}"
 ALLOW_PILOT_REJECTION="${ALLOW_PILOT_REJECTION:-on}"
-SEAGULL_MODULES="${SEAGULL_MODULES:-gcc/15.2.0-gcc-8.5.0-r7c4jsu openmpi/5.0.9-gcc-15.2.0-2irqibq cmake/3.31.9-gcc-15.2.0-ylutpfi ninja/1.13.0-gcc-15.2.0-nukwcsd python/3.14.2-gcc-15.2.0-e63sscp}"
+SEAGULL_GCC_MODULE="gcc/15.2.0-gcc-8.5.0-r7c4jsu"
+SEAGULL_MODULES="${SEAGULL_MODULES:-${SEAGULL_GCC_MODULE} openmpi/5.0.9-gcc-15.2.0-2irqibq cmake/3.31.9-gcc-15.2.0-ylutpfi ninja/1.13.0-gcc-15.2.0-nukwcsd python/3.14.2-gcc-15.2.0-e63sscp}"
 TRAINING_DATES=(2019-01-30 2019-03-27 2019-07-30 2019-10-30 2019-12-30)
 
 fail() { echo "ERROR: $*" >&2; exit 2; }

@@ -351,21 +351,27 @@ def build_case_config(
     pool_root: pathlib.Path,
     output_path: pathlib.Path,
 ) -> list[str]:
-    required = set(RUNTIME_FIELDS)
+    # The validation handoff is hash-bound but has evolved across releases.
+    # Only identifiers and opening state are allowed to enter the case from
+    # that file; the canonical runtime policy comes from frozen training.
+    heldout_required = {"book_id", "symbol", *HELDOUT_OPENING_FIELDS}
+    deployment_required = set(RUNTIME_FIELDS)
     heldout_fields, heldout_order, heldout = rows_by_symbol(
-        heldout_path, required_fields=required,
+        heldout_path, required_fields=heldout_required,
     )
     deployment_fields, deployment_order, deployment = rows_by_symbol(
-        deployment_path, required_fields=required,
+        deployment_path, required_fields=deployment_required,
     )
-    if heldout_fields != list(RUNTIME_FIELDS):
-        raise PreparationError("held-out runtime configuration has an unsupported schema")
-    if deployment_fields != list(RUNTIME_FIELDS):
-        raise PreparationError("deployment configuration has an unsupported schema")
     if heldout_order != deployment_order:
         raise PreparationError("held-out and deployment symbol order differs")
     rows: list[dict[str, object]] = []
-    frozen_fields = set(RUNTIME_FIELDS).difference(HELDOUT_OPENING_FIELDS)
+    # Compare every frozen field actually present in the held-out handoff.  A
+    # legacy handoff omits the later latent-regime fields, so those values come
+    # only from the already-frozen training deployment.
+    frozen_fields = (
+        set(heldout_fields).intersection(RUNTIME_FIELDS)
+        .difference(HELDOUT_OPENING_FIELDS)
+    )
     frozen_fields.difference_update({"data_dir", "hawkes_rates_file"})
     for book_id, symbol in enumerate(heldout_order):
         for field in frozen_fields:
@@ -373,7 +379,9 @@ def build_case_config(
                 raise PreparationError(
                     f"held-out configuration changes frozen field {field} for {symbol}"
                 )
-        row = dict(heldout[symbol])
+        row = dict(deployment[symbol])
+        for field in HELDOUT_OPENING_FIELDS:
+            row[field] = heldout[symbol][field]
         row["book_id"] = str(book_id)
         rebind_pool_paths(row, pool_root)
         rows.append(row)
@@ -554,10 +562,17 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         preferred=(selection_root / "liquidity_clusters/cluster_assignments.csv",),
         search_roots=search_roots,
     )
-    expected_executable = digest_from_record(
+    validated_baseline_executable_sha256 = digest_from_record(
         frozen.get("executable"), label="frozen executable",
     )
-    if sha256_file(executable) != expected_executable:
+    case_executable_sha256 = sha256_file(executable)
+    post_validation_treatment_amendment = (
+        case_executable_sha256 != validated_baseline_executable_sha256
+    )
+    allow_treatment_amendment = bool(getattr(
+        args, "allow_post_validation_shared_dealer_amendment", False,
+    ))
+    if post_validation_treatment_amendment and not allow_treatment_amendment:
         raise PreparationError(
             "rebuilt executable differs from the frozen validated executable"
         )
@@ -636,30 +651,61 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 f"the case-study protocol value {expected}"
             )
     protocol = {
-        "profile_id": "systemic_liquidity_case_v2_queue_reactive",
-        "experiment": "science",
+        "profile_id": "systemic_liquidity_shock_queue_reactive",
+        "experiment": "liquidity_shock_causality",
         "duration_seconds": 23400,
         "decision_window_ms": 1000.0,
+        "stochastic_baseline_normalization_seconds": 23400.0,
         "cadence_windows_ms": [1000.0],
         "shock_time_seconds": 11700.0,
-        "shock_fraction": 0.01,
+        "shock_fraction": 0.10,
         "shock_target_count": 0,
         "shock_target_seed": 314159,
-        "shock_top_depth_multiple": 1.0,
+        "shock_top_depth_multiple": 0.0,
+        "shock_reference_bid_depth_multiple": 3.0,
+        "shock_direction_rule": "inventory_adverse_at_left_limit",
         "post_shock_horizon_seconds": 1800.0,
-        "science_ranks": 32,
-        "science_risk_limits": [25.0, 100.0],
-        "reference_risk_limit": 100.0,
-        "local_inventory_limit": 100.0,
+        "production_ranks": 16,
+        "financial_risk_limits": [800.0, 1600.0],
+        "reference_risk_limit": 1600.0,
+        "local_inventory_limit": 800.0,
         "capacity_threshold": 0.5,
+        "minimum_shared_quote_scale": 0.05,
+        "shared_quote_relative": True,
+        "shared_quote_multiplier": 2.0,
+        "shared_capacity_relative": True,
+        "shared_quote_levels": 3,
+        "required_pre_shock_requested_two_sided_book_fraction": 1.0,
+        "minimum_pre_shock_resting_two_sided_book_fraction": 0.95,
+        "mechanism_preflight_lookback_seconds": 60.0,
+        "minimum_pre_shock_economic_quote_scale": 0.25,
+        "maximum_pre_shock_utilization": 0.90,
+        "minimum_pre_shock_bbo_depth_participation": 0.05,
+        "target_side_materiality_assessed_by_realized_shock_absorption": True,
+        "minimum_nonzero_inventory_asset_fraction": 0.25,
+        "minimum_shock_absorption_fraction": 0.025,
+        "preflight_threshold_status": (
+            "fixed_after_mechanism_pilot_before_financial_paths"
+        ),
         "local_mm_spread_elasticity": 0.0,
         "local_mm_max_improvement_probability": 1.0,
-        "repetitions": 5,
-        "path_count": 40,
+        "repetitions": 20,
+        "path_count": 200,
         "base_seed": 20200130,
         "primary_contrast": (
             "global_minus_uncoupled_paired_difference_in_differences"
         ),
+        "primary_outcome": "relative_non_target_top_depth_deterioration",
+        "secondary_outcome": "non_target_spread_deterioration_bps",
+        "reporting_horizons_seconds": [1, 5, 30, 300, 1800],
+        "uncoupled_capacity_control": "asset_specific_equal_total_capacity",
+        "asset_level_shock_dose_equality_required": True,
+        "state_contingent_direction_rule_identical_across_mechanisms": True,
+        "shock_fill_ownership_required": True,
+        "truncated_full_prefix_equality_required": True,
+        "shared_off_treatment_isolation_required": True,
+        "computational_and_financial_outputs_share_one_frozen_model": True,
+        "shared_dealer_mechanism_preflight_required": True,
     }
     runtime = {
         "case_config": case_path,
@@ -699,7 +745,27 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "runtime_configuration_schema": RUNTIME_SCHEMA,
         "cohort_identity": cohort_identity,
         "case_executable": str(executable),
-        "case_executable_sha256": sha256_file(executable),
+        "case_executable_sha256": case_executable_sha256,
+        "executable_provenance": {
+            "validated_baseline_executable_sha256": (
+                validated_baseline_executable_sha256
+            ),
+            "case_executable_sha256": case_executable_sha256,
+            "post_validation_treatment_amendment": (
+                post_validation_treatment_amendment
+            ),
+            "amendment_scope": (
+                "shared_dealer_counterfactual_and_observation_only"
+                if post_validation_treatment_amendment else "none"
+            ),
+            "ordinary_market_calibration_parameters_changed": False,
+            "ordinary_market_validation_claim_extended": False,
+            "interpretation": (
+                "ordinary-market adequacy remains bound to the validated "
+                "baseline executable; the case executable is used only for "
+                "the shared-dealer counterfactual and added observations"
+            ),
+        },
         "case_study_protocol": protocol,
         "case_study_protocol_sha256": sha256_json(protocol),
         "local_market_maker": {
@@ -720,11 +786,12 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         },
         "shared_market_maker": {
             "role": "post_validation_counterfactual_treatment",
-            "relative_quote_multiplier": 1.0,
+            "relative_quote_multiplier": 2.0,
             "quote_levels": 1,
             "capacity_threshold": 0.5,
-            "tight_risk_limit_per_asset": 25.0,
-            "reference_risk_limit_per_asset": 100.0,
+            "minimum_quote_scale": 0.05,
+            "tight_risk_limit_per_asset": 800.0,
+            "reference_risk_limit_per_asset": 1600.0,
         },
         "background_policy_artifacts": background_manifest,
         "empirical_target_artifacts": empirical_manifest,
@@ -784,6 +851,14 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--data-root", type=pathlib.Path, required=True)
     result.add_argument("--executable", type=pathlib.Path, required=True)
     result.add_argument("--output-root", type=pathlib.Path, required=True)
+    result.add_argument(
+        "--allow-post-validation-shared-dealer-amendment",
+        action="store_true",
+        help=(
+            "allow a hash-different executable only as an explicitly recorded "
+            "post-validation shared-dealer counterfactual/observation amendment"
+        ),
+    )
     return result
 
 

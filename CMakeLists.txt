@@ -309,6 +309,18 @@ if(LOB_BUILD_TESTS)
         add_test(NAME fragmented_calibration_output
                  COMMAND test_fragmented_calibration_output)
 
+        add_executable(test_fragmented_shared_dealer_coverage
+            tests/test_fragmented_shared_dealer_coverage.cpp)
+        target_link_libraries(test_fragmented_shared_dealer_coverage PRIVATE dlob_core)
+        add_test(NAME fragmented_shared_dealer_coverage
+                 COMMAND test_fragmented_shared_dealer_coverage)
+
+        add_executable(test_fragmented_horizon_prefix
+            tests/test_fragmented_horizon_prefix.cpp)
+        target_link_libraries(test_fragmented_horizon_prefix PRIVATE dlob_core)
+        add_test(NAME fragmented_horizon_prefix
+                 COMMAND test_fragmented_horizon_prefix)
+
         foreach(policy_variant IN ITEMS legacy periodic news recheck gap)
             if(policy_variant STREQUAL "legacy")
                 set(policy_file fragmented_value_policy.csv)
@@ -429,6 +441,8 @@ if(LOB_BUILD_TESTS)
                 test_sequential_multiasset_determinism
                 test_exact_mpi_equivalence
                 test_fragmented_calibration_output
+                test_fragmented_shared_dealer_coverage
+                test_fragmented_horizon_prefix
                 test_fragmented_model_semantics
                 test_liquidity_shock
                 test_etf_arbitrage
@@ -463,6 +477,10 @@ if(LOB_BUILD_TESTS)
                         tests/test_summarize_calibration_diagnostics.py
                         tests/test_analyze_fragmented_shared_liquidity_case.py
                         tests/test_analyze_cluster_liquidity_heterogeneity.py
+                        tests/test_validate_shared_dealer_preflight.py
+                        tests/test_validate_truncated_full_prefix.py
+                        tests/test_prepare_portable_queue_case.py
+                        tests/test_queue_case_analysis_submission_contract.py
                         tests/test_select_itch50_universe.py
                         tests/test_intersect_empirical_universe_configs.py
                         tests/test_run_fragmented_mpi_experiments.py

@@ -3,7 +3,7 @@
 
 This is a training-only structural diagnostic.  It reuses the exact dated
 configs, background policies, value policies and deterministic seeds recorded
-by the V10 full-day confirmations.  The only changed controls are the two new
+by the earlier full-day confirmations.  The only changed controls are the two new
 bounded local-MM spread-response parameters.  No held-out input is accepted or
 read.
 """

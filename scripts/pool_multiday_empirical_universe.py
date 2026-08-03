@@ -1910,7 +1910,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             {
                 **cohort_identity,
                 # These two values describe the frozen cohort's historical
-                # R16 origin.  The observed input shape of this pool is kept
+                # fixed-cohort origin.  The observed input shape of this pool is kept
                 # separately in certification_input_selection so a fresh
                 # already-prefiltered extraction is never misreported as a
                 # new 1,509-to-1,480 screen.

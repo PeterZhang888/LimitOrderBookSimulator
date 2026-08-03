@@ -84,6 +84,7 @@ class FragmentedRunnerPolicyTest(unittest.TestCase):
                 "--duration-seconds", "60", "--repetitions", "1",
                 "--background-model", "queue-reactive-v1",
                 "--background-policy-csv", str(mapping),
+                "--shock-inventory-adverse",
             ]
             with mock.patch.object(sys, "argv", argv), mock.patch.object(
                 RUNNER, "run_mpi_command", side_effect=fake_run,
@@ -102,12 +103,14 @@ class FragmentedRunnerPolicyTest(unittest.TestCase):
                 self.option_value(command, "--background-policy-csv"),
                 str(mapping.resolve()),
             )
+            self.assertIn("--shock-inventory-adverse", command)
             with output.open(newline="", encoding="utf-8") as source:
                 row = next(csv.DictReader(source))
             self.assertEqual(row["background_model"], "queue-reactive-v1")
             self.assertEqual(
                 row["background_policy_sha256"], RUNNER.sha256_file(mapping)
             )
+            self.assertEqual(row["requested_shock_inventory_adverse"], "1")
             digest, count = RUNNER.background_artifact_manifest(mapping.resolve())
             self.assertEqual(row["background_artifacts_sha256"], digest)
             self.assertEqual(row["background_artifact_count"], str(count))

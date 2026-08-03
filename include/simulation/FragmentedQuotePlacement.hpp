@@ -16,6 +16,86 @@ struct FragmentedQuotePrices {
     std::int64_t ask = 0;
 };
 
+// A global capacity constraint must not make the shared dealer's zero-quote
+// state absorbing.  Capacity scales only orders that can increase absolute
+// inventory.  The opposite side remains available to reduce inventory, but
+// its aggregate executable quantity is capped at the current position so a
+// complete fill cannot cross through zero and create risk in the other
+// direction.
+struct SharedQuotePlan {
+    double bid_scale = 0.0;
+    double ask_scale = 0.0;
+    std::uint64_t bid_total_limit = std::numeric_limits<std::uint64_t>::max();
+    std::uint64_t ask_total_limit = std::numeric_limits<std::uint64_t>::max();
+    bool bid_reduces_inventory = false;
+    bool ask_reduces_inventory = false;
+};
+
+// Aggressive order side that moves the shared dealer away from zero.  A sell
+// order trades with the dealer's bid and increases a flat/long inventory; a
+// buy order trades with its ask and makes a short inventory more negative.
+[[nodiscard]] inline Side inventory_adverse_shock_side(
+    std::int64_t shared_inventory) noexcept {
+    return shared_inventory < 0 ? Side::Buy : Side::Sell;
+}
+
+[[nodiscard]] inline double shared_capacity_quote_scale(
+    double utilization,
+    double activation_threshold,
+    double minimum_scale,
+    bool global_capacity_enabled) noexcept {
+    if (!std::isfinite(utilization) || utilization < 0.0
+        || !std::isfinite(activation_threshold)
+        || activation_threshold < 0.0 || activation_threshold >= 1.0
+        || !std::isfinite(minimum_scale)
+        || minimum_scale < 0.0 || minimum_scale > 1.0) {
+        return 0.0;
+    }
+    if (!global_capacity_enabled || utilization <= activation_threshold) {
+        return 1.0;
+    }
+    const double unconstrained = std::max(
+        0.0,
+        (1.0 - utilization) / (1.0 - activation_threshold));
+    return std::max(minimum_scale, unconstrained);
+}
+
+[[nodiscard]] inline SharedQuotePlan risk_managed_shared_quote_plan(
+    std::int64_t inventory,
+    double global_capacity_scale,
+    double local_inventory_scale) noexcept {
+    SharedQuotePlan plan;
+    if (!(global_capacity_scale >= 0.0)
+        || !std::isfinite(global_capacity_scale)
+        || !(local_inventory_scale > 0.0)
+        || !std::isfinite(local_inventory_scale)) {
+        return plan;
+    }
+    const double bounded_capacity_scale = std::min(1.0, global_capacity_scale);
+    const std::uint64_t magnitude = inventory >= 0
+        ? static_cast<std::uint64_t>(inventory)
+        : static_cast<std::uint64_t>(-(inventory + 1)) + 1U;
+    const double inventory_ratio = std::min(
+        0.75,
+        static_cast<double>(magnitude) / local_inventory_scale);
+
+    if (inventory > 0) {
+        plan.bid_scale = bounded_capacity_scale * (1.0 - inventory_ratio);
+        plan.ask_scale = 1.0 + inventory_ratio;
+        plan.ask_total_limit = magnitude;
+        plan.ask_reduces_inventory = true;
+    } else if (inventory < 0) {
+        plan.bid_scale = 1.0 + inventory_ratio;
+        plan.ask_scale = bounded_capacity_scale * (1.0 - inventory_ratio);
+        plan.bid_total_limit = magnitude;
+        plan.bid_reduces_inventory = true;
+    } else {
+        plan.bid_scale = bounded_capacity_scale;
+        plan.ask_scale = bounded_capacity_scale;
+    }
+    return plan;
+}
+
 // Return a direction only when the opposite best quote is executable at a
 // sufficiently favourable price.  Midpoint-based direction is deliberately
 // excluded because it can be destabilising when the spread is wide.

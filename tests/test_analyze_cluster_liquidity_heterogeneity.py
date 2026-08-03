@@ -45,43 +45,36 @@ class ClusterHeterogeneityTest(unittest.TestCase):
             writer.writerows(rows)
         return path
 
-    def test_snapshot_excludes_targets_and_converts_spread_to_bps(self) -> None:
-        targets = self.write_csv(
-            "targets.csv", ["symbol", "is_shock_target"],
+    def test_post_shock_window_uses_only_declared_horizon(self) -> None:
+        metrics = self.write_csv(
+            "cluster_metrics.csv",
             [
-                {"symbol": symbol, "is_shock_target": int(symbol == "S0_0")}
-                for symbol in self.symbols
+                "time_seconds", "cluster_id", "non_target_asset_count",
+                "mean_top_depth", "mean_spread_bps",
             ],
-        )
-        summary = self.write_csv(
-            "summary.csv",
-            ["symbol", "mean_bid_depth", "mean_ask_depth", "mean_spread_ticks"],
             [
                 {
-                    "symbol": symbol,
-                    "mean_bid_depth": 100 + self.clusters[symbol],
-                    "mean_ask_depth": 200 + self.clusters[symbol],
-                    "mean_spread_ticks": 2 + self.clusters[symbol],
+                    "time_seconds": time,
+                    "cluster_id": cluster,
+                    "non_target_asset_count": 2,
+                    "mean_top_depth": 1000 + 10 * time + cluster,
+                    "mean_spread_bps": 20 + time + cluster,
                 }
-                for symbol in self.symbols
+                for time in (9, 11, 12, 13)
+                for cluster in range(10)
             ],
         )
         row = {
-            "shock_targets_csv": str(targets),
-            "shock_targets_csv_sha256": ANALYSIS.primary.sha256_file(targets),
-            "asset_summary_csv": str(summary),
-            "asset_summary_csv_sha256": ANALYSIS.primary.sha256_file(summary),
+            "cluster_metrics_csv": str(metrics),
+            "cluster_metrics_csv_sha256": ANALYSIS.primary.sha256_file(metrics),
         }
-        selected = ANALYSIS.target_mask(row, set(self.symbols))
-        snapshot = ANALYSIS.cluster_snapshot(
-            row, self.midpoints, self.clusters, selected
+        snapshot = ANALYSIS.cluster_post_shock_window(
+            row, shock_time=10, horizon=2,
         )
-        self.assertEqual(selected, {"S0_0"})
-        self.assertEqual(snapshot[0]["symbol_count"], 1.0)
-        self.assertEqual(snapshot[1]["symbol_count"], 2.0)
-        self.assertAlmostEqual(snapshot[0]["mean_top_depth"], 300.0)
-        self.assertAlmostEqual(snapshot[0]["mean_spread_bps"], 2.0)
-        self.assertAlmostEqual(snapshot[9]["mean_spread_bps"], 11.0)
+        self.assertEqual(snapshot[0]["symbol_count"], 2.0)
+        self.assertAlmostEqual(snapshot[0]["mean_top_depth"], 1115.0)
+        self.assertAlmostEqual(snapshot[0]["mean_spread_bps"], 31.5)
+        self.assertAlmostEqual(snapshot[9]["mean_spread_bps"], 40.5)
 
     def test_artifact_hash_is_enforced(self) -> None:
         path = self.write_csv("artifact.csv", ["x"], [{"x": 1}])

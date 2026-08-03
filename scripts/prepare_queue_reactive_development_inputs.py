@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Relocate certified pooled evidence for queue-reactive model development.
 
-The V19 evidence bundle records absolute Seagull paths.  This helper creates a
+The archived evidence bundle records absolute Seagull paths.  This helper creates a
 new, explicitly non-certified development input tree without mutating any
 hash-bound evidence.  It also emits the training-only queue-depth targets and
 the frozen stratified symbol list needed by the extended ITCH extractor.
@@ -228,7 +228,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         },
         "warning": (
             "Relocation changes source bytes and is for model development only; "
-            "it is not a replacement for the hash-bound V19 evidence."
+            "it is not a replacement for the hash-bound archived evidence."
         ),
     }
     manifest_path = output_dir / "development_input_manifest.json"

@@ -746,8 +746,8 @@ class ClusterValueCalibrationTests(unittest.TestCase):
             )
 
     def test_reused_pool_is_bound_to_its_distinct_producer_tree(self) -> None:
-        producer = self.root / "r3_pool_producer"
-        consumer = self.root / "r4_calibration_consumer"
+        producer = self.root / "pool_producer"
+        consumer = self.root / "calibration_consumer"
         for root in (producer, consumer):
             for relative in CALIBRATION.WORKFLOW_SEMANTICS_FILES:
                 source = ROOT / relative
@@ -755,11 +755,11 @@ class ClusterValueCalibrationTests(unittest.TestCase):
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_bytes(source.read_bytes())
 
-        # Simulate a calibration-only R4 revision after the R3 pool was made.
+        # Simulate a calibration-only calibration revision after the pool was made.
         consumer_submit = consumer / "submit_cluster_value_agent_calibration.sh"
         consumer_submit.write_text(
             consumer_submit.read_text(encoding="utf-8")
-            + "\n# simulated R4 calibration-only revision\n",
+            + "\n# simulated calibration-only revision\n",
             encoding="utf-8",
         )
         producer_hash = CALIBRATION.workflow_source_semantics_sha256(producer)
@@ -1501,9 +1501,9 @@ class ClusterValueCalibrationTests(unittest.TestCase):
             (4, 2, 1),
         )
 
-    def test_v18_profile_records_complete_search_and_validation_contract(self) -> None:
+    def test_profile_records_complete_search_and_validation_contract(self) -> None:
         profile = CALIBRATION.certification_profile()
-        self.assertEqual(profile["profile_id"], "development_validation_gate_v18")
+        self.assertEqual(profile["profile_id"], "development_validation_gate")
         self.assertTrue(profile["certification_profile_enforced"])
         self.assertEqual(profile["required_common_symbol_count"], 1480)
         self.assertEqual(
@@ -1557,11 +1557,11 @@ class ClusterValueCalibrationTests(unittest.TestCase):
         self.assertEqual(
             profile["full_universe_training_adequacy"]
             ["seed_set_inherited_from_profile_id"],
-            "development_validation_gate_v17",
+            "development_validation_gate",
         )
         self.assertEqual(
             CALIBRATION.certification_profile_sha256(),
-            "38a52e86eaa5cfed6a039c68b0cda471b60a1b0255e62d26a6ddcbde700bb475",
+            "a6d6b7b4c673a174251c8a2f7d80de9a0f5dcceb17391c58ca07ea7d416892ab",
         )
         self.assertNotEqual(
             CALIBRATION.certification_profile_sha256(),
@@ -1791,7 +1791,7 @@ class ClusterValueCalibrationTests(unittest.TestCase):
                     CALIBRATION.validate_arguments(args, parser)
             self.assertIn(expected_message, error_output.getvalue())
 
-    def test_r4_candidate_and_stage_checkpoints_are_atomic_and_counted(self) -> None:
+    def test_candidate_and_stage_checkpoints_are_atomic_and_counted(self) -> None:
         progress_path = self.root / "calibration" / "calibration_progress.json"
         CALIBRATION.initialize_calibration_progress(
             progress_path, overwrite=False,
@@ -1903,7 +1903,7 @@ class ClusterValueCalibrationTests(unittest.TestCase):
         self.assertFalse(handoff.exists())
         self.assertTrue(malformed.is_dir())
 
-    def test_r4_failure_manifest_preserves_progress_snapshot(self) -> None:
+    def test_failure_manifest_preserves_progress_snapshot(self) -> None:
         output_root = self.root / "failed_calibration"
         progress_path = output_root / "calibration_progress.json"
         CALIBRATION.initialize_calibration_progress(
@@ -2011,7 +2011,7 @@ class ClusterValueCalibrationTests(unittest.TestCase):
         self.assertIn("3.28621 exceeds 3", reasons[0])
         self.assertNotIn("aggregate", reasons[0])
 
-    def test_v18_marketwide_fit_is_authoritative_when_stratified_fit_fails(
+    def test_marketwide_fit_is_authoritative_when_stratified_fit_fails(
         self,
     ) -> None:
         decision = CALIBRATION.heldout_acceptance_decision(
@@ -2032,7 +2032,7 @@ class ClusterValueCalibrationTests(unittest.TestCase):
         self.assertTrue(decision["empirical_fit_passed"])
         self.assertTrue(decision["heldout_validation_passed"])
 
-    def test_v18_stratified_structural_failure_still_blocks_certification(
+    def test_stratified_structural_failure_still_blocks_certification(
         self,
     ) -> None:
         decision = CALIBRATION.heldout_acceptance_decision(
@@ -2051,7 +2051,7 @@ class ClusterValueCalibrationTests(unittest.TestCase):
         self.assertTrue(decision["empirical_fit_passed"])
         self.assertFalse(decision["heldout_validation_passed"])
 
-    def test_v18_marketwide_fit_failure_cannot_be_replaced_by_sample_fit(
+    def test_marketwide_fit_failure_cannot_be_replaced_by_sample_fit(
         self,
     ) -> None:
         decision = CALIBRATION.heldout_acceptance_decision(

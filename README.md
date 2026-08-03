@@ -13,8 +13,10 @@ updated at deterministic decision boundaries through collective communication.
 | `config/` | Small model configurations and the fixed 1,480-symbol cohort |
 | `tests/` | C++ correctness tests and Python workflow-contract tests |
 | `submit_*.sh` | Slurm launchers for calibration, validation and case-study execution |
-| `results/final-case-study/` | Compact timing and treatment summaries from the final campaign |
-| `docs/case-study/` | LaTeX tables, figures and the case-study analysis report |
+| `results/final-case-study/` | Compact, hash-traceable summaries from the completed inventory-stress campaign |
+| `results/superseded-mechanism-audit/` | Diagnostic outputs from the rejected low-participation mechanism |
+| `docs/case-study/` | Experiment specification, result audit, LaTeX text and figures |
+| `docs/diagnostics/` | Audit explaining why the earlier zero-effect matrix is not a result |
 
 The production build uses `include/` and `src/`. Historical sources retained
 under `Draft/` and `include/*_hpp/` are excluded from CMake targets.
@@ -63,7 +65,8 @@ The main workflow is:
    `submit_cluster_value_agent_calibration.sh`.
 4. Validate the frozen model with
    `submit_queue_reactive_full_validation_hpc.sh`.
-5. Run rank-equivalence, scaling or financial treatments with
+5. Run rank-equivalence, mechanism, performance and financial phases of the
+   same liquidity-shock experiment with
    `submit_queue_reactive_case_study.sh`.
 
 Cluster jobs must be submitted with `sbatch`; the login node is used only for
@@ -88,10 +91,19 @@ Some integration tests require the external empirical directories. See
 [`TESTING.md`](TESTING.md) for the verified source-only subset and
 [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md) for the full cluster workflow.
 
-## Results
+## Final experiment evidence
 
-The final case-study summaries and rank-equivalence records are under
-`results/final-case-study/`. The associated interpretation is in
-`docs/case-study/case_study_analysis_report.md`.
+Production outputs are written below `results/seagull/` and are not committed
+in full. The completed 1,480-book inventory-stress campaign contains 200
+full-session financial paths and six implementation/preflight paths.
+The compact result tables, mechanism certificate, archive digest and execution
+audit are retained in `results/final-case-study/`; the full hash-bound archive
+is external because it expands to more than 8 GB. The principal result is a
+small withdrawal of unshocked top-of-book depth during the first seconds after
+the intervention, followed by recovery within tens of seconds. No persistent
+30-minute depth or spread effect is established.
 
-No open-source licence has been selected; see [`LICENSE`](LICENSE).
+The files in `results/superseded-mechanism-audit/` document a rejected
+low-participation implementation and must not be used as final evidence.
+
+The repository is distributed under the terms in [`LICENSE`](LICENSE).
