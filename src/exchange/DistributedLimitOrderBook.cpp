@@ -1,5 +1,4 @@
 #include "exchange/DistributedLimitOrderBook.hpp"
-
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -7,9 +6,7 @@
 #include <limits>
 #include <optional>
 #include <stdexcept>
-
 namespace dlob {
-
 DistributedLimitOrderBook::DistributedLimitOrderBook(int tick_size, BookId book_id)
     : tick_size_(std::max(1, tick_size)), book_id_(book_id) {}
 
@@ -237,7 +234,6 @@ void DistributedLimitOrderBook::record_fill(std::int32_t owner_id,
     report.book_id = book_id_;
     reports_.push_back(report);
 }
-
 void DistributedLimitOrderBook::record_order_result(const OrderMessage& message,
                                                      const ApplyResult& result) {
     if (message.owner_id <= 0 || message.agent_kind != AgentKind::Institutional) return;
@@ -255,7 +251,6 @@ void DistributedLimitOrderBook::record_order_result(const OrderMessage& message,
     report.book_id = book_id_;
     reports_.push_back(report);
 }
-
 void DistributedLimitOrderBook::record_trade(std::int64_t timestamp_ns,
                                               int price_ticks,
                                               int quantity,
@@ -280,7 +275,6 @@ void DistributedLimitOrderBook::record_trade(std::int64_t timestamp_ns,
     trade.aggressor_action = aggressor_action;
     trades_.push_back(trade);
 }
-
 int DistributedLimitOrderBook::execute_buy(int quantity,
                                            std::int64_t timestamp_ns,
                                            int limit_price_ticks,
