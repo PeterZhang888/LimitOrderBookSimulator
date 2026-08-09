@@ -1,5 +1,4 @@
 #include "simulation/FragmentedMpiSimulator.hpp"
-
 #include "common/AgentUtilities.hpp"
 #include "common/TradeTapeHasher.hpp"
 #include "exchange/BackgroundHawkesAgent.hpp"
@@ -8,7 +7,6 @@
 #include "simulation/DeterministicFundamentalProcess.hpp"
 #include "simulation/FragmentedQuotePlacement.hpp"
 #include "simulation/MultiAssetConfiguration.hpp"
-
 #include <algorithm>
 #include <array>
 #include <bit>
