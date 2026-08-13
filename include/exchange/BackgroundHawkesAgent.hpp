@@ -1,17 +1,13 @@
 #pragma once
-
 #include "common/DistributedTypes.hpp"
 #include "common/EmpiricalDistribution.hpp"
-
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
-
 namespace dlob {
-
 inline constexpr double fixed_background_hawkes_activity_scale = 0.30;
 inline constexpr std::size_t background_hawkes_event_type_count = 6U;
 inline constexpr std::size_t background_hawkes_state_feature_count = 4U;
