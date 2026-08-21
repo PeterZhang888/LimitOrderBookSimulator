@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 : "${PROJECT_DIR:?set PROJECT_DIR to the cloned repository}"
 source "$PROJECT_DIR/hpc/seagull/load_environment.sh"
+cd "$PROJECT_DIR"
 
 BACKGROUND_MODEL="${BACKGROUND_MODEL:-queue-reactive-v1}"
 MODEL_ARGS=(--background-model "$BACKGROUND_MODEL")
@@ -27,6 +28,7 @@ RESULT_ROOT="${RESULT_ROOT:-$PROJECT_DIR/results/seagull/$SLURM_JOB_ID}"
 REPETITIONS="${REPETITIONS:-7}"
 DURATION_SECONDS="${DURATION_SECONDS:-23400}"
 SEED="${SEED:-20200130}"
+CORES_PER_NODE="${CORES_PER_NODE:-16}"
 
 mkdir -p "$RESULT_ROOT"
 
@@ -36,6 +38,22 @@ run_variant() {
   local threads=$3
   shift 3
   local variant_dir="$RESULT_ROOT/$label"
+
+  if (( CORES_PER_NODE < 1 )); then
+    printf 'ERROR: CORES_PER_NODE must be positive.\n' >&2
+    return 1
+  fi
+  if (( ranks < 1 || threads < 1 || threads > CORES_PER_NODE
+        || CORES_PER_NODE % threads != 0 )); then
+    printf 'ERROR: threads per rank must divide %d cores per node.\n' \
+      "$CORES_PER_NODE" >&2
+    return 1
+  fi
+
+  local total_cores=$((ranks * threads))
+  local nodes=$(((total_cores + CORES_PER_NODE - 1) / CORES_PER_NODE))
+  local tasks_per_node=$((CORES_PER_NODE / threads))
+
   mkdir -p "$variant_dir"
 
   for ((rep=1; rep<=REPETITIONS; rep++)); do
@@ -54,7 +72,9 @@ run_variant() {
     OMP_DYNAMIC=FALSE \
     OMP_PLACES=cores \
     OMP_PROC_BIND=close \
-    srun --ntasks="$ranks" --cpus-per-task="$threads" \
+    srun --nodes="$nodes" --ntasks="$ranks" \
+      --ntasks-per-node="$tasks_per_node" \
+      --cpus-per-task="$threads" \
       --cpu-bind=cores \
       "$BUILD_DIR/lob_mpi" \
       --duration-seconds "$DURATION_SECONDS" \

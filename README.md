@@ -17,9 +17,12 @@ never divided between ranks or threads.
 
 ## Compile on Seagull
 
-From the repository root:
+On a Seagull login node:
 
 ```bash
+git clone https://github.com/PeterZhang888/LimitOrderBookSimulator.git
+cd LimitOrderBookSimulator
+
 mkdir -p slurm results/seagull
 bash scripts/build_seagull.sh
 ```
@@ -34,30 +37,19 @@ build-openmp/lob_openmp
 `lob_mpi` supports pure MPI and hybrid MPI--OpenMP. `lob_openmp` is the
 one-process MPI-free OpenMP executable.
 
-## Run a complete synthetic session
+## Submit a complete synthetic session
 
 The artificial input under `examples/synthetic/` is included so the code can
-run without Nasdaq data. For a full 10,000-book session:
+run without Nasdaq data. Submit the full 10,000-book, 23,400-second session
+from the repository root:
 
 ```bash
-source hpc/seagull/load_environment.sh
-
-mpirun -np 64 build-mpi/lob_mpi \
-  --duration-seconds 23400 \
-  --assets 10000 \
-  --base-config examples/synthetic/templates.csv \
-  --background-model legacy \
-  --partition cyclic \
-  --synchronous-observations \
-  --disable-persistent-risk-collective \
-  --shared-inventory-policy gross_pooled \
-  --threads 1 \
-  --metrics-csv results/synthetic_metrics.csv \
-  --asset-summary-csv results/synthetic_assets.csv
+sbatch experiments/00_full_synthetic/submit_seagull.sh
 ```
 
-Do not run a full session on a login node. Submit it through Slurm or use an
-interactive compute allocation.
+The job uses four nodes, 64 MPI ranks, one thread per rank and one complete
+session. Results are written below `results/seagull/<job-id>/full_10000/`.
+Do not run a full session on a login node.
 
 ## Thesis experiments
 
@@ -65,6 +57,7 @@ The `experiments/` directory contains one full submission file per experiment.
 All use the same executables; only the declared treatment flags differ.
 
 ```text
+00_full_synthetic
 01_strong_scaling
 02_weak_scaling
 03_empirical_scaling

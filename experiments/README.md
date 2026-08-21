@@ -12,6 +12,14 @@ export VALUE_POLICY_CSV=/path/to/value_agent_policy.csv
 export REPETITIONS=7
 ```
 
+The included artificial input needs no external data. Submit one complete
+10,000-book session with:
+
+```bash
+mkdir -p slurm results/seagull
+sbatch experiments/00_full_synthetic/submit_seagull.sh
+```
+
 For synthetic strong scaling, use:
 
 ```bash

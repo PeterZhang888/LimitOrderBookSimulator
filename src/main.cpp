@@ -500,7 +500,7 @@ void print_usage(const char* program) {
         << "  --partition-cost-csv PATH measured symbol,partition_weight CSV required by realized-lpt\n"
         << "  --threads N               OpenMP worker threads per MPI rank "
            "(default 1; books remain rank-local)\n"
-        << "  --openmp-schedule NAME    dynamic1 (baseline), guided, or static\n"
+        << "  --openmp-schedule NAME    dynamic1, guided, static, or weighted-static\n"
         << "  --persistent-openmp-team retain one OpenMP team for the session\n"
         << "  --parallel-asset-initialization initialize rank-local books concurrently\n"
         << "  --parallel-boundary-reductions parallelize exact local exposure construction\n"

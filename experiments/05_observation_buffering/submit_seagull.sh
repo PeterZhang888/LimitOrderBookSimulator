@@ -10,6 +10,7 @@
 #SBATCH --output=slurm/%x-%j.out
 #SBATCH --error=slurm/%x-%j.err
 set -Eeuo pipefail
+PROJECT_DIR="${PROJECT_DIR:-$SLURM_SUBMIT_DIR}"
 source "$PROJECT_DIR/hpc/seagull/common.sh"
 run_variant synchronous 16 1 \
   --partition cyclic --synchronous-observations \

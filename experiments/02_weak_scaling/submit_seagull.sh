@@ -10,6 +10,7 @@
 #SBATCH --output=slurm/%x-%j.out
 #SBATCH --error=slurm/%x-%j.err
 set -Eeuo pipefail
+PROJECT_DIR="${PROJECT_DIR:-$SLURM_SUBMIT_DIR}"
 : "${BASE_CONFIG:?set BASE_CONFIG to the synthetic template CSV}"
 ASSET_COUNT=40
 source "$PROJECT_DIR/hpc/seagull/common.sh"

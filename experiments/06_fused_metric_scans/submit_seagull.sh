@@ -10,6 +10,7 @@
 #SBATCH --output=slurm/%x-%j.out
 #SBATCH --error=slurm/%x-%j.err
 set -Eeuo pipefail
+PROJECT_DIR="${PROJECT_DIR:-$SLURM_SUBMIT_DIR}"
 : "${CLUSTER_CSV:?set CLUSTER_CSV for cluster output}"
 source "$PROJECT_DIR/hpc/seagull/common.sh"
 run_variant baseline 64 1 \
