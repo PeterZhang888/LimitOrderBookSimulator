@@ -22,7 +22,7 @@ enum class OrderAction : std::int32_t {
     Market = 2,
     CancelOwner = 3,
     CancelAtDistance = 4,
-    // Fragmented-calibration action that revises the location of anonymous
+    // Distributed-calibration action that revises the location of anonymous
     // aggregate ITCH liquidity without creating displayed quantity.  It is
     // intentionally distinct from the additive shared market maker used in
     // the systemic-liquidity experiment.

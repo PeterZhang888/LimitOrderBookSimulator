@@ -1,0 +1,7 @@
+event_type,configured_mu
+limit_buy,2.0
+limit_sell,2.0
+market_buy,1.0
+market_sell,1.0
+cancel_bid,0.5
+cancel_ask,0.5

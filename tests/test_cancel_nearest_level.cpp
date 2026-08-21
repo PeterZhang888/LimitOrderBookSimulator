@@ -1,4 +1,4 @@
-#include "exchange/DistributedLimitOrderBook.hpp"
+#include "exchange/LimitOrderBook.hpp"
 
 #include <cassert>
 #include <iostream>
@@ -62,7 +62,7 @@ dlob::OrderMessage market(dlob::BookId book,
 int main() {
     using namespace dlob;
     constexpr BookId id = 3;
-    DistributedLimitOrderBook book(100, id);
+    LimitOrderBook book(100, id);
 
     book.apply(limit(id, Side::Buy, 1'000, 10, 1));
     book.apply(limit(id, Side::Buy, 900, 10, 2));
@@ -87,7 +87,7 @@ int main() {
     // Ownership filtering is part of modeled support.  Owner 1 has support
     // only at 900, so a target at 1000 is not projected through owner 2's
     // quote onto owner 1's furthest represented order.
-    DistributedLimitOrderBook owner_filtered(100, id);
+    LimitOrderBook owner_filtered(100, id);
     owner_filtered.apply(limit(id, Side::Buy, 1'000, 10, 20, 2));
     owner_filtered.apply(limit(id, Side::Buy, 900, 10, 21, 1));
     const ApplyResult filtered_cancel = owner_filtered.apply(
@@ -101,7 +101,7 @@ int main() {
     // that the same retained mark is mapped to the nearest surviving owner-zero
     // level.  Levels four and six are equidistant; the deterministic lower-price
     // tie break selects level six, whose seeded quantity is 75.
-    DistributedLimitOrderBook background_nearest(100, id);
+    LimitOrderBook background_nearest(100, id);
     background_nearest.seed_calibrated_book(10'000, 10'200, 100, 100, 1.0);
     const std::int64_t initial_background_bid =
         background_nearest.total_background_bid_depth();
@@ -122,7 +122,7 @@ int main() {
 
     // The final-share guard remains active when a retained mark is projected
     // onto the only surviving anonymous level, not only for an exact hit.
-    DistributedLimitOrderBook final_share(100, id);
+    LimitOrderBook final_share(100, id);
     final_share.seed_calibrated_book(10'000, 10'200, 1, 1, 1.0);
     std::uint64_t drain_sequence = 40;
     while (final_share.total_background_bid_depth() > 1) {

@@ -1,13 +1,17 @@
 #pragma once
+
 #include "common/DistributedTypes.hpp"
 #include "common/EmpiricalDistribution.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
+
 namespace dlob {
+
 inline constexpr double fixed_background_hawkes_activity_scale = 0.30;
 inline constexpr std::size_t background_hawkes_event_type_count = 6U;
 inline constexpr std::size_t background_hawkes_state_feature_count = 4U;
@@ -22,7 +26,7 @@ using BackgroundStateCoefficientMatrix = std::array<
 
 struct BackgroundHawkesConfig {
     // The rate files are derived with the conventional 0.30 baseline.  This
-    // remains an explicit runtime multiplier so the fragmented calibration
+    // remains an explicit runtime multiplier so the distributed calibration
     // can select a single market-wide activity adjustment without rewriting
     // the empirically derived mu values for every candidate.
     double activity_scale = fixed_background_hawkes_activity_scale;

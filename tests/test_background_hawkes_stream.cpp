@@ -183,7 +183,7 @@ void assert_order_equal(const dlob::OrderMessage& left,
 int main() {
     using namespace dlob;
 
-    // The new incremental clock is bit-exact with the former fragmented
+    // The incremental clock is exactly equivalent to the earlier
     // one-timescale stream when every new option retains its legacy default.
     BackgroundHawkesConfig legacy;
     legacy.seed = 0x5a17ULL;

@@ -3,8 +3,19 @@
 #if __has_include(<mpi.h>) && !defined(LOB_FORCE_MPI_STUB)
 #include <mpi.h>
 #define LOB_HAS_REAL_MPI 1
+#if (defined(MPI_VERSION) && MPI_VERSION >= 4) \
+    || (defined(OMPI_MAJOR_VERSION) && OMPI_MAJOR_VERSION >= 5)
+// Open MPI 5 provides the MPI-4 persistent collective entry points while its
+// compatibility header still advertises MPI_VERSION == 3 and
+// MPI_SUBVERSION == 1. Detect that implementation explicitly instead of
+// silently disabling a function that is present in both the header and ABI.
+#define LOB_HAS_MPI_PERSISTENT_COLLECTIVES 1
+#else
+#define LOB_HAS_MPI_PERSISTENT_COLLECTIVES 0
+#endif
 #else
 #define LOB_HAS_REAL_MPI 0
+#define LOB_HAS_MPI_PERSISTENT_COLLECTIVES 0
 
 #include <algorithm>
 #include <chrono>
@@ -39,6 +50,10 @@ inline constexpr int MPI_MAX_PROCESSOR_NAME = 256;
 inline constexpr int MPI_ANY_SOURCE = -1;
 inline constexpr int MPI_ANY_TAG = -1;
 inline constexpr int MPI_UNDEFINED = -32766;
+inline constexpr int MPI_THREAD_SINGLE = 0;
+inline constexpr int MPI_THREAD_FUNNELED = 1;
+inline constexpr int MPI_THREAD_SERIALIZED = 2;
+inline constexpr int MPI_THREAD_MULTIPLE = 3;
 inline constexpr MPI_Request MPI_REQUEST_NULL = 0;
 
 inline MPI_Status mpi_status_ignore_storage{};
@@ -57,6 +72,14 @@ inline std::size_t mpi_stub_type_size(MPI_Datatype type) {
 }
 
 inline int MPI_Init(int*, char***) { return MPI_SUCCESS; }
+inline int MPI_Init_thread(int*, char***, int required, int* provided) {
+    if (provided) *provided = required;
+    return MPI_SUCCESS;
+}
+inline int MPI_Query_thread(int* provided) {
+    if (provided) *provided = MPI_THREAD_FUNNELED;
+    return MPI_SUCCESS;
+}
 inline int MPI_Finalize() { return MPI_SUCCESS; }
 inline int MPI_Abort(MPI_Comm, int) { return MPI_SUCCESS; }
 inline int MPI_Comm_rank(MPI_Comm, int* rank) { *rank = 0; return MPI_SUCCESS; }
@@ -184,6 +207,17 @@ inline int MPI_Allreduce(const void* sendbuf, void* recvbuf, int count, MPI_Data
         std::memcpy(recvbuf, sendbuf,
                     static_cast<std::size_t>(count) * mpi_stub_type_size(datatype));
     }
+    return MPI_SUCCESS;
+}
+inline int MPI_Iallreduce(const void* sendbuf, void* recvbuf, int count,
+                          MPI_Datatype datatype, MPI_Op op, MPI_Comm comm,
+                          MPI_Request* request) {
+    const int status = MPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
+    if (request) *request = status == MPI_SUCCESS ? 1 : MPI_REQUEST_NULL;
+    return status;
+}
+inline int MPI_Request_free(MPI_Request* request) {
+    if (request) *request = MPI_REQUEST_NULL;
     return MPI_SUCCESS;
 }
 #endif

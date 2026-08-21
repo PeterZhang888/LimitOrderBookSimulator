@@ -10,7 +10,7 @@
 
 namespace dlob::detail {
 
-// Fixed-memory fixed-clock moments used by the fragmented simulator.  A
+// Fixed-memory fixed-clock moments used by the distributed simulator.  A
 // one-sided observation breaks return adjacency, exactly as it does in the
 // ITCH extractor: the first later two-sided observation starts a new block.
 struct AssetMomentAccumulator {

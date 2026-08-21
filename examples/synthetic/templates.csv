@@ -1,0 +1,5 @@
+book_id,symbol,data_dir,hawkes_rates_file,fundamental_price_ticks,fundamental_volatility_bps_sqrt_second,fundamental_move_probability_per_second,fundamental_conditional_kurtosis,fundamental_log_variance_persistence,fundamental_log_variance_std,fundamental_order_flow_coupling,initial_best_bid_ticks,initial_best_ask_ticks,initial_best_bid_depth,initial_best_ask_depth,beta,basket_weight,market_maker_quote_quantity,target_spread_ticks,quote_improvement_probability
+0,QQQ,examples/synthetic/data,examples/synthetic/data/hawkes_rates.csv,100000,0,0,3,0,0,0,99900,100100,1000,1000,1.0,0.0,25,2,0.25
+1,AAPL,examples/synthetic/data,examples/synthetic/data/hawkes_rates.csv,125000,0,0,3,0,0,0,124900,125100,900,1100,1.0,0.0,25,2,0.25
+2,MSFT,examples/synthetic/data,examples/synthetic/data/hawkes_rates.csv,150000,0,0,3,0,0,0,149900,150100,1100,900,1.0,0.0,25,2,0.25
+3,AMZN,examples/synthetic/data,examples/synthetic/data/hawkes_rates.csv,175000,0,0,3,0,0,0,174900,175100,1000,1000,1.0,0.0,25,2,0.25

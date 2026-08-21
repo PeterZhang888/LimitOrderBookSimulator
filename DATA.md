@@ -1,23 +1,19 @@
-# Data availability
+# Data inputs
 
-The repository does not redistribute raw Nasdaq TotalView--ITCH files or the
-large per-symbol derived directories. Users must obtain data under Nasdaq's
-applicable terms and run the extraction workflow themselves.
+The simulator accepts either a repeated artificial template through
+`--base-config` or a complete empirical universe through `--universe-config`.
 
-The empirical protocol used five 2019 training sessions (30 January, 27 March,
-30 July, 30 October and 30 December) and 30 January 2020 as a development-
-validation session. The fixed balanced panel contains 1,480 symbols.
+`examples/synthetic/` is artificial and redistributable. It contains the
+quantity, distance and background-rate files needed for a complete run.
 
-Useful entry points are:
+The empirical thesis experiments require separately supplied Nasdaq-derived
+inputs:
 
-1. `scripts/select_itch50_universe.py`
-2. `scripts/extract_itch50_symbols.py`
-3. `scripts/build_queue_reactive_empirical_augmentation.py`
-4. `scripts/apply_queue_reactive_empirical_augmentation.py`
-5. `submit_five_day_pooled_training.sh`
-6. `submit_cluster_value_agent_calibration.sh`
+- the frozen universe CSV;
+- per-asset empirical distribution files referenced by that CSV;
+- the frozen queue-reactive background policy CSV;
+- the frozen Value Agent policy CSV;
+- the liquidity-cluster CSV when cluster output is requested.
 
-Never commit raw `.NASDAQ_ITCH50`, `.gz`, per-symbol empirical directories, or
-cluster filesystem paths containing usernames. Generated scientific artifacts
-should be content-hashed and documented separately from source code.
-
+These paths are supplied through environment variables before submission and
+are not embedded in the source repository.

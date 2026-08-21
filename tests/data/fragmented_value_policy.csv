@@ -1,5 +1,0 @@
-symbol,cluster_id,enabled,value_threshold_bps,value_order_quantity
-QQQ,0,on,0,10
-AAPL,1,off,8,50
-MSFT,1,on,1000000,25
-AMZN,2,on,1000000,25

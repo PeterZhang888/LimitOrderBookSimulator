@@ -1,4 +1,4 @@
-#include "exchange/DistributedLimitOrderBook.hpp"
+#include "exchange/LimitOrderBook.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -8,7 +8,7 @@
 int main() {
     using namespace dlob;
 
-    DistributedLimitOrderBook book(100);
+    LimitOrderBook book(100);
     book.seed_default_book(1.0);
     const int ask_before = book.best_ask_depth();
 
@@ -51,7 +51,7 @@ int main() {
     assert(has_fill);
     assert(has_result);
 
-    DistributedLimitOrderBook cancel_book(100);
+    LimitOrderBook cancel_book(100);
     cancel_book.seed_default_book(1.0);
     OrderMessage quote;
     quote.arrival_time_ns = 2000;
@@ -78,7 +78,7 @@ int main() {
     // An ITCH-derived background execution represents one E/C message and may
     // consume only the contemporaneous best price level.  A strategic market
     // order remains able to walk through multiple levels.
-    DistributedLimitOrderBook background_book(100);
+    LimitOrderBook background_book(100);
     background_book.seed_calibrated_book(10'000, 10'200, 10, 10, 1.0);
     OrderMessage second_background_ask;
     second_background_ask.arrival_time_ns = 2'900;
@@ -104,7 +104,7 @@ int main() {
     assert(background_book.best_ask() == 10'200);
     assert(background_book.best_ask_depth() == 2);
 
-    DistributedLimitOrderBook background_cancel_book(100);
+    LimitOrderBook background_cancel_book(100);
     background_cancel_book.seed_calibrated_book(10'000, 10'200, 10, 10, 1.0);
     OrderMessage second_background_bid = second_background_ask;
     second_background_bid.sequence = 51;
@@ -132,7 +132,7 @@ int main() {
     assert(absent_cancel_result.cancelled_quantity == 0);
     assert(background_cancel_book.best_bid_depth() == 2);
 
-    DistributedLimitOrderBook selected_level_exhaustion_book(100);
+    LimitOrderBook selected_level_exhaustion_book(100);
     selected_level_exhaustion_book.seed_calibrated_book(
         10'000, 10'200, 5, 5, 1.0);
     OrderMessage oversized_level_cancel = background_cancel;
@@ -147,7 +147,7 @@ int main() {
     // A reduced finite-support book must treat unrepresented outer-tail adds
     // and cancels symmetrically.  An outside add is ignored, while an
     // inside-spread add remains a valid revision of represented liquidity.
-    DistributedLimitOrderBook finite_support_book(100);
+    LimitOrderBook finite_support_book(100);
     finite_support_book.seed_calibrated_book(10'000, 10'500, 10, 10, 1.0);
     const std::int64_t finite_bid_total = finite_support_book.total_bid_depth();
     OrderMessage tail_add = second_background_bid;
@@ -175,7 +175,7 @@ int main() {
     assert(finite_support_book.best_bid() == 10'100);
     assert(finite_support_book.total_bid_depth() == finite_bid_total + 14);
 
-    DistributedLimitOrderBook value_book(100);
+    LimitOrderBook value_book(100);
     value_book.seed_calibrated_book(10'000, 10'200, 10, 10, 1.0);
     OrderMessage value_market = background_market;
     value_market.sequence = 6;
@@ -202,7 +202,7 @@ int main() {
 
     // The perceived-fundamental protection is symmetric: a value sell may
     // consume bids at or above its price floor, but never a cheaper level.
-    DistributedLimitOrderBook value_sell_book(100);
+    LimitOrderBook value_sell_book(100);
     value_sell_book.seed_calibrated_book(10'000, 10'200, 10, 10, 1.0);
     OrderMessage value_sell_market = value_market;
     value_sell_market.sequence = 61;
@@ -227,7 +227,7 @@ int main() {
     assert(value_sell_book.best_bid() == 9'800);
     assert(value_sell_book.best_bid_depth() == 13);
 
-    DistributedLimitOrderBook strategic_book(100);
+    LimitOrderBook strategic_book(100);
     strategic_book.seed_calibrated_book(10'000, 10'200, 10, 10, 1.0);
     OrderMessage strategic_market = background_market;
     strategic_market.sequence = 7;
@@ -241,7 +241,7 @@ int main() {
     // owner-zero ITCH flow; it does not add a second source of liquidity.
     // Releasing, moving and withdrawing that quote must preserve exact total
     // displayed quantity on every refresh.
-    DistributedLimitOrderBook conserved_book(100);
+    LimitOrderBook conserved_book(100);
     conserved_book.seed_calibrated_book(10'000, 10'500, 10, 12, 1.0);
     const std::int64_t original_bid_total = conserved_book.total_bid_depth();
     const std::int64_t original_ask_total = conserved_book.total_ask_depth();
@@ -302,7 +302,7 @@ int main() {
     // Validate the non-crossing repost price before any withdrawal.  This
     // deliberately constructs a tick-size-100 book whose near-INT_MAX spread
     // is narrower than one tick, making the conserved sell target impossible.
-    DistributedLimitOrderBook invalid_revision_book(100);
+    LimitOrderBook invalid_revision_book(100);
     OrderMessage extreme_bid;
     extreme_bid.sequence = 1100;
     extreme_bid.owner_id = 0;
@@ -344,7 +344,7 @@ int main() {
     // A delayed revision observes a newer same-side BBO at arrival.  It may
     // retain or improve that BBO, but must never move the donor backwards to
     // the stale decision-time price.
-    DistributedLimitOrderBook delayed_book(100);
+    LimitOrderBook delayed_book(100);
     delayed_book.seed_calibrated_book(10'000, 10'500, 10, 12, 1.0);
     OrderMessage newer_bid;
     newer_bid.sequence = 2000;
@@ -377,7 +377,7 @@ int main() {
     assert(delayed_book.total_bid_depth() == delayed_bid_total);
     assert(delayed_book.total_ask_depth() == delayed_ask_total);
 
-    DistributedLimitOrderBook no_donor_book(100);
+    LimitOrderBook no_donor_book(100);
     OrderMessage no_donor = stale_bid;
     no_donor.sequence = 3000;
     const ApplyResult no_donor_result = no_donor_book.apply(no_donor);
@@ -391,7 +391,7 @@ int main() {
     // This preserves exact two-sidedness without injecting new liquidity or
     // transferring quantity across the spread.  Every curtailed share is
     // returned explicitly in the ApplyResult for audit aggregation.
-    DistributedLimitOrderBook bid_boundary_book(100);
+    LimitOrderBook bid_boundary_book(100);
     bid_boundary_book.seed_calibrated_book(10'000, 10'200, 2, 2, 1.0);
     OrderMessage drain_bid;
     drain_bid.sequence = 4000;
@@ -438,7 +438,7 @@ int main() {
     assert(tail_cancel_at_boundary.boundary_truncated_quantity == 0);
     assert(bid_boundary_book.total_bid_depth() == 1);
 
-    DistributedLimitOrderBook ask_boundary_book(100);
+    LimitOrderBook ask_boundary_book(100);
     ask_boundary_book.seed_calibrated_book(10'000, 10'200, 2, 2, 1.0);
     OrderMessage drain_ask = drain_bid;
     drain_ask.sequence = 4100;
@@ -461,7 +461,7 @@ int main() {
     // The reserve belongs to the displayed side, not permanently to anonymous
     // background liquidity.  A maker quote can therefore replace the final
     // owner-zero share as the protected displayed unit.
-    DistributedLimitOrderBook shared_market_boundary_book(100);
+    LimitOrderBook shared_market_boundary_book(100);
     shared_market_boundary_book.seed_calibrated_book(
         10'000, 10'200, 2, 2, 1.0);
     OrderMessage drain_background_bid = drain_bid;
@@ -509,7 +509,7 @@ int main() {
 
     // A background-only cancellation can remove all anonymous quantity when
     // independently owned maker liquidity keeps the displayed side present.
-    DistributedLimitOrderBook shared_cancel_boundary_book(100);
+    LimitOrderBook shared_cancel_boundary_book(100);
     OrderMessage compact_background_bid;
     compact_background_bid.sequence = 4300;
     compact_background_bid.owner_id = 0;

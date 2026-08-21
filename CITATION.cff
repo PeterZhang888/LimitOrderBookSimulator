@@ -1,9 +1,9 @@
 cff-version: 1.2.0
 message: "If you use this software, cite this repository and the associated publication."
-title: "Whole-Book MPI Decomposition for Coupled Limit-Order-Book Simulation"
+title: "Distributed Multi-Asset Limit Order Book Simulator"
 type: software
 authors:
   - family-names: Zhang
     given-names: Peter
-date-released: 2026-08-03
-version: 1.0.0
+date-released: 2026-08-21
+version: 2.0.0

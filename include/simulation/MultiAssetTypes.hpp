@@ -14,13 +14,13 @@ using StableEntityId = std::uint64_t;
 
 [[nodiscard]] inline StableEntityId stable_symbol_stream_id(
     std::string_view symbol) noexcept {
-    StableEntityId hash = 14'695'981'039'346'656'037ULL;
+    StableEntityId value = 14'695'981'039'346'656'037ULL;
     for (const char character : symbol) {
         const auto byte = static_cast<unsigned char>(character);
-        hash ^= static_cast<StableEntityId>(byte);
-        hash *= 1'099'511'628'211ULL;
+        value ^= static_cast<StableEntityId>(byte);
+        value *= 1'099'511'628'211ULL;
     }
-    return hash ^ 0xa076'1d64'78bd'642fULL;
+    return value ^ 0xa076'1d64'78bd'642fULL;
 }
 
 inline constexpr StableEntityId background_entity_base = 0x0001'0000ULL;

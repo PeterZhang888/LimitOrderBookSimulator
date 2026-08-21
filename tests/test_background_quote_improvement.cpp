@@ -1,5 +1,5 @@
 #include "exchange/BackgroundHawkesAgent.hpp"
-#include "exchange/DistributedLimitOrderBook.hpp"
+#include "exchange/LimitOrderBook.hpp"
 
 #include <cassert>
 #include <filesystem>
@@ -239,7 +239,7 @@ int main() {
     // Additive shared-market-maker depth at the BBO must not feed back into
     // the anonymous background generator.  The total queue changes while the
     // owner-zero component, and hence the generated cancellation, does not.
-    DistributedLimitOrderBook shared_quote_book(100);
+    LimitOrderBook shared_quote_book(100);
     shared_quote_book.seed_calibrated_book(10'000, 10'200, 100, 200, 1.0);
     const MarketState before_shared = shared_quote_book.state(0, 10'100.0);
     OrderMessage shared_quote;
@@ -277,7 +277,7 @@ int main() {
     inside_reactive.target_mean_bid_depth = 200.0;
     inside_reactive.target_mean_ask_depth = 400.0;
 
-    DistributedLimitOrderBook inside_bid_book(100);
+    LimitOrderBook inside_bid_book(100);
     inside_bid_book.seed_calibrated_book(10'000, 10'300, 100, 200, 1.0);
     OrderMessage inside_bid_quote;
     inside_bid_quote.sequence = 92;
@@ -306,7 +306,7 @@ int main() {
     assert(inside_bid_book.background_best_bid_depth() == 50);
     assert(inside_bid_book.best_bid() == 10'100);
 
-    DistributedLimitOrderBook inside_ask_book(100);
+    LimitOrderBook inside_ask_book(100);
     inside_ask_book.seed_calibrated_book(10'000, 10'300, 100, 200, 1.0);
     OrderMessage inside_ask_quote;
     inside_ask_quote.sequence = 93;

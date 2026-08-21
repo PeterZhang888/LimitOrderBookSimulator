@@ -1,4 +1,4 @@
-#include "exchange/DistributedLimitOrderBook.hpp"
+#include "exchange/LimitOrderBook.hpp"
 
 #include <cassert>
 
@@ -6,7 +6,7 @@ int main() {
     using namespace dlob;
 
     constexpr BookId book_id = 42;
-    DistributedLimitOrderBook book(1, book_id);
+    LimitOrderBook book(1, book_id);
     assert(book.book_id() == book_id);
 
     OrderMessage ask;

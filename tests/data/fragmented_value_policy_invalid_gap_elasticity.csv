@@ -1,5 +1,0 @@
-symbol,cluster_id,enabled,value_threshold_bps,value_depth_participation,value_gap_elasticity,value_max_depth_participation
-QQQ,0,on,8,0.10,-1.0,0.50
-AAPL,1,off,8,0.10,0.0,1.0
-MSFT,1,on,1000000,0.10,0.0,1.0
-AMZN,2,on,1000000,0.10,0.0,1.0

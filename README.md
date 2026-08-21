@@ -1,96 +1,108 @@
-# Whole-Book MPI Limit-Order-Book Simulator
+# Distributed Multi-Asset Limit Order Book Simulator
 
-C++20 simulator for causally coupled, multi-asset limit-order books. Each book
-uses price--time priority and is owned by one MPI rank. Cross-asset state is
-updated at deterministic decision boundaries through collective communication.
+This repository contains the final simulator used by the thesis. Each asset
+has one complete order-level limit order book. MPI assigns complete books to
+ranks; OpenMP can process different books owned by the same rank. A book is
+never divided between ranks or threads.
 
-## Components
+## Source layout
 
-| Path | Purpose |
+| File | Responsibility |
 |---|---|
-| `include/`, `src/` | Production whole-book MPI simulator |
-| `scripts/` | ITCH extraction, pooling, calibration, validation and final analysis |
-| `config/` | Test configuration and the fixed 1,480-symbol cohort |
-| `tests/` | C++ correctness tests and Python workflow-contract tests |
-| `submit_*.sh` | Slurm launchers for calibration, validation and case-study execution |
-| `results/final-case-study/` | Compact, hash-traceable summaries from the completed inventory-stress campaign |
-| `docs/case-study/` | Experiment specification, result audit, LaTeX text and figures |
+| `src/exchange/LimitOrderBook.cpp` | One complete book: queues, matching, cancellations and trades |
+| `src/exchange/BackgroundHawkesAgent.cpp` | Background order-message generation |
+| `src/simulation/DistributedMarketSimulator.cpp` | Multi-asset event loop, agent decisions, book ownership, MPI boundaries and OpenMP worksharing |
+| `src/main.cpp` | Command-line parsing, MPI initialisation, launch and final output |
+| `include/mpi/MpiCompat.hpp` | One-process compatibility layer for the MPI-free OpenMP build |
 
-The source tree contains only the executable dependency closure used by the
-calibration, validation, scaling and inventory-stress experiments.
+## Compile on Seagull
 
-## Build
-
-Requirements:
-
-- CMake 3.20 or later;
-- a C++20 compiler;
-- an MPI implementation for distributed execution;
-- Python 3.10 or later for workflow utilities.
+From the repository root:
 
 ```bash
-cmake -S . -B build \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DLOB_REQUIRE_MPI=ON \
-  -DLOB_BUILD_TESTS=ON
-cmake --build build --parallel
-ctest --test-dir build -LE 'empirical|mpi' --output-on-failure
+mkdir -p slurm results/seagull
+bash scripts/build_seagull.sh
 ```
 
-Set `LOB_REQUIRE_MPI=OFF` only for single-process development and unit testing.
+This produces:
 
-The build produces one executable, `fragmented_mpi_lob`. A one-rank run of
-that same executable is the semantic reference for MPI rank-equivalence tests.
+```text
+build-mpi/lob_mpi
+build-openmp/lob_openmp
+```
 
-## Empirical workflow
+`lob_mpi` supports pure MPI and hybrid MPI--OpenMP. `lob_openmp` is the
+one-process MPI-free OpenMP executable.
 
-Raw Nasdaq TotalView--ITCH archives are not distributed with the repository.
-The main workflow is:
+## Run a complete synthetic session
 
-1. Extract book events and empirical targets with
-   `scripts/extract_itch50_symbols.py`.
-2. Pool the five training sessions with
-   `submit_five_day_pooled_training.sh`.
-3. Form liquidity clusters and select behavioural parameters with
-   `submit_cluster_value_agent_calibration.sh`.
-4. Validate the frozen model with
-   `submit_queue_reactive_full_validation_hpc.sh`.
-5. Run rank-equivalence, mechanism, performance and financial phases of the
-   same liquidity-shock experiment with
-   `submit_queue_reactive_case_study.sh`.
-
-Cluster jobs must be submitted with `sbatch`; the login node is used only for
-data inspection, packaging and job submission. Dataset requirements and path
-conventions are specified in [`DATA.md`](DATA.md).
-
-## Determinism
-
-Logical identifiers and random streams are independent of MPI ownership.
-Fixed-point collective reductions and canonical state hashing allow a run at
-one rank to be compared with the same realization at multiple ranks. The case
-launcher performs this rank-equivalence preflight before production treatments.
-
-## Verification
+The artificial input under `examples/synthetic/` is included so the code can
+run without Nasdaq data. For a full 10,000-book session:
 
 ```bash
-python3 -m unittest discover -s tests -p 'test_*.py'
-sha256sum -c SOURCE_MANIFEST.sha256
+mpirun -np 64 build-mpi/lob_mpi \
+  --duration-seconds 23400 \
+  --assets 10000 \
+  --base-config examples/synthetic/templates.csv \
+  --background-model legacy \
+  --partition cyclic \
+  --synchronous-observations \
+  --disable-persistent-risk-collective \
+  --shared-inventory-policy gross_pooled \
+  --threads 1 \
+  --metrics-csv results/synthetic_metrics.csv \
+  --asset-summary-csv results/synthetic_assets.csv
 ```
 
-Some integration tests require the external empirical directories. See
-[`TESTING.md`](TESTING.md) for the verified source-only subset and
-[`REPRODUCIBILITY.md`](REPRODUCIBILITY.md) for the full cluster workflow.
+Do not run a full session on a login node. Submit it through Slurm or use an
+interactive compute allocation.
 
-## Final experiment evidence
+## Thesis experiments
 
-Production outputs are written below `results/seagull/` and are not committed
-in full. The completed 1,480-book inventory-stress campaign contains 200
-full-session financial paths and six implementation/preflight paths.
-The compact result tables, mechanism certificate, archive digest and execution
-audit are retained in `results/final-case-study/`; the full hash-bound archive
-is external because it expands to more than 8 GB. The principal result is a
-small withdrawal of unshocked top-of-book depth during the first seconds after
-the intervention, followed by recovery within tens of seconds. No persistent
-30-minute depth or spread effect is established.
+The `experiments/` directory contains one full submission file per experiment.
+All use the same executables; only the declared treatment flags differ.
 
-The repository is distributed under the terms in [`LICENSE`](LICENSE).
+```text
+01_strong_scaling
+02_weak_scaling
+03_empirical_scaling
+04_rank_ownership
+05_observation_buffering
+06_fused_metric_scans
+07_mpi_openmp
+08_risk_collectives
+09_stylised_facts
+10_inventory_policy
+```
+
+For empirical experiments, export the paths described in
+`experiments/README.md`, then submit from the repository root. For example:
+
+```bash
+export PROJECT_DIR="$PWD"
+export UNIVERSE_CONFIG=/path/to/frozen_universe.csv
+export BACKGROUND_POLICY_CSV=/path/to/background_policy.csv
+export VALUE_POLICY_CSV=/path/to/value_agent_policy.csv
+sbatch experiments/08_risk_collectives/submit_seagull.sh
+```
+
+Every performance treatment writes separate boundary-metric, per-asset and
+console-output files. Scientific CSVs can be compared directly with:
+
+```bash
+python3 scripts/compare_scientific_outputs.py reference.csv treatment.csv
+```
+
+## Default comparison rule
+
+Unless an experiment documents a necessary prerequisite, the unoptimised
+control uses cyclic ownership (`asset_id mod MPI ranks`), synchronous
+observations, blocking `MPI_Allreduce`, one thread per rank, and no scan,
+lookahead or persistent-team optimisation. The lookahead experiment is the
+one exception: all four cells use buffered observations because the exact
+lookahead implementation requires them.
+
+## Data
+
+The repository does not redistribute Nasdaq ITCH data. See `DATA.md` for the
+required empirical inputs and the included artificial alternative.

@@ -10,8 +10,6 @@ compile_commands.json
 
 # Runtime outputs
 results/*
-!results/final-case-study/
-!results/final-case-study/**
 slurm/
 *.out
 *.err
