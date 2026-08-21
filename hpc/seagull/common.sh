@@ -2,6 +2,8 @@
 set -Eeuo pipefail
 
 : "${PROJECT_DIR:?set PROJECT_DIR to the cloned repository}"
+source "$PROJECT_DIR/hpc/seagull/load_environment.sh"
+
 BACKGROUND_MODEL="${BACKGROUND_MODEL:-queue-reactive-v1}"
 MODEL_ARGS=(--background-model "$BACKGROUND_MODEL")
 if [[ "$BACKGROUND_MODEL" == queue-reactive-v1 ]]; then

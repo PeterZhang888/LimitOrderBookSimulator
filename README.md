@@ -40,6 +40,8 @@ The artificial input under `examples/synthetic/` is included so the code can
 run without Nasdaq data. For a full 10,000-book session:
 
 ```bash
+source hpc/seagull/load_environment.sh
+
 mpirun -np 64 build-mpi/lob_mpi \
   --duration-seconds 23400 \
   --assets 10000 \
