@@ -26,7 +26,15 @@ For synthetic strong scaling, use:
 export BASE_CONFIG="$PWD/examples/synthetic/templates.csv"
 export ASSET_COUNT=10000
 export BACKGROUND_MODEL=legacy
+bash experiments/01_strong_scaling/submit_seagull.sh
 ```
+
+The strong-scaling submission file dispatches one independently sized Slurm
+job for each rank count from 1 to 256. This avoids reserving 16 nodes while a
+small-rank case is running and prevents the complete seven-repetition sweep
+from exceeding the time limit of one allocation. The submitted job numbers
+and result directories are written to
+`results/seagull/strong_scaling_<date>/submitted_jobs.csv`.
 
 The control in experiments 01, 03--07, 09 and 10 is cyclic ownership,
 synchronous observations, blocking `MPI_Allreduce`, one thread per rank and no

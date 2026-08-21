@@ -70,6 +70,16 @@ All use the same executables; only the declared treatment flags differ.
 10_inventory_policy
 ```
 
+The strong-scaling file is a submission driver because each rank count needs a
+different number of nodes. From the repository root, submit its complete
+1--256-rank campaign with:
+
+```bash
+bash experiments/01_strong_scaling/submit_seagull.sh
+```
+
+All other experiment submission files are passed directly to `sbatch`.
+
 For empirical experiments, export the paths described in
 `experiments/README.md`, then submit from the repository root. For example:
 
