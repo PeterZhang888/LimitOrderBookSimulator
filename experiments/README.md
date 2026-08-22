@@ -71,7 +71,9 @@ reporting timing. Each timed launch first has to pass the declared small-
 `MPI_Allreduce` latency gate, and any completed repetition of at least 120
 seconds is rejected. All rejected and accepted attempts are recorded in
 `attempts.csv`; seven accepted repetitions are required for every layout.
-Per-asset files, counts, accounting values and all
+Runtime ratios above 1.15 are reported as variability warnings without
+discarding repetitions or failing an otherwise valid job. Per-asset files,
+counts, accounting values and all
 non-spread metric columns must agree exactly. The three derived mean-spread
 columns use the explicitly reported floating-point tolerance documented in
 the main README because different MPI rank layouts change only the association

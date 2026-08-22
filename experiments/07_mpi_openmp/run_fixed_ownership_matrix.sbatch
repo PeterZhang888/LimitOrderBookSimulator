@@ -250,5 +250,5 @@ done
 python3 "$PROJECT_DIR/scripts/summarize_fixed_decomposition_matrix.py" \
   "$RESULT_ROOT" "$TOTAL_CORES"
 
-printf 'PERMANENT OWNERSHIP %s-CORE MATRIX: PASS\n' "$TOTAL_CORES"
+printf 'PERMANENT OWNERSHIP %s-CORE MATRIX: COMPLETE\n' "$TOTAL_CORES"
 printf 'RESULT_ROOT=%s\n' "$RESULT_ROOT"

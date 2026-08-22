@@ -195,7 +195,11 @@ its execution time is at least 120 seconds. Rejected attempts remain in the
 result directory and are listed in `attempts.csv`; the driver retries until
 each configuration has seven accepted repetitions, with a maximum of ten
 attempts for each required repetition. The preflight runs before the execution
-timer and does not alter the simulated market state.
+timer and does not alter the simulated market state. A layout whose
+maximum-to-minimum runtime ratio exceeds 1.15 is retained and labelled with a
+timing-variability warning; this warning does not cause an otherwise valid
+Slurm job to fail. Invalid placement, scientific disagreement, failed health
+checks and incomplete repetitions remain fatal errors.
 
 To diagnose the 16-core result phase by phase, run the separate instrumented
 campaign:
