@@ -114,6 +114,9 @@ struct SimulationConfig {
     // compare it with the unmodified dynamic,1 reference path.
     bool openmp_window_only = false;
     bool persistent_openmp_team = false;
+    // Build measured-cost thread buckets once, keep one OpenMP team alive,
+    // and retain every book on the same logical thread for the full session.
+    bool persistent_fixed_book_ownership = false;
     bool parallel_asset_initialization = false;
     bool parallel_boundary_reductions = false;
     bool parallel_metric_scans = false;
@@ -282,6 +285,8 @@ struct SimulationConfig {
     // reduction without inserting an extra boundary collective.
     std::string asset_work_csv;
     std::string boundary_arrival_csv;
+    // Optional one-time mapping produced by persistent fixed book ownership.
+    std::string thread_ownership_csv;
     // Optional diagnostic decomposition of every simulated interval.  Each
     // rank records its own phase durations in memory; the rows are gathered
     // and written only after the simulated session has finished.  Leaving the
@@ -357,11 +362,13 @@ struct SimulationResult {
     int worker_threads = 1;
     bool openmp_window_only = false;
     bool persistent_openmp_team = false;
+    bool persistent_fixed_book_ownership = false;
     bool parallel_asset_initialization = false;
     bool parallel_boundary_reductions = false;
     bool parallel_metric_scans = false;
     bool fuse_metric_cluster_scans = false;
     double predicted_partition_imbalance = 1.0;
+    double predicted_thread_imbalance = 1.0;
     double final_shared_gross_exposure = 0.0;
     double maximum_shared_gross_exposure = 0.0;
     double final_shared_utilization = 0.0;

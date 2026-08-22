@@ -152,6 +152,31 @@ columns are compared with the narrow rule
 \( |a-b|\leq5\times10^{-9}+10^{-12}\max(|a|,|b|) \); every other metric
 column remains exact.
 
+The permanent-book-ownership campaign tests the alternative OpenMP design in
+which scheduling occurs once rather than once per phase. A full preparation
+run first measures the work of every one of the 1,480 books. The books are
+then sorted by measured cost and assigned, one at a time, to the currently
+least-loaded OpenMP thread. This produces 16 load-balanced thread buckets.
+The buckets are frozen before the timed runs: the same thread initializes,
+processes events for, and applies every agent and observation phase to each of
+its books throughout the complete 23,400-second session. One OpenMP team
+remains alive for the session; this mode uses neither repeated
+`schedule(dynamic,1)` assignment nor one OpenMP task per book.
+
+```bash
+mkdir -p slurm results/seagull
+sbatch experiments/07_mpi_openmp/submit_16core_fixed_ownership_pair.sh
+```
+
+The job compares the fixed-owner one-process/16-thread configuration with the
+16-rank/one-thread cyclic MPI control on the same node and physical cores in
+seven alternating blocks. It records the permanent book-to-thread mapping
+and rejects a run if that mapping changes, if a book has no unique owner, or
+if the scientific outputs diverge. Because the OpenMP treatment also replaces
+cyclic ownership with measured-cost thread assignment, this is a comparison
+of two complete execution configurations; it does not isolate the programming
+model from the ownership policy.
+
 To diagnose the 16-core result phase by phase, run the separate instrumented
 campaign:
 

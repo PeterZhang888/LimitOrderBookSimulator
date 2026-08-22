@@ -413,6 +413,7 @@ struct Options {
     std::string openmp_schedule = "dynamic1";
     bool openmp_window_only = false;
     bool persistent_openmp_team = false;
+    bool persistent_fixed_book_ownership = false;
     bool parallel_asset_initialization = false;
     bool parallel_boundary_reductions = false;
     bool parallel_metric_scans = false;
@@ -438,6 +439,7 @@ struct Options {
     std::string shock_cluster_csv;
     std::string asset_work_csv;
     std::string boundary_arrival_csv;
+    std::string thread_ownership_csv;
     std::string window_phase_profile_csv;
     bool local_market_makers = true;
     bool value_agents = true;
@@ -509,6 +511,7 @@ void print_usage(const char* program) {
         << "  --openmp-schedule NAME    dynamic1, guided, static, or weighted-static\n"
         << "  --openmp-window-only     parallelize event-window processing; run shorter per-book phases serially\n"
         << "  --persistent-openmp-team retain one OpenMP team for the session\n"
+        << "  --persistent-fixed-book-ownership assign measured-cost book buckets once and retain them for the session\n"
         << "  --parallel-asset-initialization initialize rank-local books concurrently\n"
         << "  --parallel-boundary-reductions parallelize exact local exposure construction\n"
         << "  --parallel-metric-scans   parallelize metric/cluster scans with stable summation\n"
@@ -533,6 +536,7 @@ void print_usage(const char* program) {
         << "  --shock-targets-csv PATH  write deterministic shock target list on rank 0\n"
         << "  --asset-work-csv PATH     write measured per-asset event/time costs\n"
         << "  --boundary-arrival-csv PATH write rank arrivals before each causal reduction\n"
+        << "  --thread-ownership-csv PATH write the frozen OpenMP book-to-thread mapping\n"
         << "  --window-phase-profile-csv PATH write per-rank phase times for every simulated interval\n"
         << "  --global-risk-limit-per-asset X shared-MM global capacity / assets\n"
         << "  --risk-limit-per-asset X backward-compatible alias for the preceding option\n"
@@ -629,6 +633,8 @@ Options parse_options(int argc, char** argv) {
             options.openmp_window_only = true;
         } else if (argument == "--persistent-openmp-team") {
             options.persistent_openmp_team = true;
+        } else if (argument == "--persistent-fixed-book-ownership") {
+            options.persistent_fixed_book_ownership = true;
         } else if (argument == "--parallel-asset-initialization") {
             options.parallel_asset_initialization = true;
         } else if (argument == "--parallel-boundary-reductions") {
@@ -683,6 +689,9 @@ Options parse_options(int argc, char** argv) {
                 index, argc, argv, argument.c_str());
         } else if (argument == "--boundary-arrival-csv") {
             options.boundary_arrival_csv = require_value(
+                index, argc, argv, argument.c_str());
+        } else if (argument == "--thread-ownership-csv") {
+            options.thread_ownership_csv = require_value(
                 index, argc, argv, argument.c_str());
         } else if (argument == "--window-phase-profile-csv") {
             options.window_phase_profile_csv = require_value(
@@ -1053,6 +1062,8 @@ int main(int argc, char** argv) {
                     : dlob::OpenMpSchedule::DynamicOne));
         config.openmp_window_only = options.openmp_window_only;
         config.persistent_openmp_team = options.persistent_openmp_team;
+        config.persistent_fixed_book_ownership =
+            options.persistent_fixed_book_ownership;
         config.parallel_asset_initialization =
             options.parallel_asset_initialization;
         config.parallel_boundary_reductions =
@@ -1095,6 +1106,7 @@ int main(int argc, char** argv) {
         config.shock_cluster_ids = shock_clusters;
         config.asset_work_csv = options.asset_work_csv;
         config.boundary_arrival_csv = options.boundary_arrival_csv;
+        config.thread_ownership_csv = options.thread_ownership_csv;
         config.window_phase_profile_csv =
             options.window_phase_profile_csv;
         config.shock_quantity_per_asset = options.shock_quantity;
@@ -1153,6 +1165,8 @@ int main(int argc, char** argv) {
                 << (options.profile_boundary_wait ? 1 : 0)
                 << " window_phase_profile="
                 << (options.window_phase_profile_csv.empty() ? 0 : 1)
+                << " thread_ownership_output="
+                << (options.thread_ownership_csv.empty() ? 0 : 1)
                 << " fundamental_news_interval_ms=1000.000000000"
                 << " windows=" << result.windows
                 << " hawkes_activity_scale=" << options.hawkes_activity_scale
@@ -1170,6 +1184,8 @@ int main(int argc, char** argv) {
                 << (result.openmp_window_only ? 1 : 0)
                 << " persistent_openmp_team="
                 << (result.persistent_openmp_team ? 1 : 0)
+                << " persistent_fixed_book_ownership="
+                << (result.persistent_fixed_book_ownership ? 1 : 0)
                 << " parallel_asset_initialization="
                 << (result.parallel_asset_initialization ? 1 : 0)
                 << " parallel_boundary_reductions="
@@ -1182,6 +1198,8 @@ int main(int argc, char** argv) {
                 << (result.openmp_enabled ? 1 : 0)
                 << " predicted_partition_imbalance="
                 << result.predicted_partition_imbalance
+                << " predicted_thread_imbalance="
+                << result.predicted_thread_imbalance
                 << " local_mm_interval_ms=" << local_mm_interval_ms
                 << " local_mm_quantity_multiplier="
                 << options.local_mm_quantity_multiplier

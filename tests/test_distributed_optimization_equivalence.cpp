@@ -157,6 +157,20 @@ int main(int argc, char** argv) {
     persistent.persistent_openmp_team = true;
     verify("persistent", std::move(persistent));
 
+    dlob::SimulationConfig fixed_ownership =
+        make_config(root, "fixed_ownership");
+    fixed_ownership.worker_threads = 4;
+    fixed_ownership.openmp_schedule =
+        dlob::OpenMpSchedule::WeightedStatic;
+    fixed_ownership.realized_partition_costs.resize(64);
+    for (std::size_t index = 0;
+         index < fixed_ownership.realized_partition_costs.size(); ++index) {
+        fixed_ownership.realized_partition_costs[index] =
+            static_cast<double>(1U + index % 11U);
+    }
+    fixed_ownership.persistent_fixed_book_ownership = true;
+    verify("fixed_ownership", std::move(fixed_ownership));
+
     dlob::SimulationConfig window_only = make_config(root, "window_only");
     window_only.worker_threads = 4;
     window_only.openmp_window_only = true;

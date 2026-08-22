@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <chrono>
 #include <cstddef>
@@ -25,6 +26,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -485,6 +487,43 @@ public:
 
     SimulationResult run() {
 #if LOB_HAS_OPENMP
+        if (config_.persistent_fixed_book_ownership
+            && config_.worker_threads > 1) {
+            SimulationResult result;
+            std::exception_ptr failure;
+            persistent_fixed_stop_.store(false, std::memory_order_relaxed);
+            persistent_fixed_generation_.store(0U, std::memory_order_relaxed);
+            persistent_fixed_workers_completed_.store(
+                0U, std::memory_order_relaxed);
+            persistent_fixed_callback_ = nullptr;
+            persistent_fixed_context_ = nullptr;
+            persistent_fixed_failure_ = nullptr;
+#pragma omp parallel num_threads(config_.worker_threads) shared(result, failure)
+            {
+                const int thread_id = omp_get_thread_num();
+                if (thread_id == 0) {
+                    try {
+                        if (omp_get_num_threads()
+                                != config_.worker_threads) {
+                            throw std::runtime_error(
+                                "OpenMP did not create the requested fixed "
+                                "ownership team");
+                        }
+                        result = run_session();
+                    } catch (...) {
+                        failure = std::current_exception();
+                    }
+                    persistent_fixed_stop_.store(
+                        true, std::memory_order_release);
+                    persistent_fixed_generation_.fetch_add(
+                        1U, std::memory_order_release);
+                } else {
+                    persistent_fixed_worker_loop(thread_id);
+                }
+            }
+            if (failure) std::rethrow_exception(failure);
+            return result;
+        }
         if (config_.persistent_openmp_team && config_.worker_threads > 1) {
             SimulationResult result;
             std::exception_ptr failure;
@@ -510,6 +549,91 @@ public:
     }
 
 private:
+#if LOB_HAS_OPENMP
+    void persistent_fixed_execute_bucket(int thread_id) noexcept {
+        try {
+            const auto& bucket = local_thread_buckets_.at(
+                static_cast<std::size_t>(thread_id));
+            for (const std::size_t index : bucket) {
+                if (index >= persistent_fixed_count_) {
+                    throw std::logic_error(
+                        "fixed OpenMP bucket index exceeds phase size");
+                }
+                persistent_fixed_callback_(persistent_fixed_context_, index);
+            }
+        } catch (...) {
+#pragma omp critical(dlob_persistent_fixed_failure)
+            {
+                if (!persistent_fixed_failure_) {
+                    persistent_fixed_failure_ = std::current_exception();
+                }
+            }
+        }
+    }
+
+    void persistent_fixed_worker_loop(int thread_id) {
+        std::size_t observed_generation = 0U;
+        while (true) {
+            std::size_t generation = observed_generation;
+            while (generation == observed_generation) {
+                generation = persistent_fixed_generation_.load(
+                    std::memory_order_acquire);
+                if (generation == observed_generation) {
+                    std::this_thread::yield();
+                }
+            }
+            observed_generation = generation;
+            if (persistent_fixed_stop_.load(std::memory_order_acquire)) return;
+            persistent_fixed_execute_bucket(thread_id);
+            persistent_fixed_workers_completed_.fetch_add(
+                1U, std::memory_order_release);
+        }
+    }
+
+    template <typename Function>
+    void dispatch_persistent_fixed_phase(
+        std::size_t count,
+        Function&& function) {
+        if (omp_get_thread_num() != 0) {
+            throw std::logic_error(
+                "fixed OpenMP phases must be dispatched by thread zero");
+        }
+        if (local_thread_buckets_.size()
+                != static_cast<std::size_t>(config_.worker_threads)) {
+            throw std::logic_error(
+                "fixed OpenMP book ownership is not initialized");
+        }
+        if (count != persistent_fixed_book_count_) {
+            throw std::logic_error(
+                "fixed OpenMP phase does not match the owned book set");
+        }
+        using Callable = std::remove_reference_t<Function>;
+        persistent_fixed_context_ = const_cast<void*>(
+            static_cast<const void*>(std::addressof(function)));
+        persistent_fixed_callback_ = [](void* context, std::size_t index) {
+            (*static_cast<Callable*>(context))(index);
+        };
+        persistent_fixed_count_ = count;
+        persistent_fixed_failure_ = nullptr;
+        persistent_fixed_workers_completed_.store(
+            0U, std::memory_order_relaxed);
+        persistent_fixed_generation_.fetch_add(
+            1U, std::memory_order_release);
+        persistent_fixed_execute_bucket(0);
+        const std::size_t expected_workers =
+            static_cast<std::size_t>(config_.worker_threads - 1);
+        while (persistent_fixed_workers_completed_.load(
+                   std::memory_order_acquire) != expected_workers) {
+            std::this_thread::yield();
+        }
+        const std::exception_ptr failure = persistent_fixed_failure_;
+        persistent_fixed_callback_ = nullptr;
+        persistent_fixed_context_ = nullptr;
+        persistent_fixed_count_ = 0U;
+        if (failure) std::rethrow_exception(failure);
+    }
+#endif
+
     template <typename Function>
     void profile_window_phase(
         double WindowPhaseWire::*field,
@@ -593,6 +717,7 @@ private:
         const double initialization_start = MPI_Wtime();
         initialize_local_assets();
         initialization_seconds_ = MPI_Wtime() - initialization_start;
+        write_thread_ownership();
         open_metrics_output();
         open_return_panel_output();
         update_shared_risk(0, [&]() {
@@ -817,6 +942,12 @@ private:
     template <typename Function>
     void for_each_local_index(std::size_t count, Function&& function) {
 #if LOB_HAS_OPENMP
+        if (config_.persistent_fixed_book_ownership
+            && config_.worker_threads > 1) {
+            dispatch_persistent_fixed_phase(
+                count, std::forward<Function>(function));
+            return;
+        }
         if (config_.worker_threads > 1 && count > 1U) {
             std::exception_ptr failure;
             if (omp_in_parallel() != 0) {
@@ -1043,6 +1174,30 @@ private:
             throw std::invalid_argument(
                 "persistent OpenMP and window-only OpenMP are separate "
                 "treatments and cannot be enabled together");
+        }
+        if (config_.persistent_fixed_book_ownership
+            && (config_.persistent_openmp_team
+                || config_.openmp_window_only)) {
+            throw std::invalid_argument(
+                "fixed book ownership is a separate OpenMP treatment");
+        }
+        if (config_.persistent_fixed_book_ownership
+            && (world_size_ != 1 || config_.worker_threads <= 1)) {
+            throw std::invalid_argument(
+                "fixed book ownership requires one MPI-free process and "
+                "more than one OpenMP thread");
+        }
+        if (config_.persistent_fixed_book_ownership
+            && config_.openmp_schedule != OpenMpSchedule::WeightedStatic) {
+            throw std::invalid_argument(
+                "fixed book ownership requires measured-cost weighted-static "
+                "assignment");
+        }
+        if (!config_.thread_ownership_csv.empty()
+            && !config_.persistent_fixed_book_ownership) {
+            throw std::invalid_argument(
+                "thread ownership output requires persistent fixed book "
+                "ownership");
         }
 #if !LOB_HAS_OPENMP
         if (config_.worker_threads != 1) {
@@ -1529,7 +1684,8 @@ private:
             }
             local_assets_[local_index] = std::move(asset);
         };
-        if (config_.parallel_asset_initialization) {
+        if (config_.parallel_asset_initialization
+            || config_.persistent_fixed_book_ownership) {
             initialize_thread_buckets(owned_asset_indices);
             for_each_local_index(owned_asset_indices.size(), initialize_one);
         } else {
@@ -1542,14 +1698,18 @@ private:
 
     void initialize_thread_buckets(const std::vector<int>& owned_assets) {
         local_thread_buckets_.clear();
+        persistent_fixed_book_count_ = 0U;
+        predicted_thread_imbalance_ = 1.0;
         if (config_.openmp_schedule
                 != OpenMpSchedule::WeightedStatic
             || config_.worker_threads <= 1 || owned_assets.size() <= 1U) {
             return;
         }
-        const std::size_t thread_count = std::min(
-            static_cast<std::size_t>(config_.worker_threads),
-            owned_assets.size());
+        const std::size_t thread_count = config_.persistent_fixed_book_ownership
+            ? static_cast<std::size_t>(config_.worker_threads)
+            : std::min(
+                static_cast<std::size_t>(config_.worker_threads),
+                owned_assets.size());
         local_thread_buckets_.resize(thread_count);
         std::vector<double> thread_loads(thread_count, 0.0);
         std::vector<std::size_t> order(owned_assets.size());
@@ -1574,6 +1734,57 @@ private:
         }
         for (std::vector<std::size_t>& bucket : local_thread_buckets_) {
             std::sort(bucket.begin(), bucket.end());
+        }
+        const double mean_load = std::accumulate(
+            thread_loads.begin(), thread_loads.end(), 0.0)
+            / static_cast<double>(thread_loads.size());
+        predicted_thread_imbalance_ = mean_load > 0.0
+            ? *std::max_element(thread_loads.begin(), thread_loads.end())
+                / mean_load
+            : 1.0;
+        if (config_.persistent_fixed_book_ownership) {
+            persistent_fixed_book_count_ = owned_assets.size();
+        }
+    }
+
+    void write_thread_ownership() const {
+        if (rank_ != 0 || config_.thread_ownership_csv.empty()) return;
+        std::vector<int> owners(local_assets_.size(), -1);
+        for (std::size_t thread = 0;
+             thread < local_thread_buckets_.size(); ++thread) {
+            for (const std::size_t local_index : local_thread_buckets_[thread]) {
+                if (local_index >= owners.size() || owners[local_index] != -1) {
+                    throw std::logic_error(
+                        "invalid fixed OpenMP thread ownership mapping");
+                }
+                owners[local_index] = static_cast<int>(thread);
+            }
+        }
+        if (std::any_of(owners.begin(), owners.end(),
+                        [](int owner) { return owner < 0; })) {
+            throw std::logic_error(
+                "incomplete fixed OpenMP thread ownership mapping");
+        }
+        const std::filesystem::path path(config_.thread_ownership_csv);
+        if (path.has_parent_path()) {
+            std::filesystem::create_directories(path.parent_path());
+        }
+        std::ofstream output(path);
+        if (!output) {
+            throw std::runtime_error(
+                "cannot open thread ownership CSV: " + path.string());
+        }
+        output << "asset_id,symbol,thread_id,assignment_weight\n";
+        output << std::setprecision(17);
+        for (std::size_t local_index = 0;
+             local_index < local_assets_.size(); ++local_index) {
+            const LocalAsset& asset = *local_assets_[local_index];
+            output << asset.asset_id << ','
+                   << asset.config.symbol << ','
+                   << owners[local_index] << ','
+                   << config_.realized_partition_costs.at(
+                          static_cast<std::size_t>(asset.asset_id))
+                   << '\n';
         }
     }
 
@@ -2453,7 +2664,10 @@ private:
                 asset.config.beta * static_cast<double>(asset.shared_inventory));
             return std::llround(exposure * risk_fixed_point_scale);
         };
-        if (config_.parallel_boundary_reductions) {
+        const bool parallel_contributions =
+            config_.parallel_boundary_reductions
+            || config_.persistent_fixed_book_ownership;
+        if (parallel_contributions) {
             if (fixed_exposure_contributions_.size() != local_assets_.size()) {
                 fixed_exposure_contributions_.resize(local_assets_.size());
             }
@@ -2464,7 +2678,7 @@ private:
         }
         long long total = 0;
         for (std::size_t index = 0; index < local_assets_.size(); ++index) {
-            const long long fixed = config_.parallel_boundary_reductions
+            const long long fixed = parallel_contributions
                 ? fixed_exposure_contributions_[index]
                 : contribution(*local_assets_[index]);
             if (fixed > std::numeric_limits<long long>::max() - total) {
@@ -2846,7 +3060,8 @@ private:
                 time_ns, asset.fundamental_value_ticks);
             asset.calibration_moments.observe(state, config_.tick_size);
         };
-        if (config_.parallel_metric_scans) {
+        if (config_.parallel_metric_scans
+            || config_.persistent_fixed_book_ownership) {
             for_each_local_asset(record);
         } else {
             for (const std::unique_ptr<LocalAsset>& pointer : local_assets_) {
@@ -2883,15 +3098,30 @@ private:
             || time_ns % config_.return_panel_interval_ns != 0) return;
         return_panel_output_ << std::fixed << std::setprecision(9)
             << static_cast<double>(time_ns) / 1e9;
-        for (const std::unique_ptr<LocalAsset>& asset : local_assets_) {
-            const MarketState state = asset->book.lob.state(
-                time_ns, asset->fundamental_value_ticks);
-            return_panel_output_ << ',';
+        std::vector<std::int64_t> twice_midpoints(
+            local_assets_.size(), std::numeric_limits<std::int64_t>::min());
+        const auto observe = [&](std::size_t index) {
+            const LocalAsset& asset = *local_assets_[index];
+            const MarketState state = asset.book.lob.state(
+                time_ns, asset.fundamental_value_ticks);
             if (state.best_bid_ticks > 0
                 && state.best_ask_ticks >= state.best_bid_ticks) {
-                const std::int64_t twice_midpoint =
+                twice_midpoints[index] =
                     static_cast<std::int64_t>(state.best_bid_ticks)
                     + static_cast<std::int64_t>(state.best_ask_ticks);
+            }
+        };
+        if (config_.persistent_fixed_book_ownership) {
+            for_each_local_index(local_assets_.size(), observe);
+        } else {
+            for (std::size_t index = 0;
+                 index < local_assets_.size(); ++index) {
+                observe(index);
+            }
+        }
+        for (const std::int64_t twice_midpoint : twice_midpoints) {
+            return_panel_output_ << ',';
+            if (twice_midpoint != std::numeric_limits<std::int64_t>::min()) {
                 return_panel_output_ << twice_midpoint;
             }
         }
@@ -3041,7 +3271,8 @@ private:
             fused_cluster_contributions_.assign(local_assets_.size(), {});
             fused_cluster_time_ns_ = time_ns;
         }
-        if (!config_.parallel_metric_scans) {
+        if (!config_.parallel_metric_scans
+            && !config_.persistent_fixed_book_ownership) {
             for (std::size_t index = 0; index < local_assets_.size(); ++index) {
                 accumulate_asset(
                     metrics, *local_assets_[index],
@@ -3177,6 +3408,7 @@ private:
                 * cluster_metric_field_count,
             0.0);
         if (!config_.parallel_metric_scans
+            && !config_.persistent_fixed_book_ownership
             && !config_.fuse_metric_cluster_scans) {
             // Preserve the baseline implementation exactly when neither
             // cluster optimization is selected.  This is the denominator of
@@ -3270,7 +3502,8 @@ private:
                     contributions[index].values.begin());
             }
         } else {
-            if (config_.parallel_metric_scans) {
+            if (config_.parallel_metric_scans
+                || config_.persistent_fixed_book_ownership) {
                 for_each_local_index(
                     local_assets_.size(), [&](std::size_t index) {
                         scan_asset(*local_assets_[index], contributions[index]);
@@ -4362,6 +4595,8 @@ private:
         result.worker_threads = config_.worker_threads;
         result.openmp_window_only = config_.openmp_window_only;
         result.persistent_openmp_team = config_.persistent_openmp_team;
+        result.persistent_fixed_book_ownership =
+            config_.persistent_fixed_book_ownership;
         result.parallel_asset_initialization =
             config_.parallel_asset_initialization;
         result.parallel_boundary_reductions =
@@ -4371,6 +4606,7 @@ private:
             config_.fuse_metric_cluster_scans;
         result.predicted_partition_imbalance =
             predicted_partition_imbalance_;
+        result.predicted_thread_imbalance = predicted_thread_imbalance_;
         result.shock_target_assets = shock_asset_count_;
         result.shock_assets = shock_asset_count_;
         result.withdrawal_windows = withdrawal_windows_;
@@ -4481,6 +4717,17 @@ private:
     // parallel exact-integer exposure ablation.
     std::vector<long long> fixed_exposure_contributions_;
     std::vector<std::vector<std::size_t>> local_thread_buckets_;
+    std::size_t persistent_fixed_book_count_ = 0U;
+#if LOB_HAS_OPENMP
+    using PersistentFixedCallback = void (*)(void*, std::size_t);
+    PersistentFixedCallback persistent_fixed_callback_ = nullptr;
+    void* persistent_fixed_context_ = nullptr;
+    std::size_t persistent_fixed_count_ = 0U;
+    std::exception_ptr persistent_fixed_failure_;
+    std::atomic<bool> persistent_fixed_stop_{false};
+    std::atomic<std::size_t> persistent_fixed_generation_{0U};
+    std::atomic<std::size_t> persistent_fixed_workers_completed_{0U};
+#endif
     std::vector<std::array<double, 8>> fused_cluster_contributions_;
     std::int64_t fused_cluster_time_ns_ = -1;
     int cluster_count_ = 0;
@@ -4506,6 +4753,7 @@ private:
     bool weighted_partition_active_ = false;
     bool realized_cost_partition_active_ = false;
     double predicted_partition_imbalance_ = 1.0;
+    double predicted_thread_imbalance_ = 1.0;
     double wall_start_seconds_ = 0.0;
     double last_risk_completion_seconds_ = 0.0;
     double shared_gross_exposure_ = 0.0;
