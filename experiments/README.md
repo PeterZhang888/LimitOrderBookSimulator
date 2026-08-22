@@ -67,7 +67,11 @@ MPI ownership remains cyclic. In every threaded layout, measured book costs
 are used to assign each rank's books to threads once, and the assignment is
 retained for the complete session. Each total-core job uses seven rotating
 blocks, validates CPU placement and directly checks scientific outputs before
-reporting timing. Per-asset files, counts, accounting values and all
+reporting timing. Each timed launch first has to pass the declared small-
+`MPI_Allreduce` latency gate, and any completed repetition of at least 120
+seconds is rejected. All rejected and accepted attempts are recorded in
+`attempts.csv`; seven accepted repetitions are required for every layout.
+Per-asset files, counts, accounting values and all
 non-spread metric columns must agree exactly. The three derived mean-spread
 columns use the explicitly reported floating-point tolerance documented in
 the main README because different MPI rank layouts change only the association

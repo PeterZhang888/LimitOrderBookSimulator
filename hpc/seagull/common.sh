@@ -185,24 +185,30 @@ run_variant() {
         --cluster-metrics-csv "$cluster"
       )
     fi
-    "${omp_environment[@]}" \
-    mpirun --np "$ranks" \
-      --map-by "$mpi_mapping" \
-      --bind-to core \
-      --report-bindings \
-      "$BUILD_DIR/lob_mpi" \
-      --duration-seconds "$DURATION_SECONDS" \
-      --window-ms 1000 \
-      "${INPUT_ARGS[@]}" \
-      "${MODEL_ARGS[@]}" \
-      "${SCIENTIFIC_ARGS[@]}" \
-      --seed "$SEED" \
-      --metrics-csv "$metrics" \
-      --asset-summary-csv "$assets" \
-      --asset-summary-interval-ms 1000 \
-      --threads "$threads" \
-      "${cluster_args[@]}" \
-      "$@" | tee "$log"
+    if "${omp_environment[@]}" \
+      mpirun --np "$ranks" \
+        --map-by "$mpi_mapping" \
+        --bind-to core \
+        --report-bindings \
+        "$BUILD_DIR/lob_mpi" \
+        --duration-seconds "$DURATION_SECONDS" \
+        --window-ms 1000 \
+        "${INPUT_ARGS[@]}" \
+        "${MODEL_ARGS[@]}" \
+        "${SCIENTIFIC_ARGS[@]}" \
+        --seed "$SEED" \
+        --metrics-csv "$metrics" \
+        --asset-summary-csv "$assets" \
+        --asset-summary-interval-ms 1000 \
+        --threads "$threads" \
+        "${cluster_args[@]}" \
+        "$@" | tee "$log"
+    then
+      :
+    else
+      local run_status=$?
+      return "$run_status"
+    fi
   done
 }
 

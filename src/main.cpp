@@ -4,6 +4,7 @@
 #include "simulation/QueueReactiveBackgroundPolicy.hpp"
 
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <cctype>
 #include <cmath>
@@ -404,6 +405,8 @@ struct Options {
     bool use_nonblocking_risk_collective = false;
     std::uint64_t risk_lookahead_max_windows = 0;
     bool profile_boundary_wait = false;
+    int mpi_health_check_iterations = 0;
+    double mpi_health_check_max_mean_ms = 0.0;
     double hawkes_activity_scale = 0.30;
     std::string background_model = "legacy";
     std::string background_policy_csv;
@@ -497,6 +500,10 @@ void print_usage(const char* program) {
            "(default 0: disabled)\n"
         << "  --profile-boundary-wait  add a pre-reduction barrier to separate "
            "arrival wait from collective execution\n"
+        << "  --mpi-health-check-iterations N run N pairs of small blocking "
+           "Allreduces before timing (default 0: disabled)\n"
+        << "  --mpi-health-check-max-mean-ms X reject the MPI launch when the "
+           "slowest-rank mean per preflight collective exceeds X ms\n"
         << "  --hawkes-activity-scale X global background Hawkes activity multiplier "
            "for legacy mode (default 0.30)\n"
         << "  --background-model NAME  legacy or queue-reactive-v1\n"
@@ -607,6 +614,14 @@ Options parse_options(int argc, char** argv) {
                 argument.c_str());
         } else if (argument == "--profile-boundary-wait") {
             options.profile_boundary_wait = true;
+        } else if (argument == "--mpi-health-check-iterations") {
+            options.mpi_health_check_iterations = parse_integer<int>(
+                require_value(index, argc, argv, argument.c_str()),
+                argument.c_str());
+        } else if (argument == "--mpi-health-check-max-mean-ms") {
+            options.mpi_health_check_max_mean_ms = parse_double(
+                require_value(index, argc, argv, argument.c_str()),
+                argument.c_str());
         } else if (argument == "--hawkes-activity-scale") {
             options.hawkes_activity_scale = parse_double(
                 require_value(index, argc, argv, argument.c_str()), argument.c_str());
@@ -804,6 +819,9 @@ Options parse_options(int argc, char** argv) {
                 < static_cast<double>(options.duration_seconds))
         || !std::isfinite(options.metrics_interval_ms)
         || options.metrics_interval_ms < 0.0
+        || options.mpi_health_check_iterations < 0
+        || !std::isfinite(options.mpi_health_check_max_mean_ms)
+        || options.mpi_health_check_max_mean_ms < 0.0
         || !std::isfinite(options.hawkes_activity_scale)
         || options.hawkes_activity_scale <= 0.0
         || !std::isfinite(options.local_mm_interval_ms)
@@ -855,6 +873,12 @@ Options parse_options(int argc, char** argv) {
         || options.value_quantity <= 0
         || options.worker_threads <= 0) {
         throw std::invalid_argument("invalid distributed-market options");
+    }
+    if ((options.mpi_health_check_iterations > 0)
+            != (options.mpi_health_check_max_mean_ms > 0.0)) {
+        throw std::invalid_argument(
+            "MPI health-check iterations and threshold must be enabled "
+            "together");
     }
     if (options.background_model != "legacy"
         && options.background_model != "queue-reactive-v1") {
@@ -926,6 +950,103 @@ std::vector<dlob::MultiAssetBookConfig> resolve_asset_configs(
         dlob::load_multi_asset_book_configs(options.base_config), options.assets);
 }
 
+double run_mpi_health_check(
+    int iterations,
+    double maximum_mean_ms,
+    int rank) {
+    if (iterations == 0) return 0.0;
+
+    int world_size = 0;
+    if (MPI_Comm_size(MPI_COMM_WORLD, &world_size) != MPI_SUCCESS
+        || world_size < 1) {
+        throw std::runtime_error(
+            "MPI_Comm_size failed during the MPI health check");
+    }
+
+    constexpr int observation_width = 64;
+    constexpr int warmup_iterations = 4;
+    const long long integer_input = static_cast<long long>(rank + 1);
+    const long long expected_integer =
+        static_cast<long long>(world_size)
+        * static_cast<long long>(world_size + 1) / 2LL;
+    std::array<double, observation_width> observation_input{};
+    std::array<double, observation_width> observation_output{};
+    observation_input.fill(static_cast<double>(rank + 1));
+
+    const auto run_pair = [&]() {
+        long long integer_output = 0;
+        if (MPI_Allreduce(
+                &integer_input,
+                &integer_output,
+                1,
+                MPI_LONG_LONG,
+                MPI_SUM,
+                MPI_COMM_WORLD) != MPI_SUCCESS) {
+            throw std::runtime_error(
+                "integer MPI_Allreduce failed during the MPI health check");
+        }
+        if (MPI_Allreduce(
+                observation_input.data(),
+                observation_output.data(),
+                observation_width,
+                MPI_DOUBLE,
+                MPI_SUM,
+                MPI_COMM_WORLD) != MPI_SUCCESS) {
+            throw std::runtime_error(
+                "floating MPI_Allreduce failed during the MPI health check");
+        }
+        if (integer_output != expected_integer
+            || observation_output.front()
+                != static_cast<double>(expected_integer)
+            || observation_output.back()
+                != static_cast<double>(expected_integer)) {
+            throw std::runtime_error(
+                "MPI health-check reductions returned incorrect values");
+        }
+    };
+
+    for (int iteration = 0; iteration < warmup_iterations; ++iteration) {
+        run_pair();
+    }
+    if (MPI_Barrier(MPI_COMM_WORLD) != MPI_SUCCESS) {
+        throw std::runtime_error(
+            "MPI_Barrier failed during the MPI health check");
+    }
+    const double start = MPI_Wtime();
+    for (int iteration = 0; iteration < iterations; ++iteration) {
+        run_pair();
+    }
+    const double local_mean_ms = 1000.0 * (MPI_Wtime() - start)
+        / static_cast<double>(2 * iterations);
+    double maximum_mean_observed_ms = 0.0;
+    if (MPI_Allreduce(
+            &local_mean_ms,
+            &maximum_mean_observed_ms,
+            1,
+            MPI_DOUBLE,
+            MPI_MAX,
+            MPI_COMM_WORLD) != MPI_SUCCESS) {
+        throw std::runtime_error(
+            "final MPI_Allreduce failed during the MPI health check");
+    }
+    const bool accepted = maximum_mean_observed_ms <= maximum_mean_ms;
+    if (rank == 0) {
+        std::cout << std::fixed << std::setprecision(9)
+                  << "mpi_health_check"
+                  << " iterations=" << iterations
+                  << " max_mean_collective_ms="
+                  << maximum_mean_observed_ms
+                  << " threshold_ms=" << maximum_mean_ms
+                  << " status=" << (accepted ? "PASS" : "REJECT")
+                  << std::endl;
+    }
+    if (!accepted) {
+        throw std::runtime_error(
+            "MPI health check rejected the communicator");
+    }
+    return maximum_mean_observed_ms;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -944,6 +1065,10 @@ int main(int argc, char** argv) {
             throw std::runtime_error(
                 "MPI implementation does not provide MPI_THREAD_FUNNELED");
         }
+        const double mpi_health_check_max_mean_ms = run_mpi_health_check(
+            options.mpi_health_check_iterations,
+            options.mpi_health_check_max_mean_ms,
+            rank);
         const std::vector<dlob::MultiAssetBookConfig> asset_configs =
             resolve_asset_configs(options);
         dlob::QueueReactiveBackgroundBundle background_bundle;
@@ -1163,6 +1288,12 @@ int main(int argc, char** argv) {
                 << (result.nonblocking_risk_collective ? 1 : 0)
                 << " boundary_wait_profile="
                 << (options.profile_boundary_wait ? 1 : 0)
+                << " mpi_health_check_iterations="
+                << options.mpi_health_check_iterations
+                << " mpi_health_check_max_mean_ms="
+                << mpi_health_check_max_mean_ms
+                << " mpi_health_check_threshold_ms="
+                << options.mpi_health_check_max_mean_ms
                 << " window_phase_profile="
                 << (options.window_phase_profile_csv.empty() ? 0 : 1)
                 << " thread_ownership_output="

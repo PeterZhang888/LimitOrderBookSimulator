@@ -7,6 +7,9 @@ import sys
 
 import summarize_layout_pair as base
 
+HEALTH_THRESHOLD_MS = 2.0
+POSTRUN_THRESHOLD_SECONDS = 120.0
+
 
 def fail(message):
     raise SystemExit(message)
@@ -68,6 +71,8 @@ def load_runs(root, layouts):
                 "0" if threads == 1 else "1"
             ),
             "thread_ownership_output": "0",
+            "mpi_health_check_iterations": "100",
+            "mpi_health_check_threshold_ms": "2.000000000",
         })
         for block in base.BLOCKS:
             path = root / label / "block_{}".format(block) / "run_1.txt"
@@ -81,8 +86,68 @@ def load_runs(root, layouts):
                             path, name, fields.get(name), value
                         )
                     )
+            health = float(fields["mpi_health_check_max_mean_ms"])
+            execution = float(fields["execution_seconds"])
+            if not math.isfinite(health) or health > HEALTH_THRESHOLD_MS:
+                fail("{} failed the MPI health gate".format(path))
+            if (not math.isfinite(execution)
+                    or execution >= POSTRUN_THRESHOLD_SECONDS):
+                fail("{} failed the post-run timing gate".format(path))
             rows[label][block] = fields
     return rows
+
+
+def validate_attempts(root, layouts):
+    path = root / "attempts.csv"
+    if not path.is_file():
+        fail("missing {}".format(path))
+    with path.open(newline="", encoding="utf-8") as handle:
+        attempt_rows = list(csv.DictReader(handle))
+    expected_slots = {"cost_preparation"}
+    for label, _, _ in layouts:
+        for block in base.BLOCKS:
+            expected_slots.add("{}/block_{}".format(label, block))
+    observed_accepted = set()
+    attempts_by_slot = {}
+    for row in attempt_rows:
+        slot = row["slot"]
+        if slot not in expected_slots:
+            fail("attempt log contains unexpected slot {}".format(slot))
+        attempt = int(row["attempt"])
+        attempts_by_slot.setdefault(slot, []).append(attempt)
+        health = float(row["health_mean_ms"])
+        if not math.isfinite(health) or health < 0.0:
+            fail("invalid health-check time for {}".format(slot))
+        status = row["status"]
+        result_path = pathlib.Path(row["result_path"])
+        if not result_path.is_dir():
+            fail("attempt result directory is missing: {}".format(result_path))
+        if status == "accepted":
+            if slot in observed_accepted:
+                fail("multiple accepted attempts for {}".format(slot))
+            execution = float(row["execution_seconds"])
+            if (health > HEALTH_THRESHOLD_MS
+                    or not math.isfinite(execution)
+                    or execution >= POSTRUN_THRESHOLD_SECONDS):
+                fail("accepted attempt violates a safeguard for {}".format(slot))
+            observed_accepted.add(slot)
+        elif status == "preflight_rejected":
+            if health <= HEALTH_THRESHOLD_MS or row["execution_seconds"]:
+                fail("invalid preflight rejection for {}".format(slot))
+        elif status == "postrun_rejected":
+            execution = float(row["execution_seconds"])
+            if (health > HEALTH_THRESHOLD_MS
+                    or not math.isfinite(execution)
+                    or execution < POSTRUN_THRESHOLD_SECONDS):
+                fail("invalid post-run rejection for {}".format(slot))
+        else:
+            fail("unknown attempt status {}".format(status))
+    if observed_accepted != expected_slots:
+        fail("attempt log does not contain one accepted run for every slot")
+    for slot, attempts in attempts_by_slot.items():
+        if attempts != list(range(1, len(attempts) + 1)):
+            fail("attempt numbers are not consecutive for {}".format(slot))
+    return attempt_rows
 
 
 def validate_outputs_and_resources(root, layouts, rows):
@@ -91,6 +156,7 @@ def validate_outputs_and_resources(root, layouts, rows):
         "openmp_schedule",
         "persistent_fixed_book_ownership",
         "predicted_thread_imbalance",
+        "mpi_health_check_max_mean_ms",
     })
     diagnostics = []
     for treatment, _, _ in layouts[1:]:
@@ -125,6 +191,7 @@ def main():
         fail("TOTAL_CORES must be 16, 32, or 64")
     layouts = layouts_for(total_cores)
     positions = validate_order(root, layouts)
+    attempt_rows = validate_attempts(root, layouts)
     rows = load_runs(root, layouts)
     diagnostics = validate_outputs_and_resources(root, layouts, rows)
 
@@ -150,6 +217,7 @@ def main():
             values.append(value)
             walls.append(wall)
             imbalances.append(imbalance)
+            health = float(fields["mpi_health_check_max_mean_ms"])
             raw.append({
                 "total_cores": total_cores,
                 "block": block,
@@ -160,6 +228,7 @@ def main():
                 "execution_seconds": value,
                 "internal_wall_seconds": wall,
                 "predicted_max_thread_imbalance": imbalance,
+                "mpi_health_check_max_mean_ms": health,
             })
         ratio = max(values) / min(values)
         stable = ratio <= 1.15
@@ -181,6 +250,10 @@ def main():
             ),
             "median_internal_wall": statistics.median(walls),
             "maximum_predicted_thread_imbalance": max(imbalances),
+            "maximum_mpi_health_check_mean_ms": max(
+                float(rows[label][block]["mpi_health_check_max_mean_ms"])
+                for block in base.BLOCKS
+            ),
         })
 
     raw.sort(key=lambda row: (row["block"], row["position"]))
@@ -229,6 +302,9 @@ def main():
     print("configuration gate: PASS")
     print("CPU placement gate: PASS")
     print("scientific-equivalence gate: PASS")
+    print("MPI health and post-run gates: PASS ({} attempts)".format(
+        len(attempt_rows)
+    ))
     for summary in summaries:
         print(
             "{} median={:.9f} min={:.9f} max={:.9f} {}"

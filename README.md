@@ -187,7 +187,15 @@ bash experiments/07_mpi_openmp/submit_fixed_ownership_matrix.sh
 The driver submits one exclusive job for each total core count. Each job uses
 seven rotating-order blocks, verifies physical-core placement, requires
 reproducible outputs within every layout, and compares all scientific outputs
-with its pure-MPI control before accepting the timing table.
+with its pure-MPI control before accepting the timing table. Before each timed
+simulation, the same MPI communicator performs 100 pairs of small blocking
+reductions. A launch is rejected when the slowest-rank mean exceeds
+\(2\,\mathrm{ms}\) per collective. A completed simulation is rejected when
+its execution time is at least 120 seconds. Rejected attempts remain in the
+result directory and are listed in `attempts.csv`; the driver retries until
+each configuration has seven accepted repetitions, with a maximum of ten
+attempts for each required repetition. The preflight runs before the execution
+timer and does not alter the simulated market state.
 
 To diagnose the 16-core result phase by phase, run the separate instrumented
 campaign:
