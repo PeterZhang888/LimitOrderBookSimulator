@@ -51,31 +51,31 @@ mkdir -p slurm results/seagull
 sbatch experiments/04_rank_ownership/submit_seagull.sh
 ```
 
-The OpenMP experiment first performs one full cyclic preparation run to
-measure the work associated with each complete book. It converts that output
-into the scheduling-cost input used by all weighted-static cells. The
-preparation output is kept under `cost_preparation/` and is not a timed
-treatment.
-
-Two focused launchers provide the matched process--thread comparisons used to
-interpret the OpenMP results:
+The formal OpenMP experiment first performs one full cyclic preparation run
+at each total core count to measure the work associated with every complete
+book. It converts that output into the common scheduling-cost input used by
+all permanent-owner cells. The preparation output is kept under
+`cost_preparation/` and is not a timed treatment. Submit the complete 16-,
+32- and 64-core decomposition matrix with:
 
 ```bash
 mkdir -p slurm results/seagull
-sbatch experiments/07_mpi_openmp/submit_64core_mpi_hybrid_pair.sh
-sbatch experiments/07_mpi_openmp/submit_16core_mpi_openmp_pair.sh
+bash experiments/07_mpi_openmp/submit_seagull.sh
 ```
 
-The first compares 64 MPI ranks with 32 MPI ranks times two OpenMP threads on
-the same four nodes. The second compares 16 MPI ranks with one MPI-free
-process times 16 OpenMP threads on the same node and physical cores. Each job
-uses seven alternating-order pairs, validates CPU placement, and directly
-checks its scientific outputs before reporting timing. Per-asset files,
-counts, accounting values and all non-spread metric columns must agree
-exactly. The three derived mean-spread columns use the explicitly reported
-floating-point tolerance documented in the main README because different MPI
-rank layouts change only the association order of their double-precision
-sums.
+MPI ownership remains cyclic. In every threaded layout, measured book costs
+are used to assign each rank's books to threads once, and the assignment is
+retained for the complete session. Each total-core job uses seven rotating
+blocks, validates CPU placement and directly checks scientific outputs before
+reporting timing. Per-asset files, counts, accounting values and all
+non-spread metric columns must agree exactly. The three derived mean-spread
+columns use the explicitly reported floating-point tolerance documented in
+the main README because different MPI rank layouts change only the association
+order of their double-precision sums.
+
+The additional pair and window-profile files in `07_mpi_openmp/` are focused
+diagnostics retained to explain the phase-based control and the origin of its
+overhead. They are not required to reproduce the final decomposition matrix.
 
 Experiment 09 writes the full rank-local simulated return panels used for the
 temporal diagnostics. The derived empirical comparison panel is not present
