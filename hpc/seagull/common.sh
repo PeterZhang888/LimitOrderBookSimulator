@@ -135,6 +135,15 @@ run_variant() {
 
   local tasks_per_node=$((CORES_PER_NODE / threads))
   local mpi_mapping="ppr:${tasks_per_node}:node:PE=${threads}"
+  local mpi_binding=core
+  if (( threads == CORES_PER_NODE )); then
+    # Seagull's 16 physical cores are split across two CPU packages. Open MPI
+    # refuses a CORE binding that spans both packages. With exactly one rank
+    # per node, retain Slurm's full-node CPU set and let OMP_PLACES=cores bind
+    # the 16 OpenMP workers within that validated allocation.
+    mpi_mapping="ppr:1:node"
+    mpi_binding=none
+  fi
 
   mkdir -p "$variant_dir"
 
@@ -160,7 +169,7 @@ run_variant() {
   "${omp_environment[@]}" \
   mpirun --np "$ranks" \
     --map-by "$mpi_mapping" \
-    --bind-to core \
+    --bind-to "$mpi_binding" \
     bash -c '
       cpu_list=$(awk '\''/^Cpus_allowed_list:/ {print $2}'\'' /proc/self/status)
       printf "%s|%s|%s\n" "$(hostname -s)" "$OMPI_COMM_WORLD_RANK" "$cpu_list"
@@ -188,7 +197,7 @@ run_variant() {
     if "${omp_environment[@]}" \
       mpirun --np "$ranks" \
         --map-by "$mpi_mapping" \
-        --bind-to core \
+        --bind-to "$mpi_binding" \
         --report-bindings \
         "$BUILD_DIR/lob_mpi" \
         --duration-seconds "$DURATION_SECONDS" \
