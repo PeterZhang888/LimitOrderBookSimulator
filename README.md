@@ -86,18 +86,18 @@ All use the same executables; only the declared treatment flags differ.
 10_inventory_policy
 ```
 
-The strong-scaling file is a submission driver because each rank count needs a
-different number of nodes. From the repository root, submit its complete
-1--256-rank campaign with:
+The strong-scaling and MPI--OpenMP files are submission drivers because their
+configurations need different numbers of nodes. From the repository root,
+submit the complete 1--256-rank strong-scaling campaign with:
 
 ```bash
 bash experiments/01_strong_scaling/submit_seagull.sh
 ```
 
-All other experiment submission files are passed directly to `sbatch`. The
-frozen empirical universe and policies are included under `data/empirical/`,
-so no cluster-specific input paths need to be exported. A complete submission
-sequence is:
+Experiments 01 and 07 are invoked with `bash`; the remaining experiment files
+are passed directly to `sbatch`. The frozen empirical universe and policies
+are included under `data/empirical/`, so no cluster-specific input paths need
+to be exported. A complete submission sequence is:
 
 ```bash
 mkdir -p slurm results/seagull
@@ -107,7 +107,7 @@ sbatch experiments/03_empirical_scaling/submit_seagull.sh
 sbatch experiments/04_rank_ownership/submit_seagull.sh
 sbatch experiments/05_observation_buffering/submit_seagull.sh
 sbatch experiments/06_fused_metric_scans/submit_seagull.sh
-sbatch experiments/07_mpi_openmp/submit_seagull.sh
+bash experiments/07_mpi_openmp/submit_seagull.sh
 sbatch experiments/08_risk_collectives/submit_seagull.sh
 sbatch experiments/09_stylised_facts/submit_seagull.sh
 sbatch experiments/10_inventory_policy/submit_seagull.sh
@@ -119,19 +119,12 @@ costs from one full preparation run before starting the timed OpenMP
 comparisons; that preparation run is stored separately and is not included in
 the reported comparisons.
 
-The focused three-way OpenMP implementation comparison uses one executable,
-one exclusive four-node allocation and seven counterbalanced blocks. Every run
-uses 32 MPI ranks, two threads per rank, cyclic book ownership, synchronous
-observations and the same empirical inputs. Only the OpenMP execution method
-changes between all-phase worksharing, event-window-only worksharing and a
-persistent task-based team:
-
-```bash
-sbatch experiments/07_mpi_openmp/submit_three_way_comparison.sh
-```
-
-The job directly compares all boundary-metric and per-asset output files and
-stops if any scientific result differs.
+The thesis reports two OpenMP designs. In the phase-based control, every local
+phase dynamically redistributes complete books among the rank's threads. In
+the final permanent-owner design, measured book costs are used to assign each
+book to one thread before timing, and that ownership is retained for the
+complete session. The superseded event-window-only and task-per-book
+prototypes are not part of the formal experiment workflow.
 
 Two smaller matched campaigns provide the pure-MPI reference at 64 physical
 cores and the pure-MPI versus MPI-free OpenMP comparison at 16 physical
