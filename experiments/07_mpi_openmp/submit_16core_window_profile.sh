@@ -11,8 +11,10 @@
 #SBATCH --error=slurm/%x-%j.err
 set -Eeuo pipefail
 
-PROJECT_DIR="${PROJECT_DIR:-$SLURM_SUBMIT_DIR}"
-RESULT_ROOT="${RESULT_ROOT:-$PROJECT_DIR/results/seagull/${SLURM_JOB_ID}_16core_window_profile}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}}"
+JOB_TAG="${SLURM_JOB_ID:-manual}"
+RESULT_ROOT="${RESULT_ROOT:-$PROJECT_DIR/results/seagull/${JOB_TAG}_16core_window_profile}"
 REPETITIONS=1
 DURATION_SECONDS=23400
 SEED=20200130
@@ -20,6 +22,17 @@ CORES_PER_NODE=16
 BACKGROUND_MODEL=queue-reactive-v1
 BUILD_DIR="${BUILD_DIR:-$PROJECT_DIR/build-mpi}"
 BLOCK_COUNT=3
+
+# Load the compiler/MPI runtime before executing either binary during the
+# preflight. A batch job does not inherit the environment loaded inside the
+# separate build script.
+export OMP_WAIT_POLICY=ACTIVE
+export OMP_MAX_ACTIVE_LEVELS=1
+unset GOMP_SPINCOUNT || true
+# This diagnostic is specifically the full 1,480-book empirical case. Do not
+# inherit optional synthetic-template or cluster-output overrides.
+unset BASE_CONFIG ASSET_COUNT CLUSTER_CSV || true
+source "$PROJECT_DIR/hpc/seagull/common.sh"
 
 test -x "$BUILD_DIR/lob_mpi" || {
   printf 'ERROR: missing MPI executable: %s\nRun scripts/build_seagull.sh first.\n' \
@@ -36,22 +49,18 @@ if [[ -n "$(git -C "$PROJECT_DIR" status --porcelain --untracked-files=no)" ]]; 
   exit 1
 fi
 for executable in "$BUILD_DIR/lob_mpi" "$PROJECT_DIR/build-openmp/lob_openmp"; do
-  "$executable" --help 2>&1 \
-    | grep -F -- '--window-phase-profile-csv' >/dev/null || {
-      printf 'ERROR: %s is stale; rebuild with scripts/build_seagull.sh.\n' \
-        "$executable" >&2
-      exit 1
-    }
+  if ! help_output=$("$executable" --help 2>&1); then
+    printf 'ERROR: cannot execute %s during preflight:\n%s\n' \
+      "$executable" "$help_output" >&2
+    exit 1
+  fi
+  grep -F -- '--window-phase-profile-csv' <<< "$help_output" >/dev/null || {
+    printf 'ERROR: %s is stale; rebuild with scripts/build_seagull.sh.\n' \
+      "$executable" >&2
+    exit 1
+  }
 done
 
-export OMP_WAIT_POLICY=ACTIVE
-export OMP_MAX_ACTIVE_LEVELS=1
-unset GOMP_SPINCOUNT || true
-# This diagnostic is specifically the full 1,480-book empirical case.  Do not
-# inherit optional synthetic-template or cluster-output overrides.
-unset BASE_CONFIG ASSET_COUNT CLUSTER_CSV || true
-
-source "$PROJECT_DIR/hpc/seagull/common.sh"
 command -v taskset >/dev/null || {
   printf 'ERROR: taskset is required for the MPI-free OpenMP placement.\n' >&2
   exit 1
