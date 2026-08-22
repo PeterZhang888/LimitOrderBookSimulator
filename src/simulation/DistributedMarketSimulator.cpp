@@ -26,7 +26,6 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <thread>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -518,6 +517,7 @@ public:
                         true, std::memory_order_release);
                     persistent_fixed_generation_.fetch_add(
                         1U, std::memory_order_release);
+                    persistent_fixed_generation_.notify_all();
                 } else {
                     persistent_fixed_worker_loop(thread_id);
                 }
@@ -575,19 +575,20 @@ private:
     void persistent_fixed_worker_loop(int thread_id) {
         std::size_t observed_generation = 0U;
         while (true) {
-            std::size_t generation = observed_generation;
+            std::size_t generation =
+                persistent_fixed_generation_.load(std::memory_order_acquire);
             while (generation == observed_generation) {
+                persistent_fixed_generation_.wait(
+                    observed_generation, std::memory_order_acquire);
                 generation = persistent_fixed_generation_.load(
                     std::memory_order_acquire);
-                if (generation == observed_generation) {
-                    std::this_thread::yield();
-                }
             }
             observed_generation = generation;
             if (persistent_fixed_stop_.load(std::memory_order_acquire)) return;
             persistent_fixed_execute_bucket(thread_id);
             persistent_fixed_workers_completed_.fetch_add(
                 1U, std::memory_order_release);
+            persistent_fixed_workers_completed_.notify_one();
         }
     }
 
@@ -620,12 +621,17 @@ private:
             0U, std::memory_order_relaxed);
         persistent_fixed_generation_.fetch_add(
             1U, std::memory_order_release);
+        persistent_fixed_generation_.notify_all();
         persistent_fixed_execute_bucket(0);
         const std::size_t expected_workers =
             static_cast<std::size_t>(config_.worker_threads - 1);
-        while (persistent_fixed_workers_completed_.load(
-                   std::memory_order_acquire) != expected_workers) {
-            std::this_thread::yield();
+        std::size_t completed =
+            persistent_fixed_workers_completed_.load(std::memory_order_acquire);
+        while (completed != expected_workers) {
+            persistent_fixed_workers_completed_.wait(
+                completed, std::memory_order_acquire);
+            completed = persistent_fixed_workers_completed_.load(
+                std::memory_order_acquire);
         }
         const std::exception_ptr failure = persistent_fixed_failure_;
         persistent_fixed_callback_ = nullptr;
