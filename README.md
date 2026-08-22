@@ -1,5 +1,11 @@
 # Distributed Multi-Asset Limit Order Book Simulator
 
+> **Original data source.** The raw order-message files used to prepare the
+> frozen empirical inputs were obtained from the
+> [official Nasdaq TotalView--ITCH archive](https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/).
+> Raw ITCH files are not redistributed in this repository; access and use of
+> Nasdaq data remain subject to Nasdaq's applicable terms.
+
 This repository contains the final simulator used by the thesis. Each asset
 has one complete order-level limit order book. MPI assigns complete books to
 ranks; OpenMP can process different books owned by the same rank. A book is
@@ -27,6 +33,16 @@ mkdir -p slurm results/seagull
 bash scripts/build_seagull.sh
 ```
 
+The build command first checks that all frozen runtime inputs are present. It
+then requires OpenMP support, builds both executables and runs the compiled
+correctness tests against both builds. No raw Nasdaq message files or
+calibration run are required.
+
+The Seagull scripts load
+`openmpi/5.0.9-gcc-15.2.0-2irqibq`, the module used for the final release
+tests. Set `OPENMPI_MODULE` only if the cluster administrators replace that
+module and record the replacement with the results.
+
 This produces:
 
 ```text
@@ -47,7 +63,7 @@ from the repository root:
 sbatch experiments/00_full_synthetic/submit_seagull.sh
 ```
 
-The job uses four nodes, 64 MPI ranks, one thread per rank and one complete
+The job uses 16 nodes, 256 MPI ranks, one thread per rank and one complete
 session. Results are written below `results/seagull/<job-id>/full_10000/`.
 Do not run a full session on a login node.
 
@@ -78,25 +94,57 @@ different number of nodes. From the repository root, submit its complete
 bash experiments/01_strong_scaling/submit_seagull.sh
 ```
 
-All other experiment submission files are passed directly to `sbatch`.
-
-For empirical experiments, export the paths described in
-`experiments/README.md`, then submit from the repository root. For example:
+All other experiment submission files are passed directly to `sbatch`. The
+frozen empirical universe and policies are included under `data/empirical/`,
+so no cluster-specific input paths need to be exported. A complete submission
+sequence is:
 
 ```bash
-export PROJECT_DIR="$PWD"
-export UNIVERSE_CONFIG=/path/to/frozen_universe.csv
-export BACKGROUND_POLICY_CSV=/path/to/background_policy.csv
-export VALUE_POLICY_CSV=/path/to/value_agent_policy.csv
+mkdir -p slurm results/seagull
+bash experiments/01_strong_scaling/submit_seagull.sh
+sbatch experiments/02_weak_scaling/submit_seagull.sh
+sbatch experiments/03_empirical_scaling/submit_seagull.sh
+sbatch experiments/04_rank_ownership/submit_seagull.sh
+sbatch experiments/05_observation_buffering/submit_seagull.sh
+sbatch experiments/06_fused_metric_scans/submit_seagull.sh
+sbatch experiments/07_mpi_openmp/submit_seagull.sh
 sbatch experiments/08_risk_collectives/submit_seagull.sh
+sbatch experiments/09_stylised_facts/submit_seagull.sh
+sbatch experiments/10_inventory_policy/submit_seagull.sh
 ```
 
+These are formal full-session jobs. The performance experiments use seven
+repetitions by default. Experiment 07 creates its measured per-book scheduling
+costs from one full preparation run before starting the timed OpenMP
+comparisons; that preparation run is stored separately and is not included in
+the reported comparisons.
+
+The shared Seagull runner also freezes the empirical-market controls used in
+the thesis: a 23,400-second activity-normalisation horizon, empirical relative
+quote and capacity sizing, three Shared Market Maker price levels, local
+inventory scale 800, portfolio capacity 50 per asset, activation threshold
+0.5 and minimum quote scale 0.05. The ordinary empirical experiments use the
+selected quote multiplier 2.00; experiment 10 deliberately replaces that one
+value across its declared participation sweep.
+
 Every performance treatment writes separate boundary-metric, per-asset and
-console-output files. Scientific CSVs can be compared directly with:
+console-output files. Each job also writes `environment.txt`, containing its
+compiler, MPI version, CPU description, allocation and loaded modules.
+Scientific CSVs can be compared directly with:
 
 ```bash
 python3 scripts/compare_scientific_outputs.py reference.csv treatment.csv
 ```
+
+After a campaign finishes, collect every completed simulator row and generate
+the raw and median/minimum/maximum timing tables with:
+
+```bash
+python3 scripts/summarize_results.py results/seagull/<job-or-campaign-directory>
+```
+
+The command writes `raw_results.csv` and `performance_summary.csv` below the
+selected result directory. It does not discard slow repetitions.
 
 ## Default comparison rule
 
@@ -109,5 +157,9 @@ lookahead implementation requires them.
 
 ## Data
 
-The repository does not redistribute Nasdaq ITCH data. See `DATA.md` for the
-required empirical inputs and the included artificial alternative.
+The repository includes the frozen derived inputs consumed by the simulator:
+the 1,480-book universe, per-book order-message distributions, pooled Hawkes
+rates, queue-response policies, Value Agent controls and liquidity-cluster
+assignments. It does not include raw Nasdaq ITCH messages and does not repeat
+extraction or calibration. See `DATA.md` for the exact boundary between raw
+data and runnable inputs.

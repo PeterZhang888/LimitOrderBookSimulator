@@ -1,16 +1,18 @@
 # Experiment submission
 
 Run `scripts/build_seagull.sh` once, then submit an experiment from the
-repository root. The common empirical variables are:
+repository root. The empirical submission files automatically use:
 
-```bash
-export PROJECT_DIR="$PWD"
-export UNIVERSE_CONFIG=/path/to/frozen_universe.csv
-export BACKGROUND_MODEL=queue-reactive-v1
-export BACKGROUND_POLICY_CSV=/path/to/background_policy.csv
-export VALUE_POLICY_CSV=/path/to/value_agent_policy.csv
-export REPETITIONS=7
+```text
+data/empirical/universe.csv
+data/empirical/background_policy.csv
+data/empirical/value_policy.csv
+data/empirical/clusters.csv
 ```
+
+No external input paths are required. All formal performance jobs use seven
+full-session repetitions by default. The stylised-fact job and the standalone
+10,000-book run use one complete session by design.
 
 The included artificial input needs no external data. Submit one complete
 10,000-book session with:
@@ -23,9 +25,6 @@ sbatch experiments/00_full_synthetic/submit_seagull.sh
 For synthetic strong scaling, use:
 
 ```bash
-export BASE_CONFIG="$PWD/examples/synthetic/templates.csv"
-export ASSET_COUNT=10000
-export BACKGROUND_MODEL=legacy
 bash experiments/01_strong_scaling/submit_seagull.sh
 ```
 
@@ -41,7 +40,8 @@ synchronous observations, blocking `MPI_Allreduce`, one thread per rank and no
 other optimisation. Experiment 08 uses a cyclic, buffered blocking control
 because bounded lookahead requires buffered observational output. It contains
 the four factorial cells: blocking, nonblocking, lookahead, and nonblocking
-plus lookahead.
+plus lookahead. The current certificate skips at most the next risk reduction;
+the following boundary synchronises normally.
 
 Create `slurm/` before submission because Slurm opens the output file before
 the script starts:
@@ -50,3 +50,13 @@ the script starts:
 mkdir -p slurm results/seagull
 sbatch experiments/04_rank_ownership/submit_seagull.sh
 ```
+
+The OpenMP experiment first performs one full cyclic preparation run to
+measure the work associated with each complete book. It converts that output
+into the scheduling-cost input used by all weighted-static cells. The
+preparation output is kept under `cost_preparation/` and is not a timed
+treatment.
+
+Experiment 09 writes the full rank-local simulated return panels used for the
+temporal diagnostics. The derived empirical comparison panel is not present
+in the supplied runtime-data archives; see `DATA.md`.

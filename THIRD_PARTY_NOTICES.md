@@ -8,6 +8,7 @@ The project builds against software supplied by the user's system:
 - a C++20 standard library and compiler;
 - CMake;
 - an MPI implementation such as Open MPI;
+- an OpenMP implementation supplied by the compiler toolchain;
 - Python and its standard library.
 
 Those components remain governed by their own licences and are not redistributed

@@ -16,5 +16,6 @@ for ranks in 1 2 4 8 16 32 64 128 256; do
   run_variant "r${ranks}" "$ranks" 1 \
     --partition cyclic --synchronous-observations \
     --disable-persistent-risk-collective \
+    --shared-quote-multiplier 2.00 \
     --shared-inventory-policy gross_pooled
 done

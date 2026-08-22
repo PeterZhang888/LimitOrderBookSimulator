@@ -4,6 +4,7 @@ set -Eeuo pipefail
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 BUILD_JOBS="${BUILD_JOBS:-16}"
 
+bash "$PROJECT_DIR/scripts/validate_empirical_data.sh"
 source "$PROJECT_DIR/hpc/seagull/load_environment.sh"
 
 if command -v ninja >/dev/null 2>&1; then
@@ -44,8 +45,9 @@ cmake -S "$PROJECT_DIR" -B "$OPENMP_BUILD_DIR" -G "$CMAKE_GENERATOR_NAME" \
   -DLOB_REQUIRE_MPI=OFF \
   -DLOB_FORCE_MPI_STUB=ON \
   -DLOB_ENABLE_OPENMP=ON \
-  -DLOB_BUILD_TESTS=OFF
+  -DLOB_BUILD_TESTS=ON
 cmake --build "$OPENMP_BUILD_DIR" --parallel "$BUILD_JOBS"
+ctest --test-dir "$OPENMP_BUILD_DIR" --output-on-failure
 
 printf 'Built:\n  %s\n  %s\n' \
   "$PROJECT_DIR/build-mpi/lob_mpi" \

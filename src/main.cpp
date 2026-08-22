@@ -424,12 +424,15 @@ struct Options {
     double local_mm_max_improvement_probability = 1.0;
     // Zero means use the decision-window cadence.
     double asset_summary_interval_ms = 0.0;
+    // Zero means use the decision-window cadence.
+    double return_panel_interval_ms = 0.0;
     std::uint64_t seed = 20200130;
     std::string base_config = "config/qqq_aapl_msft_amzn_20200130.csv";
     std::string universe_config;
     std::string metrics_csv;
     std::string cluster_metrics_csv;
     std::string asset_summary_csv;
+    std::string return_panel_prefix;
     std::string shock_targets_csv;
     std::string shock_cluster_csv;
     std::string asset_work_csv;
@@ -485,8 +488,9 @@ void print_usage(const char* program) {
            "for the causal risk scalar\n"
         << "  --nonblocking-risk-collective overlap exact MPI_Iallreduce (or "
            "persistent start/wait) with capacity-independent local work\n"
-        << "  --risk-lookahead-max-windows N exact proof-based cap on skipped "
-           "risk boundaries (default 0: disabled)\n"
+        << "  --risk-lookahead-max-windows N enable exact one-boundary "
+           "lookahead; N also limits eligibility before a configured shock "
+           "(default 0: disabled)\n"
         << "  --profile-boundary-wait  add a pre-reduction barrier to separate "
            "arrival wait from collective execution\n"
         << "  --hawkes-activity-scale X global background Hawkes activity multiplier "
@@ -521,6 +525,8 @@ void print_usage(const char* program) {
         << "  --asset-summary-interval-ms X\n"
         << "                           sampling cadence for --asset-summary-csv "
            "(default: decision window)\n"
+        << "  --return-panel-prefix PATH write rank-local twice-midpoint panels\n"
+        << "  --return-panel-interval-ms X sampling cadence for return panels\n"
         << "  --shock-targets-csv PATH  write deterministic shock target list on rank 0\n"
         << "  --asset-work-csv PATH     write measured per-asset event/time costs\n"
         << "  --boundary-arrival-csv PATH write rank arrivals before each causal reduction\n"
@@ -643,6 +649,9 @@ Options parse_options(int argc, char** argv) {
         } else if (argument == "--asset-summary-interval-ms") {
             options.asset_summary_interval_ms = parse_double(
                 require_value(index, argc, argv, argument.c_str()), argument.c_str());
+        } else if (argument == "--return-panel-interval-ms") {
+            options.return_panel_interval_ms = parse_double(
+                require_value(index, argc, argv, argument.c_str()), argument.c_str());
         } else if (argument == "--base-config") {
             options.base_config = require_value(index, argc, argv, argument.c_str());
         } else if (argument == "--universe-config") {
@@ -657,6 +666,9 @@ Options parse_options(int argc, char** argv) {
                 index, argc, argv, argument.c_str());
         } else if (argument == "--asset-summary-csv") {
             options.asset_summary_csv = require_value(
+                index, argc, argv, argument.c_str());
+        } else if (argument == "--return-panel-prefix") {
+            options.return_panel_prefix = require_value(
                 index, argc, argv, argument.c_str());
         } else if (argument == "--shock-targets-csv") {
             options.shock_targets_csv = require_value(index, argc, argv, argument.c_str());
@@ -791,6 +803,8 @@ Options parse_options(int argc, char** argv) {
         || options.local_mm_max_improvement_probability > 1.0
         || !std::isfinite(options.asset_summary_interval_ms)
         || options.asset_summary_interval_ms < 0.0
+        || !std::isfinite(options.return_panel_interval_ms)
+        || options.return_panel_interval_ms < 0.0
         || !std::isfinite(options.shock_time_seconds)
         || options.shock_time_seconds < 0.0
         || !std::isfinite(options.shock_fraction)
@@ -941,6 +955,9 @@ int main(int argc, char** argv) {
         const double asset_summary_ms = options.asset_summary_interval_ms > 0.0
             ? options.asset_summary_interval_ms : options.window_ms;
         const double asset_summary_ns_double = asset_summary_ms * 1'000'000.0;
+        const double return_panel_ms = options.return_panel_interval_ms > 0.0
+            ? options.return_panel_interval_ms : options.window_ms;
+        const double return_panel_ns_double = return_panel_ms * 1'000'000.0;
         if (window_ns_double > static_cast<double>(
                 std::numeric_limits<std::int64_t>::max())
             || local_mm_interval_ns_double > static_cast<double>(
@@ -952,10 +969,12 @@ int main(int argc, char** argv) {
             || shock_ns_double > static_cast<double>(
                 std::numeric_limits<std::int64_t>::max())
             || asset_summary_ns_double > static_cast<double>(
+                std::numeric_limits<std::int64_t>::max())
+            || return_panel_ns_double > static_cast<double>(
                 std::numeric_limits<std::int64_t>::max())) {
             throw std::invalid_argument(
                 "window, metrics, local-MM, value-agent, shock, or "
-                "asset-summary timestamp is too large");
+                "observation timestamp is too large");
         }
         const auto local_mm_interval_ns = static_cast<std::int64_t>(
             std::llround(local_mm_interval_ns_double));
@@ -1001,6 +1020,8 @@ int main(int argc, char** argv) {
             options.local_mm_max_improvement_probability;
         config.asset_summary_interval_ns = static_cast<std::int64_t>(
             std::llround(asset_summary_ns_double));
+        config.return_panel_interval_ns = static_cast<std::int64_t>(
+            std::llround(return_panel_ns_double));
         config.seed = options.seed;
         config.asset_configs = asset_configs;
         config.background_configs = std::move(background_bundle.configs);
@@ -1072,6 +1093,7 @@ int main(int argc, char** argv) {
         config.metrics_csv = options.metrics_csv;
         config.cluster_metrics_csv = options.cluster_metrics_csv;
         config.asset_summary_csv = options.asset_summary_csv;
+        config.return_panel_prefix = options.return_panel_prefix;
         config.shock_targets_csv = options.shock_targets_csv;
 
         dlob::DistributedMarketSimulator simulator(MPI_COMM_WORLD, std::move(config));

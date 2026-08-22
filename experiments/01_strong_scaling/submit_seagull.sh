@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 RANK_COUNTS=(1 2 4 8 16 32 64 128 256)
+ASSET_COUNTS=(201 1000 2000 5000 10000)
 
 # This file is both the login-node submission driver and the worker executed
 # by each Slurm job. Run it with `bash`, not `sbatch`: the driver gives each
@@ -12,7 +13,6 @@ if [[ -z "${SLURM_JOB_ID:-}" ]]; then
   mkdir -p slurm results/seagull
 
   BASE_CONFIG="${BASE_CONFIG:-$PROJECT_DIR/examples/synthetic/templates.csv}"
-  ASSET_COUNT="${ASSET_COUNT:-10000}"
   BACKGROUND_MODEL="${BACKGROUND_MODEL:-legacy}"
   REPETITIONS="${REPETITIONS:-7}"
   DURATION_SECONDS="${DURATION_SECONDS:-23400}"
@@ -31,41 +31,46 @@ if [[ -z "${SLURM_JOB_ID:-}" ]]; then
     exit 1
   fi
 
-  export PROJECT_DIR BASE_CONFIG ASSET_COUNT BACKGROUND_MODEL
+  export PROJECT_DIR BASE_CONFIG BACKGROUND_MODEL
   export REPETITIONS DURATION_SECONDS CORES_PER_NODE
 
   campaign="strong_scaling_$(date -u +%Y%m%dT%H%M%SZ)"
   campaign_root="$PROJECT_DIR/results/seagull/$campaign"
   manifest="$campaign_root/submitted_jobs.csv"
   mkdir -p "$campaign_root"
-  printf 'mpi_ranks,nodes,job_id,result_directory\n' > "$manifest"
+  printf 'assets,mpi_ranks,nodes,job_id,result_directory\n' > "$manifest"
 
-  for ranks in "${RANK_COUNTS[@]}"; do
-    nodes=$(((ranks + CORES_PER_NODE - 1) / CORES_PER_NODE))
-    result_root="$campaign_root/ranks_${ranks}"
-    job_id=$(
-      SCALING_RANKS="$ranks" RESULT_ROOT="$result_root" \
-      sbatch --parsable \
-        --chdir="$PROJECT_DIR" \
-        --job-name="lob-strong-r${ranks}" \
-        --nodes="$nodes" \
-        --ntasks="$ranks" \
-        --cpus-per-task=1 \
-        --time=2-00:00:00 \
-        --exclusive \
-        --hint=nomultithread \
-        --output="$PROJECT_DIR/slurm/%x-%j.out" \
-        --error="$PROJECT_DIR/slurm/%x-%j.err" \
-        --export=ALL \
-        "$PROJECT_DIR/experiments/01_strong_scaling/submit_seagull.sh"
-    )
-    job_id="${job_id%%;*}"
-    if [[ ! "$job_id" =~ ^[0-9]+$ ]]; then
-      printf 'ERROR: invalid job ID for %d ranks: %s\n' "$ranks" "$job_id" >&2
-      exit 1
-    fi
-    printf '%d,%d,%s,%s\n' \
-      "$ranks" "$nodes" "$job_id" "$result_root" >> "$manifest"
+  for assets in "${ASSET_COUNTS[@]}"; do
+    for ranks in "${RANK_COUNTS[@]}"; do
+      nodes=$(((ranks + CORES_PER_NODE - 1) / CORES_PER_NODE))
+      result_root="$campaign_root/assets_${assets}/ranks_${ranks}"
+      job_id=$(
+        ASSET_COUNT="$assets" SCALING_RANKS="$ranks" \
+        RESULT_ROOT="$result_root" \
+        sbatch --parsable \
+          --chdir="$PROJECT_DIR" \
+          --job-name="lob-a${assets}-r${ranks}" \
+          --nodes="$nodes" \
+          --ntasks="$ranks" \
+          --cpus-per-task=1 \
+          --time=2-00:00:00 \
+          --exclusive \
+          --hint=nomultithread \
+          --output="$PROJECT_DIR/slurm/%x-%j.out" \
+          --error="$PROJECT_DIR/slurm/%x-%j.err" \
+          --export=ALL \
+          "$PROJECT_DIR/experiments/01_strong_scaling/submit_seagull.sh"
+      )
+      job_id="${job_id%%;*}"
+      if [[ ! "$job_id" =~ ^[0-9]+$ ]]; then
+        printf 'ERROR: invalid job ID for %d books and %d ranks: %s\n' \
+          "$assets" "$ranks" "$job_id" >&2
+        exit 1
+      fi
+      printf '%d,%d,%d,%s,%s\n' \
+        "$assets" "$ranks" "$nodes" "$job_id" "$result_root" \
+        >> "$manifest"
+    done
   done
 
   printf 'Submitted the complete strong-scaling campaign.\n'
@@ -74,14 +79,14 @@ if [[ -z "${SLURM_JOB_ID:-}" ]]; then
   exit 0
 fi
 
-if [[ -z "${SCALING_RANKS:-}" ]]; then
+if [[ -z "${SCALING_RANKS:-}" || -z "${ASSET_COUNT:-}" ]]; then
   printf 'ERROR: submit this experiment with:\n' >&2
   printf '  bash experiments/01_strong_scaling/submit_seagull.sh\n' >&2
   exit 1
 fi
 
 source "$PROJECT_DIR/hpc/seagull/common.sh"
-run_variant "r${SCALING_RANKS}" "$SCALING_RANKS" 1 \
+run_variant "a${ASSET_COUNT}_r${SCALING_RANKS}" "$SCALING_RANKS" 1 \
   --partition cyclic --synchronous-observations \
   --disable-persistent-risk-collective \
   --shared-inventory-policy gross_pooled

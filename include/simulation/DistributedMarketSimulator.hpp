@@ -250,9 +250,10 @@ struct SimulationConfig {
     // order only; it does not introduce stale capacity or alter model state.
     bool use_nonblocking_risk_collective = false;
     // Exact conservative lookahead for the causal shared-risk reduction.
-    // Zero retains one reduction per global boundary.  A positive value caps
-    // the number of future boundaries that may be skipped when an integer
-    // exposure bound proves that the capacity response remains exactly one.
+    // Zero retains one reduction per global boundary. A positive value enables
+    // a certificate that skips exactly the next boundary when an integer
+    // exposure bound proves that the capacity response remains one. Before a
+    // configured shock, the value also limits whether that proof is attempted.
     std::uint64_t risk_lookahead_max_windows = 0;
     // Optional measurement mode.  A barrier immediately before each causal
     // exposure reduction measures boundary-arrival wait separately from the
@@ -265,6 +266,11 @@ struct SimulationConfig {
     // distributional check.
     std::string asset_summary_csv;
     std::int64_t asset_summary_interval_ns = 1'000'000'000LL;
+    // Optional rank-local panel of exact twice-midpoint ticks. Each rank
+    // writes only the complete books it owns, so this output adds no MPI
+    // communication and is not an input to any trading decision.
+    std::string return_panel_prefix;
+    std::int64_t return_panel_interval_ns = 1'000'000'000LL;
     // Optional provenance artifact.  The deterministic target mask is written
     // for both shock and matched-control runs, making the treated asset set
     // explicit rather than implicit in a seeded selection calculation.

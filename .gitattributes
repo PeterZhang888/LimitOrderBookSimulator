@@ -3,9 +3,7 @@
 *.py text eol=lf
 *.cpp text eol=lf
 *.hpp text eol=lf
-# Empirical and result CSV files include historical byte-level evidence. Keep
-# their existing line endings so recorded SHA-256 values remain reproducible.
-*.csv -text
+*.csv text eol=lf
 *.json text eol=lf
 *.png binary
 *.pdf binary

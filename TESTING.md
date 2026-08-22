@@ -8,4 +8,7 @@ Shared Market Maker coverage and OpenMP equivalence when OpenMP is available.
 For experiment equivalence, compare the complete scientific CSV contents,
 processed-order count, trade count, boundary count, Shared Market Maker cash,
 inventory and terminal accounting values. Do not infer equivalence from wall
-time or from an encoded fingerprint.
+time or from one summary value.
+
+`scripts/summarize_results.py` reads the complete simulator result line from
+each repetition and reports all raw rows before calculating timing summaries.

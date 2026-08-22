@@ -492,8 +492,10 @@ private:
         initialize_local_assets();
         initialization_seconds_ = MPI_Wtime() - initialization_start;
         open_metrics_output();
+        open_return_panel_output();
         update_shared_risk(0, [&]() {
             record_asset_moments(0);
+            record_return_panel(0);
             schedule_local_market_makers(0, 0);
             if (config_.enable_local_market_makers) {
                 ++local_mm_refresh_boundaries_;
@@ -568,6 +570,7 @@ private:
             if (global_boundary) {
                 update_shared_risk(end_ns, [&]() {
                     record_asset_moments(end_ns);
+                    record_return_panel(end_ns);
                     if (local_refresh) {
                         schedule_local_market_makers(
                             end_ns, local_refresh_index);
@@ -866,6 +869,14 @@ private:
             throw std::invalid_argument(
                 "per-asset calibration summary requires an interval "
                 "that is an exact multiple of the decision window and session");
+        }
+        if (!config_.return_panel_prefix.empty()
+            && (config_.return_panel_interval_ns < config_.decision_window_ns
+                || config_.return_panel_interval_ns
+                    % config_.decision_window_ns != 0)) {
+            throw std::invalid_argument(
+                "return-panel interval must be an exact multiple of the "
+                "decision window");
         }
         if (!config_.value_agent_policies.empty()
             && config_.value_agent_policies.size()
@@ -2294,6 +2305,14 @@ private:
         ++risk_boundaries_;
         last_risk_boundary_was_skipped_ = false;
         const long long local_fixed = local_fixed_exposure();
+        const long long maximum_safe_local_sum =
+            std::numeric_limits<long long>::max()
+            / static_cast<long long>(world_size_);
+        if (local_fixed > maximum_safe_local_sum) {
+            throw std::overflow_error(
+                "shared market-maker global exposure may overflow "
+                "MPI_LONG_LONG");
+        }
         const bool terminal_boundary = time_ns == end_time_ns_;
         if (config_.risk_lookahead_max_windows > 0U
             && risk_lookahead_remaining_ > 0U
@@ -2405,6 +2424,11 @@ private:
                         "lookahead local outstanding-quote bound overflow");
                 }
                 risk_local_fixed_[1] += fixed;
+            }
+            if (risk_local_fixed_[1] > maximum_safe_local_sum) {
+                throw std::overflow_error(
+                    "lookahead global exposure bound may overflow "
+                    "MPI_LONG_LONG");
             }
         }
         const double risk_arrival_seconds = MPI_Wtime();
@@ -2617,6 +2641,49 @@ private:
                 record(*pointer);
             }
         }
+    }
+
+    void open_return_panel_output() {
+        if (config_.return_panel_prefix.empty()) return;
+        std::ostringstream name;
+        name << config_.return_panel_prefix << ".rank"
+             << std::setw(5) << std::setfill('0') << rank_ << ".csv";
+        const std::filesystem::path path(name.str());
+        if (path.has_parent_path()) {
+            std::filesystem::create_directories(path.parent_path());
+        }
+        return_panel_output_.open(path);
+        if (!return_panel_output_) {
+            throw std::runtime_error(
+                "cannot open rank-local return panel CSV: " + path.string());
+        }
+        return_panel_output_ << "time_seconds";
+        for (const std::unique_ptr<LocalAsset>& asset : local_assets_) {
+            return_panel_output_ << ','
+                << config_.asset_configs.at(
+                       static_cast<std::size_t>(asset->asset_id)).symbol;
+        }
+        return_panel_output_ << '\n';
+    }
+
+    void record_return_panel(std::int64_t time_ns) {
+        if (!return_panel_output_
+            || time_ns % config_.return_panel_interval_ns != 0) return;
+        return_panel_output_ << std::fixed << std::setprecision(9)
+            << static_cast<double>(time_ns) / 1e9;
+        for (const std::unique_ptr<LocalAsset>& asset : local_assets_) {
+            const MarketState state = asset->book.lob.state(
+                time_ns, asset->fundamental_value_ticks);
+            return_panel_output_ << ',';
+            if (state.best_bid_ticks > 0
+                && state.best_ask_ticks >= state.best_bid_ticks) {
+                const std::int64_t twice_midpoint =
+                    static_cast<std::int64_t>(state.best_bid_ticks)
+                    + static_cast<std::int64_t>(state.best_ask_ticks);
+                return_panel_output_ << twice_midpoint;
+            }
+        }
+        return_panel_output_ << '\n';
     }
 
     AggregateMetricSums local_metrics(std::int64_t time_ns) {
@@ -4099,6 +4166,7 @@ private:
     ValueAgentPolicy default_value_agent_policy_;
     std::ofstream metrics_output_;
     std::ofstream cluster_metrics_output_;
+    std::ofstream return_panel_output_;
     std::vector<GlobalObservationFrame> global_observations_;
     std::vector<ClusterObservationFrame> cluster_observations_;
     std::vector<RiskObservationFrame> risk_observations_;

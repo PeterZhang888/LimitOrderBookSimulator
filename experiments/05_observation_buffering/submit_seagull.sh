@@ -14,6 +14,8 @@ PROJECT_DIR="${PROJECT_DIR:-$SLURM_SUBMIT_DIR}"
 source "$PROJECT_DIR/hpc/seagull/common.sh"
 run_variant synchronous 16 1 \
   --partition cyclic --synchronous-observations \
-  --disable-persistent-risk-collective
+  --disable-persistent-risk-collective \
+  --shared-quote-multiplier 2.00
 run_variant buffered 16 1 \
-  --partition cyclic --disable-persistent-risk-collective
+  --partition cyclic --disable-persistent-risk-collective \
+  --shared-quote-multiplier 2.00

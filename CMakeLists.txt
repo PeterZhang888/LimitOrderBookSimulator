@@ -22,7 +22,7 @@ else()
 endif()
 
 if(LOB_ENABLE_OPENMP)
-    find_package(OpenMP QUIET COMPONENTS CXX)
+    find_package(OpenMP REQUIRED COMPONENTS CXX)
 endif()
 
 add_library(lob_core
@@ -47,7 +47,7 @@ else()
     target_compile_definitions(lob_core PUBLIC LOB_FORCE_MPI_STUB=1)
 endif()
 
-if(LOB_ENABLE_OPENMP AND OpenMP_CXX_FOUND)
+if(LOB_ENABLE_OPENMP)
     target_link_libraries(lob_core PUBLIC OpenMP::OpenMP_CXX)
     target_compile_definitions(lob_core PUBLIC LOB_HAS_OPENMP=1)
 else()
@@ -88,7 +88,7 @@ if(LOB_BUILD_TESTS)
             tests/test_queue_reactive_background_policy.cpp)
         add_lob_test(test_distributed_model_semantics
             tests/test_distributed_model_semantics.cpp)
-        if(OpenMP_CXX_FOUND)
+        if(LOB_ENABLE_OPENMP)
             add_lob_test(test_distributed_optimization_equivalence
                 tests/test_distributed_optimization_equivalence.cpp)
         endif()

@@ -15,8 +15,10 @@ source "$PROJECT_DIR/hpc/seagull/common.sh"
 for ranks in 16 32 64; do
   run_variant "r${ranks}_cyclic" "$ranks" 1 \
     --partition cyclic --synchronous-observations \
-    --disable-persistent-risk-collective
+    --disable-persistent-risk-collective \
+    --shared-quote-multiplier 2.00
   run_variant "r${ranks}_weighted" "$ranks" 1 \
     --partition weighted --synchronous-observations \
-    --disable-persistent-risk-collective
+    --disable-persistent-risk-collective \
+    --shared-quote-multiplier 2.00
 done

@@ -1,8 +1,13 @@
 Copyright (c) 2026 Peter Zhang. All rights reserved.
 
-No permission is granted to copy, modify, distribute, sublicense, or sell this
-software except where required by applicable law or separately authorised in
-writing by the copyright holder.
+Permission is granted to thesis supervisors, examiners and academic reviewers
+to download, copy, compile, execute, inspect and locally modify this software
+solely for non-commercial academic examination and reproducibility review.
 
-This file does not alter the licences of system dependencies, external data,
-specifications, publications, or any subsequently identified third-party code.
+This permission does not grant the right to redistribute, publish, sublicense,
+sell or commercially exploit the software or a modified version. Any other use
+requires prior written permission from the copyright holder.
+
+This permission applies only to the software. It does not grant rights in
+external data, exchange specifications, publications, system dependencies or
+third-party material, which remain subject to their respective terms.

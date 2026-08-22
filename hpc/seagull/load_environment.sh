@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
 module purge
-module load openmpi
+OPENMPI_MODULE="${OPENMPI_MODULE:-openmpi/5.0.9-gcc-15.2.0-2irqibq}"
+module load "$OPENMPI_MODULE"
 
 LOB_MPI_CXX_COMPILER="$(command -v mpicxx)"
 read -r LOB_OPENMP_CXX_COMPILER _ <<< "$(mpicxx --showme:command)"
@@ -39,3 +40,4 @@ LOB_MPI_LIBRARY_PATH="$(
   printf '%s' "${LOB_MPI_LIBRARY_DIRS[*]}"
 )"
 export LD_LIBRARY_PATH="${LOB_MPI_LIBRARY_PATH}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export OPENMPI_MODULE

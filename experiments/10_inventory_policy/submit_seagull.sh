@@ -11,15 +11,37 @@
 #SBATCH --error=slurm/%x-%j.err
 set -Eeuo pipefail
 PROJECT_DIR="${PROJECT_DIR:-$SLURM_SUBMIT_DIR}"
+REPETITIONS=1
 source "$PROJECT_DIR/hpc/seagull/common.sh"
 base=(--partition cyclic --synchronous-observations
-      --disable-persistent-risk-collective --shared-quote-relative)
-for eta in 0.50 0.75 1.00 1.25 1.50 1.75 2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75 4.00; do
-  label=${eta/./p}
-  run_variant "asset_local_eta_${label}" 64 1 "${base[@]}" \
+      --disable-persistent-risk-collective)
+
+# The opening-prefix table uses the five pre-declared quote-engine paths.
+DURATION_SECONDS=1800
+for seed in 30300130 30300131 30300132 30300133 30300134; do
+  SEED=$seed
+  run_variant "opening/asset_local_eta_2p00_seed_${seed}" 64 1 "${base[@]}" \
     --shared-inventory-policy asset_local \
-    --shared-quote-multiplier "$eta"
-  run_variant "gross_pooled_eta_${label}" 64 1 "${base[@]}" \
+    --shared-quote-multiplier 2.00
+  run_variant "opening/gross_pooled_eta_2p00_seed_${seed}" 64 1 "${base[@]}" \
     --shared-inventory-policy gross_pooled \
-    --shared-quote-multiplier "$eta"
+    --shared-quote-multiplier 2.00
+done
+
+# The main comparison uses five matched full-session paths at every value of
+# the participation control. Asset-local and Gross-pooled always share a seed.
+DURATION_SECONDS=23400
+for eta in 0.50 0.75 1.00 1.25 1.50 1.75 2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75 4.00; do
+  eta_label=${eta/./p}
+  for seed in 20200130 20200131 20200132 20200133 20200134; do
+    SEED=$seed
+    run_variant "full/asset_local_eta_${eta_label}_seed_${seed}" \
+      64 1 "${base[@]}" \
+      --shared-inventory-policy asset_local \
+      --shared-quote-multiplier "$eta"
+    run_variant "full/gross_pooled_eta_${eta_label}_seed_${seed}" \
+      64 1 "${base[@]}" \
+      --shared-inventory-policy gross_pooled \
+      --shared-quote-multiplier "$eta"
+  done
 done

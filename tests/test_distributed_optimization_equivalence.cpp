@@ -26,6 +26,7 @@ dlob::SimulationConfig make_config(
     config.decision_window_ns = 1'000'000'000LL;
     config.global_metrics_interval_ns = 1'000'000'000LL;
     config.asset_summary_interval_ns = 1'000'000'000LL;
+    config.return_panel_interval_ns = 1'000'000'000LL;
     config.background_model = "queue-reactive-v1";
     config.enable_local_market_makers = true;
     config.enable_value_agents = false;
@@ -39,6 +40,8 @@ dlob::SimulationConfig make_config(
     config.metrics_csv = (root / (label + "_metrics.csv")).string();
     config.cluster_metrics_csv =
         (root / (label + "_clusters.csv")).string();
+    config.return_panel_prefix =
+        (root / (label + "_twice_midpoint")).string();
 
     const std::filesystem::path quantity = root / "quantity.csv";
     const std::filesystem::path distance = root / "distance.csv";
@@ -116,7 +119,15 @@ int main(int argc, char** argv) {
                == contents(root / "baseline_metrics.csv"));
         assert(contents(root / (label + "_clusters.csv"))
                == contents(root / "baseline_clusters.csv"));
+        assert(contents(root / (label + "_twice_midpoint.rank00000.csv"))
+               == contents(root / "baseline_twice_midpoint.rank00000.csv"));
     };
+
+    const std::string return_panel = contents(
+        root / "baseline_twice_midpoint.rank00000.csv");
+    assert(return_panel.starts_with("time_seconds,ASSET0,ASSET1,"));
+    assert(return_panel.find("0.000000000,20000,20000,")
+           != std::string::npos);
 
     dlob::SimulationConfig guided = make_config(root, "guided");
     guided.worker_threads = 4;

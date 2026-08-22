@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=lob-full-synthetic
-#SBATCH --nodes=4
-#SBATCH --ntasks=64
+#SBATCH --nodes=16
+#SBATCH --ntasks=256
 #SBATCH --ntasks-per-node=16
 #SBATCH --cpus-per-task=1
 #SBATCH --time=02:00:00
@@ -20,7 +20,7 @@ DURATION_SECONDS="${DURATION_SECONDS:-23400}"
 
 source "$PROJECT_DIR/hpc/seagull/common.sh"
 
-run_variant full_10000 64 1 \
+run_variant full_10000 256 1 \
   --partition cyclic --synchronous-observations \
   --disable-persistent-risk-collective \
   --shared-inventory-policy gross_pooled

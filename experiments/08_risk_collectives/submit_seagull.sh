@@ -12,7 +12,8 @@
 set -Eeuo pipefail
 PROJECT_DIR="${PROJECT_DIR:-$SLURM_SUBMIT_DIR}"
 source "$PROJECT_DIR/hpc/seagull/common.sh"
-base=(--partition cyclic --disable-persistent-risk-collective)
+base=(--partition cyclic --disable-persistent-risk-collective
+      --shared-quote-multiplier 2.00)
 run_variant blocking 64 1 "${base[@]}"
 run_variant nonblocking 64 1 "${base[@]}" \
   --nonblocking-risk-collective
