@@ -54,18 +54,34 @@ common_arguments=(
 record_openmp_placement() {
   local variant_dir=$1
   mkdir -p "$variant_dir"
+  cpu_list=$(awk '/^Cpus_allowed_list:/ {print $2}' /proc/self/status)
+  printf '%s|0|%s\n' "$(hostname -s)" "$cpu_list" \
+    > "$variant_dir/cpu_placement.txt"
+  python3 "$PROJECT_DIR/scripts/validate_cpu_placement.py" \
+    "$variant_dir/cpu_placement.txt" 1 16 1
+}
+
+run_openmp_direct() {
+  local label=$1
+  shift
+  local variant_dir="$RESULT_ROOT/$label"
+  mkdir -p "$variant_dir"
   OMP_NUM_THREADS=16 \
   OMP_DYNAMIC=FALSE \
   OMP_PLACES=cores \
   OMP_PROC_BIND=spread \
-  srun --nodes=1 --ntasks=1 --cpus-per-task=16 \
-    --exclusive --cpu-bind=none \
-    bash -c '
-      cpu_list=$(awk '\''/^Cpus_allowed_list:/ {print $2}'\'' /proc/self/status)
-      printf "%s|0|%s\n" "$(hostname -s)" "$cpu_list"
-    ' > "$variant_dir/cpu_placement.txt"
-  python3 "$PROJECT_DIR/scripts/validate_cpu_placement.py" \
-    "$variant_dir/cpu_placement.txt" 1 16 1
+  "$PROJECT_DIR/build-openmp/lob_openmp" \
+    --duration-seconds "$DURATION_SECONDS" \
+    --window-ms 1000 \
+    "${INPUT_ARGS[@]}" \
+    "${MODEL_ARGS[@]}" \
+    "${SCIENTIFIC_ARGS[@]}" \
+    --seed "$SEED" \
+    --metrics-csv "$variant_dir/metrics_1.csv" \
+    --asset-summary-csv "$variant_dir/assets_1.csv" \
+    --asset-summary-interval-ms 1000 \
+    --threads 16 \
+    "$@" | tee "$variant_dir/run_1.txt"
 }
 
 control=mpi_16x1
@@ -92,7 +108,7 @@ for block in 1 2 3 4 5 6 7; do
       openmp_1x16)
         variant_dir="$RESULT_ROOT/$variant/block_$block"
         record_openmp_placement "$variant_dir"
-        run_openmp_variant "$variant/block_$block" 16 \
+        run_openmp_direct "$variant/block_$block" \
           "${common_arguments[@]}"
         ;;
       *)
