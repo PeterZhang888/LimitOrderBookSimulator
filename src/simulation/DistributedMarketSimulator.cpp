@@ -33,6 +33,10 @@
 #define LOB_HAS_OPENMP 0
 #endif
 
+#ifndef LOB_OPENMP_WINDOW_ONLY
+#define LOB_OPENMP_WINDOW_ONLY 0
+#endif
+
 #if LOB_HAS_OPENMP
 #include <omp.h>
 #endif
@@ -762,6 +766,17 @@ private:
         for_each_local_index(local_assets_.size(), [&](std::size_t index) {
             function(*local_assets_[index]);
         });
+    }
+
+    template <typename Function>
+    void for_each_short_phase_asset(Function&& function) {
+#if LOB_OPENMP_WINDOW_ONLY
+        for (const std::unique_ptr<LocalAsset>& asset : local_assets_) {
+            function(*asset);
+        }
+#else
+        for_each_local_asset(std::forward<Function>(function));
+#endif
     }
 
     void validate_config() const {
@@ -1888,7 +1903,7 @@ private:
                                       std::uint64_t refresh_index) {
         if (!config_.enable_local_market_makers) return;
         const double compute_start = MPI_Wtime();
-        for_each_local_asset([&](LocalAsset& asset) {
+        for_each_short_phase_asset([&](LocalAsset& asset) {
             LocalBook& book = asset.book;
             const int local_quantity = bounded_positive_quantity(
                 config_.local_mm_quantity_multiplier * static_cast<double>(
@@ -1911,7 +1926,7 @@ private:
 
     void advance_fundamental_news(std::uint64_t news_index) {
         const double compute_start = MPI_Wtime();
-        for_each_local_asset([&](LocalAsset& asset) {
+        for_each_short_phase_asset([&](LocalAsset& asset) {
             const double previous_fundamental = asset.fundamental_value_ticks;
             asset.fresh_fundamental_news = false;
             double effective_fundamental_volatility =
@@ -1952,7 +1967,7 @@ private:
                                        std::uint64_t boundary_index) {
         if (!config_.enable_shared_market_maker) return;
         const double compute_start = MPI_Wtime();
-        for_each_local_asset([&](LocalAsset& asset) {
+        for_each_short_phase_asset([&](LocalAsset& asset) {
             LocalBook& book = asset.book;
             const double shared_base_quantity =
                 config_.shared_quote_relative_to_asset
@@ -2081,7 +2096,7 @@ private:
                                std::uint64_t decision_index) {
         if (!config_.enable_value_agents) return;
         const double compute_start = MPI_Wtime();
-        for_each_local_asset([&](LocalAsset& asset) {
+        for_each_short_phase_asset([&](LocalAsset& asset) {
             const ValueAgentPolicy& policy =
                 value_agent_policy(asset.asset_id);
             if (policy.trigger_mode
@@ -2110,7 +2125,7 @@ private:
     void schedule_news_impulse_value_agents(
         std::int64_t decision_time_ns, std::uint64_t news_index) {
         const double compute_start = MPI_Wtime();
-        for_each_local_asset([&](LocalAsset& asset) {
+        for_each_short_phase_asset([&](LocalAsset& asset) {
             const ValueAgentPolicy& policy =
                 value_agent_policy(asset.asset_id);
             if (config_.enable_value_agents && asset.fresh_fundamental_news) {
