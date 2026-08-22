@@ -212,6 +212,24 @@ replace the uninstrumented performance results.  The slowest rank observed in
 each window is a diagnostic proxy, not an exact reconstruction of the full
 session critical path.
 
+If a multi-node run intermittently spends several minutes inside nominally
+small collectives, use the focused 32-rank diagnostic instead of repeating the
+complete decomposition matrix:
+
+```bash
+mkdir -p slurm results/seagull
+bash experiments/07_mpi_openmp/submit_collective_stall_diagnostic.sh
+```
+
+It repeats only the 32-rank/one-thread layout and stops after capturing both a
+normal run and a run whose execution time reaches 120 seconds, or after twelve
+attempts. For each repetition it records the CPU mask of the actual process,
+per-rank work before every risk reduction, experienced collective time, and
+the full per-window phase decomposition. The resulting
+`boundary_summary.csv` separates variation in rank-local arrival work from
+time experienced inside the collective. The diagnostic does not enable an
+extra boundary barrier and does not alter the financial model.
+
 The shared Seagull runner also freezes the empirical-market controls used in
 the thesis: a 23,400-second activity-normalisation horizon, empirical relative
 quote and capacity sizing, three Shared Market Maker price levels, local

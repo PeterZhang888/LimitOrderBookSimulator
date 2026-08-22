@@ -22,6 +22,7 @@ SEED=20200130
 CORES_PER_NODE=16
 BACKGROUND_MODEL=queue-reactive-v1
 BUILD_DIR="$PROJECT_DIR/build-mpi"
+STALL_THRESHOLD_SECONDS=120
 
 case "$TOTAL_CORES" in
   16|32|64) ;;
@@ -72,6 +73,32 @@ common_arguments=(
   --shared-quote-multiplier 2.00
 )
 
+reject_collective_stall() {
+  local label=$1
+  local log="$RESULT_ROOT/$label/run_1.txt"
+  local execution_seconds
+  execution_seconds=$(
+    sed -n 's/.* execution_seconds=\([0-9.]*\).*/\1/p' "$log"
+  )
+  [[ "$execution_seconds" =~ ^[0-9]+([.][0-9]+)?$ ]] || {
+    printf 'ERROR: %s has no valid execution_seconds.\n' "$label" >&2
+    exit 1
+  }
+  if python3 - "$execution_seconds" "$STALL_THRESHOLD_SECONDS" <<'PY'
+import sys
+raise SystemExit(0 if float(sys.argv[1]) >= float(sys.argv[2]) else 1)
+PY
+  then
+    printf '%s\n' \
+      "ERROR: $label took $execution_seconds seconds, exceeding the" \
+      "$STALL_THRESHOLD_SECONDS-second collective-stall guard." >&2
+    printf '%s\n' \
+      'Run experiments/07_mpi_openmp/submit_collective_stall_diagnostic.sh' \
+      'before repeating the matrix.' >&2
+    exit 1
+  fi
+}
+
 mkdir -p "$RESULT_ROOT"
 PARTITION_COST_CSV="$RESULT_ROOT/partition_costs.csv"
 if [[ ! -s "$PARTITION_COST_CSV" ]]; then
@@ -80,6 +107,7 @@ if [[ ! -s "$PARTITION_COST_CSV" ]]; then
     "${common_arguments[@]}" \
     --openmp-schedule dynamic1 \
     --asset-work-csv "$work_profile"
+  reject_collective_stall cost_preparation
   bash "$PROJECT_DIR/scripts/create_partition_costs.sh" \
     "$work_profile" "$PARTITION_COST_CSV"
 fi
@@ -120,6 +148,7 @@ for block in 1 2 3 4 5 6 7; do
         --partition-cost-csv "$PARTITION_COST_CSV" \
         --persistent-fixed-book-ownership
     fi
+    reject_collective_stall "$variant/block_$block"
   done
 done
 

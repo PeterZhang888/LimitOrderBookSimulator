@@ -2,6 +2,17 @@
 set -Eeuo pipefail
 
 : "${PROJECT_DIR:?set PROJECT_DIR to the cloned repository}"
+
+# Formal runs use the Open MPI defaults supplied by the loaded Seagull module.
+# Do not silently inherit transport, collective, progress, or UCX experiments
+# from the shell that called sbatch.  A specialised diagnostic can set an
+# intentional override after sourcing this file.
+while IFS='=' read -r variable _; do
+  case "$variable" in
+    OMPI_MCA_*|PRTE_MCA_*|PMIX_MCA_*|UCX_*) unset "$variable" ;;
+  esac
+done < <(env)
+
 source "$PROJECT_DIR/hpc/seagull/load_environment.sh"
 cd "$PROJECT_DIR"
 
@@ -98,6 +109,9 @@ if [[ ! -e "$ENVIRONMENT_FILE" ]]; then
     printf 'OMP_MAX_ACTIVE_LEVELS=%s\n' \
       "${OMP_MAX_ACTIVE_LEVELS:-unset}"
     printf 'GOMP_SPINCOUNT=%s\n' "${GOMP_SPINCOUNT:-unset}"
+    printf '\nmpi_runtime_overrides\n'
+    env | LC_ALL=C sort |
+      awk '/^(OMPI_MCA_|PRTE_MCA_|PMIX_MCA_|UCX_)/' || true
   } > "$ENVIRONMENT_FILE" 2>&1
 fi
 
