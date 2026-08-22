@@ -112,9 +112,8 @@ run_variant() {
     return 1
   fi
 
-  local total_cores=$((ranks * threads))
-  local nodes=$(((total_cores + CORES_PER_NODE - 1) / CORES_PER_NODE))
   local tasks_per_node=$((CORES_PER_NODE / threads))
+  local mpi_mapping="ppr:${tasks_per_node}:node:PE=${threads}"
 
   mkdir -p "$variant_dir"
 
@@ -138,14 +137,12 @@ run_variant() {
   # failures such as all ranks being restricted to CPU 0.
   local placement_file="$variant_dir/cpu_placement.txt"
   "${omp_environment[@]}" \
-  srun --nodes="$nodes" --ntasks="$ranks" \
-    --ntasks-per-node="$tasks_per_node" \
-    --cpus-per-task="$threads" \
-    --distribution=block:block \
-    --cpu-bind=cores \
+  mpirun --np "$ranks" \
+    --map-by "$mpi_mapping" \
+    --bind-to core \
     bash -c '
       cpu_list=$(awk '\''/^Cpus_allowed_list:/ {print $2}'\'' /proc/self/status)
-      printf "%s,%s,%s\n" "$(hostname -s)" "$SLURM_PROCID" "$cpu_list"
+      printf "%s,%s,%s\n" "$(hostname -s)" "$OMPI_COMM_WORLD_RANK" "$cpu_list"
     ' | LC_ALL=C sort -t, -k1,1 -k2,2n > "$placement_file"
 
   local observed_placements unique_placements
@@ -171,11 +168,10 @@ run_variant() {
       )
     fi
     "${omp_environment[@]}" \
-    srun --nodes="$nodes" --ntasks="$ranks" \
-      --ntasks-per-node="$tasks_per_node" \
-      --cpus-per-task="$threads" \
-      --distribution=block:block \
-      --cpu-bind=verbose,cores \
+    mpirun --np "$ranks" \
+      --map-by "$mpi_mapping" \
+      --bind-to core \
+      --report-bindings \
       "$BUILD_DIR/lob_mpi" \
       --duration-seconds "$DURATION_SECONDS" \
       --window-ms 1000 \
