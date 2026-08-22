@@ -118,6 +118,46 @@ run_variant() {
 
   mkdir -p "$variant_dir"
 
+  # Slurm owns process placement.  Do not apply OpenMP affinity to a
+  # one-thread MPI rank: on Seagull, doing so can move every rank on a node
+  # onto the first OpenMP place.  Threaded ranks retain explicit OpenMP
+  # placement inside the multi-core mask assigned by Slurm.
+  local omp_environment=(
+    env -u OMP_PLACES -u GOMP_CPU_AFFINITY
+    "OMP_NUM_THREADS=$threads"
+    OMP_DYNAMIC=FALSE
+  )
+  if (( threads == 1 )); then
+    omp_environment+=(OMP_PROC_BIND=FALSE)
+  else
+    omp_environment+=(OMP_PLACES=cores OMP_PROC_BIND=close)
+  fi
+
+  # Fail before starting a long simulation if two ranks on the same node
+  # have been assigned the same CPU set.  This guard catches placement
+  # failures such as all ranks being restricted to CPU 0.
+  local placement_file="$variant_dir/cpu_placement.txt"
+  "${omp_environment[@]}" \
+  srun --nodes="$nodes" --ntasks="$ranks" \
+    --ntasks-per-node="$tasks_per_node" \
+    --cpus-per-task="$threads" \
+    --distribution=block:block \
+    --cpu-bind=cores \
+    bash -c '
+      cpu_list=$(awk '\''/^Cpus_allowed_list:/ {print $2}'\'' /proc/self/status)
+      printf "%s,%s,%s\n" "$(hostname -s)" "$SLURM_PROCID" "$cpu_list"
+    ' | LC_ALL=C sort -t, -k1,1 -k2,2n > "$placement_file"
+
+  local observed_placements unique_placements
+  observed_placements=$(wc -l < "$placement_file")
+  unique_placements=$(cut -d, -f1,3 "$placement_file" | sort -u | wc -l)
+  if (( observed_placements != ranks || unique_placements != ranks )); then
+    printf 'ERROR: invalid CPU placement for %s: expected %d distinct rank masks, observed %d rows and %d distinct masks.\n' \
+      "$label" "$ranks" "$observed_placements" "$unique_placements" >&2
+    cat "$placement_file" >&2
+    return 1
+  fi
+
   for ((rep=1; rep<=REPETITIONS; rep++)); do
     local metrics="$variant_dir/metrics_${rep}.csv"
     local assets="$variant_dir/assets_${rep}.csv"
@@ -130,14 +170,12 @@ run_variant() {
         --cluster-metrics-csv "$cluster"
       )
     fi
-    OMP_NUM_THREADS="$threads" \
-    OMP_DYNAMIC=FALSE \
-    OMP_PLACES=cores \
-    OMP_PROC_BIND=close \
+    "${omp_environment[@]}" \
     srun --nodes="$nodes" --ntasks="$ranks" \
       --ntasks-per-node="$tasks_per_node" \
       --cpus-per-task="$threads" \
-      --cpu-bind=cores \
+      --distribution=block:block \
+      --cpu-bind=verbose,cores \
       "$BUILD_DIR/lob_mpi" \
       --duration-seconds "$DURATION_SECONDS" \
       --window-ms 1000 \
