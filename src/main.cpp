@@ -438,6 +438,7 @@ struct Options {
     std::string shock_cluster_csv;
     std::string asset_work_csv;
     std::string boundary_arrival_csv;
+    std::string window_phase_profile_csv;
     bool local_market_makers = true;
     bool value_agents = true;
     double value_agent_interval_ms = 1000.0;
@@ -532,6 +533,7 @@ void print_usage(const char* program) {
         << "  --shock-targets-csv PATH  write deterministic shock target list on rank 0\n"
         << "  --asset-work-csv PATH     write measured per-asset event/time costs\n"
         << "  --boundary-arrival-csv PATH write rank arrivals before each causal reduction\n"
+        << "  --window-phase-profile-csv PATH write per-rank phase times for every simulated interval\n"
         << "  --global-risk-limit-per-asset X shared-MM global capacity / assets\n"
         << "  --risk-limit-per-asset X backward-compatible alias for the preceding option\n"
         << "  --local-inventory-limit X fixed local inventory-skew scale\n"
@@ -681,6 +683,9 @@ Options parse_options(int argc, char** argv) {
                 index, argc, argv, argument.c_str());
         } else if (argument == "--boundary-arrival-csv") {
             options.boundary_arrival_csv = require_value(
+                index, argc, argv, argument.c_str());
+        } else if (argument == "--window-phase-profile-csv") {
+            options.window_phase_profile_csv = require_value(
                 index, argc, argv, argument.c_str());
         } else if (argument == "--shock-cluster-csv") {
             options.shock_cluster_csv = require_value(index, argc, argv, argument.c_str());
@@ -1090,6 +1095,8 @@ int main(int argc, char** argv) {
         config.shock_cluster_ids = shock_clusters;
         config.asset_work_csv = options.asset_work_csv;
         config.boundary_arrival_csv = options.boundary_arrival_csv;
+        config.window_phase_profile_csv =
+            options.window_phase_profile_csv;
         config.shock_quantity_per_asset = options.shock_quantity;
         config.shock_top_depth_multiple = options.shock_top_depth_multiple;
         config.shock_reference_bid_depth_multiple =
@@ -1144,6 +1151,8 @@ int main(int argc, char** argv) {
                 << (result.nonblocking_risk_collective ? 1 : 0)
                 << " boundary_wait_profile="
                 << (options.profile_boundary_wait ? 1 : 0)
+                << " window_phase_profile="
+                << (options.window_phase_profile_csv.empty() ? 0 : 1)
                 << " fundamental_news_interval_ms=1000.000000000"
                 << " windows=" << result.windows
                 << " hawkes_activity_scale=" << options.hawkes_activity_scale

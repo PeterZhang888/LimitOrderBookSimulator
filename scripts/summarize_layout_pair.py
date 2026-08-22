@@ -121,8 +121,13 @@ def require_complete_order(root, control, treatment):
         newline="", encoding="utf-8"
     ) as handle:
         recorded = list(csv.DictReader(handle))
-    if len(recorded) != 14:
-        raise SystemExit("run_order.csv must contain 14 treatment runs")
+    expected_runs = 2 * len(BLOCKS)
+    if len(recorded) != expected_runs:
+        raise SystemExit(
+            "run_order.csv must contain {} treatment runs".format(
+                expected_runs
+            )
+        )
     for block in BLOCKS:
         block_rows = [row for row in recorded if int(row["block"]) == block]
         block_rows.sort(key=lambda row: int(row["position"]))

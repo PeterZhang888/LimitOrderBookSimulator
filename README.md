@@ -152,6 +152,24 @@ columns are compared with the narrow rule
 \( |a-b|\leq5\times10^{-9}+10^{-12}\max(|a|,|b|) \); every other metric
 column remains exact.
 
+To diagnose the 16-core result phase by phase, run the separate instrumented
+campaign:
+
+```bash
+sbatch experiments/07_mpi_openmp/submit_16core_window_profile.sh
+```
+
+It compares 16 one-thread MPI ranks with one 16-thread MPI-free OpenMP process
+in three alternating blocks on the same 16 physical cores.  For every
+one-second simulated interval it records event processing, the local exposure
+scan, risk synchronization, asset-moment and global-metric scans, and each
+agent phase.  Rows are kept in memory and written only after the simulated
+session; no profiling collective or file write is inserted inside a window.
+These diagnostic timings provide a profiled-window decomposition and do not
+replace the uninstrumented performance results.  The slowest rank observed in
+each window is a diagnostic proxy, not an exact reconstruction of the full
+session critical path.
+
 The shared Seagull runner also freezes the empirical-market controls used in
 the thesis: a 23,400-second activity-normalisation horizon, empirical relative
 quote and capacity sizing, three Shared Market Maker price levels, local

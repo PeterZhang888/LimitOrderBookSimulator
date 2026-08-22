@@ -282,6 +282,11 @@ struct SimulationConfig {
     // reduction without inserting an extra boundary collective.
     std::string asset_work_csv;
     std::string boundary_arrival_csv;
+    // Optional diagnostic decomposition of every simulated interval.  Each
+    // rank records its own phase durations in memory; the rows are gathered
+    // and written only after the simulated session has finished.  Leaving the
+    // path empty adds no per-phase clocks to an ordinary performance run.
+    std::string window_phase_profile_csv;
 };
 
 struct SimulationResult {

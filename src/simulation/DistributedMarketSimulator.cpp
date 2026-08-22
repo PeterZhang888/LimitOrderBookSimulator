@@ -313,12 +313,40 @@ struct BoundaryArrivalWire {
     double collective_seconds = 0.0;
 };
 
+// One diagnostic row for one rank and one simulated interval.  The phase
+// fields are exclusive: their sum, together with other_seconds, equals the
+// measured interval total.  Rows stay rank-local during the session and are
+// gathered only after the final simulated boundary.
+struct WindowPhaseWire {
+    std::int64_t start_time_ns = 0;
+    std::int64_t end_time_ns = 0;
+    std::uint64_t window_index = 0;
+    std::int32_t rank = 0;
+    double event_processing_seconds = 0.0;
+    double risk_local_seconds = 0.0;
+    double risk_collective_seconds = 0.0;
+    double asset_moments_seconds = 0.0;
+    double return_panel_seconds = 0.0;
+    double local_market_maker_seconds = 0.0;
+    double risk_finalize_seconds = 0.0;
+    double global_metrics_local_seconds = 0.0;
+    double global_metrics_collective_seconds = 0.0;
+    double global_metrics_write_seconds = 0.0;
+    double fundamental_seconds = 0.0;
+    double shared_market_maker_seconds = 0.0;
+    double news_value_agent_seconds = 0.0;
+    double periodic_value_agent_seconds = 0.0;
+    double other_seconds = 0.0;
+    double total_window_seconds = 0.0;
+};
+
 static_assert(std::is_trivially_copyable_v<BookResultWire>);
 static_assert(std::is_trivially_copyable_v<AssetResultWire>);
 static_assert(std::is_trivially_copyable_v<AssetMomentWire>);
 static_assert(std::is_trivially_copyable_v<RankResultWire>);
 static_assert(std::is_trivially_copyable_v<AssetWorkWire>);
 static_assert(std::is_trivially_copyable_v<BoundaryArrivalWire>);
+static_assert(std::is_trivially_copyable_v<WindowPhaseWire>);
 
 struct AggregateMetricSums {
     double spread_sum_bps = 0.0;
@@ -482,6 +510,80 @@ public:
     }
 
 private:
+    template <typename Function>
+    void profile_window_phase(
+        double WindowPhaseWire::*field,
+        Function&& function) {
+        if (active_window_phase_ == nullptr) {
+            function();
+            return;
+        }
+        const double start = MPI_Wtime();
+        function();
+        (active_window_phase_->*field) += MPI_Wtime() - start;
+    }
+
+    template <typename Function>
+    void profile_risk_phase(Function&& function) {
+        if (active_window_phase_ == nullptr) {
+            function();
+            return;
+        }
+        const double start = MPI_Wtime();
+        function();
+        active_risk_total_seconds_ += MPI_Wtime() - start;
+    }
+
+    template <typename Function>
+    void profile_global_metrics_phase(Function&& function) {
+        if (active_window_phase_ == nullptr) {
+            function();
+            return;
+        }
+        const double start = MPI_Wtime();
+        function();
+        active_global_metrics_total_seconds_ += MPI_Wtime() - start;
+    }
+
+    void finish_window_phase_profile(double interval_start_seconds) {
+        if (active_window_phase_ == nullptr) return;
+        WindowPhaseWire& row = *active_window_phase_;
+        row.risk_finalize_seconds = std::max(
+            0.0,
+            active_risk_total_seconds_
+                - row.risk_local_seconds
+                - row.risk_collective_seconds
+                - row.asset_moments_seconds
+                - row.return_panel_seconds
+                - row.local_market_maker_seconds);
+        row.global_metrics_write_seconds = std::max(
+            0.0,
+            active_global_metrics_total_seconds_
+                - row.global_metrics_local_seconds
+                - row.global_metrics_collective_seconds);
+        row.total_window_seconds = MPI_Wtime() - interval_start_seconds;
+        const double accounted =
+            row.event_processing_seconds
+            + row.risk_local_seconds
+            + row.risk_collective_seconds
+            + row.asset_moments_seconds
+            + row.return_panel_seconds
+            + row.local_market_maker_seconds
+            + row.risk_finalize_seconds
+            + row.global_metrics_local_seconds
+            + row.global_metrics_collective_seconds
+            + row.global_metrics_write_seconds
+            + row.fundamental_seconds
+            + row.shared_market_maker_seconds
+            + row.news_value_agent_seconds
+            + row.periodic_value_agent_seconds;
+        row.other_seconds = std::max(0.0, row.total_window_seconds - accounted);
+        window_phase_profiles_.push_back(row);
+        active_window_phase_ = nullptr;
+        active_risk_total_seconds_ = 0.0;
+        active_global_metrics_total_seconds_ = 0.0;
+    }
+
     SimulationResult run_session() {
         check_mpi(MPI_Barrier(communicator_), "MPI_Barrier(start)");
         ++collective_calls_;
@@ -524,11 +626,32 @@ private:
         std::uint64_t local_refresh_index = 1;
         std::uint64_t fundamental_news_index = 1;
         std::uint64_t value_decision_index = 1;
+        std::uint64_t phase_window_index = 0;
+        if (!config_.window_phase_profile_csv.empty()) {
+            const std::uint64_t expected_global_windows =
+                static_cast<std::uint64_t>(
+                    end_time_ns_ / config_.decision_window_ns) + 1U;
+            window_phase_profiles_.reserve(
+                static_cast<std::size_t>(expected_global_windows));
+        }
         while (current_ns < end_time_ns_) {
             const std::int64_t end_ns = std::min({
                 end_time_ns_, next_global_boundary_ns,
                 next_local_refresh_ns, next_fundamental_news_ns,
                 next_value_decision_ns});
+            std::optional<WindowPhaseWire> phase_row;
+            double phase_interval_start = 0.0;
+            if (!config_.window_phase_profile_csv.empty()) {
+                phase_row.emplace();
+                phase_row->start_time_ns = current_ns;
+                phase_row->end_time_ns = end_ns;
+                phase_row->window_index = ++phase_window_index;
+                phase_row->rank = static_cast<std::int32_t>(rank_);
+                active_window_phase_ = &*phase_row;
+                active_risk_total_seconds_ = 0.0;
+                active_global_metrics_total_seconds_ = 0.0;
+                phase_interval_start = MPI_Wtime();
+            }
             const double compute_start = MPI_Wtime();
             for_each_local_asset([&](LocalAsset& asset) {
                 if (config_.asset_work_csv.empty()) {
@@ -553,7 +676,12 @@ private:
                     asset.measured_processing_nanoseconds += measured;
                 }
             });
-            compute_seconds_ += MPI_Wtime() - compute_start;
+            const double compute_elapsed = MPI_Wtime() - compute_start;
+            compute_seconds_ += compute_elapsed;
+            if (active_window_phase_ != nullptr) {
+                active_window_phase_->event_processing_seconds +=
+                    compute_elapsed;
+            }
 
             const bool terminal_boundary = end_ns == end_time_ns_;
             // Preserve the final partial global window from the original
@@ -568,22 +696,33 @@ private:
             const bool value_decision = !terminal_boundary
                 && end_ns == next_value_decision_ns;
             if (global_boundary) {
-                update_shared_risk(end_ns, [&]() {
-                    record_asset_moments(end_ns);
-                    record_return_panel(end_ns);
-                    if (local_refresh) {
-                        schedule_local_market_makers(
-                            end_ns, local_refresh_index);
-                        ++local_mm_refresh_boundaries_;
-                        next_local_refresh_ns = checked_add_time(
-                            next_local_refresh_ns,
-                            config_.local_mm_interval_ns);
-                        ++local_refresh_index;
-                    }
+                profile_risk_phase([&]() {
+                    update_shared_risk(end_ns, [&]() {
+                        profile_window_phase(
+                            &WindowPhaseWire::asset_moments_seconds,
+                            [&]() { record_asset_moments(end_ns); });
+                        profile_window_phase(
+                            &WindowPhaseWire::return_panel_seconds,
+                            [&]() { record_return_panel(end_ns); });
+                        if (local_refresh) {
+                            profile_window_phase(
+                                &WindowPhaseWire::local_market_maker_seconds,
+                                [&]() {
+                                    schedule_local_market_makers(
+                                        end_ns, local_refresh_index);
+                                });
+                            ++local_mm_refresh_boundaries_;
+                            next_local_refresh_ns = checked_add_time(
+                                next_local_refresh_ns,
+                                config_.local_mm_interval_ns);
+                            ++local_refresh_index;
+                        }
+                    });
                 });
                 if (terminal_boundary
                     || end_ns % config_.global_metrics_interval_ns == 0) {
-                    observe_global_metrics(end_ns);
+                    profile_global_metrics_phase(
+                        [&]() { observe_global_metrics(end_ns); });
                 }
             }
             if (!terminal_boundary) {
@@ -593,29 +732,52 @@ private:
                 // entity's stochastic stream stable when only the MPI window
                 // is changed.
                 if (local_refresh && !global_boundary) {
-                    schedule_local_market_makers(end_ns, local_refresh_index);
+                    profile_window_phase(
+                        &WindowPhaseWire::local_market_maker_seconds,
+                        [&]() {
+                            schedule_local_market_makers(
+                                end_ns, local_refresh_index);
+                        });
                     ++local_mm_refresh_boundaries_;
                     next_local_refresh_ns = checked_add_time(
                         next_local_refresh_ns, config_.local_mm_interval_ns);
                     ++local_refresh_index;
                 }
                 if (fundamental_news) {
-                    advance_fundamental_news(fundamental_news_index);
+                    profile_window_phase(
+                        &WindowPhaseWire::fundamental_seconds,
+                        [&]() {
+                            advance_fundamental_news(
+                                fundamental_news_index);
+                        });
                     next_fundamental_news_ns = checked_add_time(
                         next_fundamental_news_ns,
                         fundamental_news_interval_ns);
                     ++fundamental_news_index;
                 }
                 if (global_boundary) {
-                    schedule_shared_market_makers(
-                        end_ns, global_boundary_index);
+                    profile_window_phase(
+                        &WindowPhaseWire::shared_market_maker_seconds,
+                        [&]() {
+                            schedule_shared_market_makers(
+                                end_ns, global_boundary_index);
+                        });
                 }
                 if (fundamental_news) {
-                    schedule_news_impulse_value_agents(
-                        end_ns, fundamental_news_index - 1U);
+                    profile_window_phase(
+                        &WindowPhaseWire::news_value_agent_seconds,
+                        [&]() {
+                            schedule_news_impulse_value_agents(
+                                end_ns, fundamental_news_index - 1U);
+                        });
                 }
                 if (value_decision) {
-                    schedule_value_agents(end_ns, value_decision_index);
+                    profile_window_phase(
+                        &WindowPhaseWire::periodic_value_agent_seconds,
+                        [&]() {
+                            schedule_value_agents(
+                                end_ns, value_decision_index);
+                        });
                     next_value_decision_ns = checked_add_time(
                         next_value_decision_ns,
                         config_.value_agent_interval_ns);
@@ -630,6 +792,7 @@ private:
                     ++global_boundary_index;
                 }
             }
+            finish_window_phase_profile(phase_interval_start);
             current_ns = end_ns;
         }
 
@@ -642,6 +805,7 @@ private:
         write_shock_targets(assets);
         write_asset_work(gather_asset_work());
         write_boundary_arrivals(gather_boundary_arrivals());
+        write_window_phase_profiles(gather_window_phase_profiles());
         compute_shared_financial_results(books, assets);
 
         check_mpi(MPI_Barrier(communicator_), "MPI_Barrier(finish)");
@@ -854,6 +1018,18 @@ private:
             throw std::invalid_argument(
                 "risk lookahead requires a globally capacity-constrained "
                 "shared market maker and buffered observations");
+        }
+        if (!config_.window_phase_profile_csv.empty()
+            && config_.use_nonblocking_risk_collective) {
+            throw std::invalid_argument(
+                "window phase profiling requires the blocking risk path so "
+                "reported phases remain exclusive");
+        }
+        if (!config_.window_phase_profile_csv.empty()
+            && config_.profile_boundary_wait) {
+            throw std::invalid_argument(
+                "window phase profiling cannot be combined with the "
+                "extra boundary-wait barrier");
         }
         if (config_.persistent_openmp_team
             && config_.openmp_schedule
@@ -2304,10 +2480,21 @@ private:
     void update_shared_risk(
         std::int64_t time_ns,
         CapacityIndependentWork&& capacity_independent_work) {
+        const double profiled_local_start = active_window_phase_ != nullptr
+            ? MPI_Wtime() : 0.0;
+        bool profiled_local_finished = false;
+        const auto finish_profiled_local = [&]() {
+            if (active_window_phase_ != nullptr && !profiled_local_finished) {
+                active_window_phase_->risk_local_seconds +=
+                    MPI_Wtime() - profiled_local_start;
+                profiled_local_finished = true;
+            }
+        };
         if (!config_.enable_shared_market_maker) {
             shared_gross_exposure_ = 0.0;
             shared_utilization_ = 0.0;
             shared_quote_scale_ = 1.0;
+            finish_profiled_local();
             capacity_independent_work();
             return;
         }
@@ -2316,6 +2503,7 @@ private:
             shared_gross_exposure_ = 0.0;
             shared_utilization_ = 0.0;
             shared_quote_scale_ = 1.0;
+            finish_profiled_local();
             capacity_independent_work();
             return;
         }
@@ -2343,6 +2531,7 @@ private:
             shared_quote_scale_ = 1.0;
             risk_observations_.push_back(RiskObservationFrame{
                 time_ns, local_fixed, 0.0});
+            finish_profiled_local();
             capacity_independent_work();
             return;
         }
@@ -2354,6 +2543,7 @@ private:
             }
             risk_observations_.push_back(RiskObservationFrame{
                 time_ns, local_fixed, local_scale_sum});
+            finish_profiled_local();
             capacity_independent_work();
             return;
         }
@@ -2449,6 +2639,7 @@ private:
             }
         }
         const double risk_arrival_seconds = MPI_Wtime();
+        finish_profiled_local();
         if (!config_.boundary_arrival_csv.empty()) {
             boundary_arrivals_.push_back(BoundaryArrivalWire{
                 time_ns,
@@ -2537,6 +2728,10 @@ private:
         if (!work_completed) capacity_independent_work();
         communication_seconds_ += collective_elapsed;
         risk_collective_seconds_ += collective_elapsed;
+        if (active_window_phase_ != nullptr) {
+            active_window_phase_->risk_collective_seconds +=
+                collective_elapsed;
+        }
         if (!config_.boundary_arrival_csv.empty()) {
             boundary_arrivals_.back().collective_seconds = collective_elapsed;
         }
@@ -3142,7 +3337,13 @@ private:
     }
 
     void observe_global_metrics(std::int64_t time_ns) {
+        const double local_metrics_start = active_window_phase_ != nullptr
+            ? MPI_Wtime() : 0.0;
         const AggregateMetricSums local = local_metrics(time_ns);
+        if (active_window_phase_ != nullptr) {
+            active_window_phase_->global_metrics_local_seconds +=
+                MPI_Wtime() - local_metrics_start;
+        }
         GlobalObservationFrame frame;
         frame.time_ns = time_ns;
         frame.local = {{
@@ -3212,6 +3413,10 @@ private:
         const double elapsed = MPI_Wtime() - start;
         communication_seconds_ += elapsed;
         observation_collective_seconds_ += elapsed;
+        if (active_window_phase_ != nullptr) {
+            active_window_phase_->global_metrics_collective_seconds +=
+                elapsed;
+        }
         ++collective_calls_;
         ++observation_collective_calls_;
         consume_global_observation(frame, global);
@@ -3749,6 +3954,85 @@ private:
         }
     }
 
+    std::vector<WindowPhaseWire> gather_window_phase_profiles() {
+        if (config_.window_phase_profile_csv.empty()) return {};
+        return gather_values(window_phase_profiles_, "window phase profiles");
+    }
+
+    void write_window_phase_profiles(
+        std::vector<WindowPhaseWire> rows) const {
+        if (rank_ != 0 || config_.window_phase_profile_csv.empty()) return;
+        std::sort(rows.begin(), rows.end(),
+                  [](const WindowPhaseWire& left,
+                     const WindowPhaseWire& right) {
+                      if (left.window_index != right.window_index) {
+                          return left.window_index < right.window_index;
+                      }
+                      return left.rank < right.rank;
+                  });
+        if (rows.empty()
+            || rows.size() % static_cast<std::size_t>(world_size_) != 0U) {
+            throw std::logic_error("incomplete window phase profile");
+        }
+        for (std::size_t begin = 0; begin < rows.size();
+             begin += static_cast<std::size_t>(world_size_)) {
+            const WindowPhaseWire& first = rows[begin];
+            for (int rank = 0; rank < world_size_; ++rank) {
+                const WindowPhaseWire& row = rows[
+                    begin + static_cast<std::size_t>(rank)];
+                if (row.window_index != first.window_index
+                    || row.start_time_ns != first.start_time_ns
+                    || row.end_time_ns != first.end_time_ns
+                    || row.rank != rank) {
+                    throw std::logic_error(
+                        "inconsistent rank coverage in window phase profile");
+                }
+            }
+        }
+        const std::filesystem::path path(config_.window_phase_profile_csv);
+        if (path.has_parent_path()) {
+            std::filesystem::create_directories(path.parent_path());
+        }
+        std::ofstream output(path);
+        if (!output) {
+            throw std::runtime_error(
+                "cannot open window phase profile CSV: " + path.string());
+        }
+        output << "window_index,start_time_seconds,end_time_seconds,rank,"
+                  "event_processing_seconds,risk_local_seconds,"
+                  "risk_collective_seconds,asset_moments_seconds,"
+                  "return_panel_seconds,local_market_maker_seconds,"
+                  "risk_finalize_seconds,global_metrics_local_seconds,"
+                  "global_metrics_collective_seconds,"
+                  "global_metrics_write_seconds,fundamental_seconds,"
+                  "shared_market_maker_seconds,news_value_agent_seconds,"
+                  "periodic_value_agent_seconds,other_seconds,"
+                  "total_window_seconds\n";
+        output << std::setprecision(17);
+        for (const WindowPhaseWire& row : rows) {
+            output << row.window_index << ','
+                   << static_cast<double>(row.start_time_ns) / 1e9 << ','
+                   << static_cast<double>(row.end_time_ns) / 1e9 << ','
+                   << row.rank << ','
+                   << row.event_processing_seconds << ','
+                   << row.risk_local_seconds << ','
+                   << row.risk_collective_seconds << ','
+                   << row.asset_moments_seconds << ','
+                   << row.return_panel_seconds << ','
+                   << row.local_market_maker_seconds << ','
+                   << row.risk_finalize_seconds << ','
+                   << row.global_metrics_local_seconds << ','
+                   << row.global_metrics_collective_seconds << ','
+                   << row.global_metrics_write_seconds << ','
+                   << row.fundamental_seconds << ','
+                   << row.shared_market_maker_seconds << ','
+                   << row.news_value_agent_seconds << ','
+                   << row.periodic_value_agent_seconds << ','
+                   << row.other_seconds << ','
+                   << row.total_window_seconds << '\n';
+        }
+    }
+
     void write_asset_summary(std::vector<AssetMomentWire> moments) const {
         if (rank_ != 0 || config_.asset_summary_csv.empty()) return;
         if (moments.size() != static_cast<std::size_t>(config_.asset_count)) {
@@ -4189,6 +4473,10 @@ private:
     std::vector<ClusterObservationFrame> cluster_observations_;
     std::vector<RiskObservationFrame> risk_observations_;
     std::vector<BoundaryArrivalWire> boundary_arrivals_;
+    std::vector<WindowPhaseWire> window_phase_profiles_;
+    WindowPhaseWire* active_window_phase_ = nullptr;
+    double active_risk_total_seconds_ = 0.0;
+    double active_global_metrics_total_seconds_ = 0.0;
     // Reused at every boundary; avoids 23,401 heap allocations in the
     // parallel exact-integer exposure ablation.
     std::vector<long long> fixed_exposure_contributions_;
