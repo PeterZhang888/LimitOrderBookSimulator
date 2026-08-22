@@ -57,6 +57,21 @@ into the scheduling-cost input used by all weighted-static cells. The
 preparation output is kept under `cost_preparation/` and is not a timed
 treatment.
 
+Two focused launchers provide the matched process--thread comparisons used to
+interpret the OpenMP results:
+
+```bash
+mkdir -p slurm results/seagull
+sbatch experiments/07_mpi_openmp/submit_64core_mpi_hybrid_pair.sh
+sbatch experiments/07_mpi_openmp/submit_16core_mpi_openmp_pair.sh
+```
+
+The first compares 64 MPI ranks with 32 MPI ranks times two OpenMP threads on
+the same four nodes. The second compares 16 MPI ranks with one MPI-free
+process times 16 OpenMP threads on the same node and physical cores. Each job
+uses seven alternating-order pairs, validates CPU placement, and directly
+compares the complete scientific CSV outputs before reporting timing.
+
 Experiment 09 writes the full rank-local simulated return panels used for the
 temporal diagnostics. The derived empirical comparison panel is not present
 in the supplied runtime-data archives; see `DATA.md`.
