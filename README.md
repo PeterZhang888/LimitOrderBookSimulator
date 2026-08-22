@@ -177,6 +177,25 @@ cyclic ownership with measured-cost thread assignment, this is a comparison
 of two complete execution configurations; it does not isolate the programming
 model from the ownership policy.
 
+The complete permanent-owner decomposition campaign applies the same design
+to every threaded layout at 16, 32 and 64 total physical cores. MPI ownership
+remains cyclic. Within each rank, its local books are assigned once to threads
+using the common measured-cost file and retain those thread owners for the
+whole session. The campaign covers
+`16x1, 8x2, 4x4, 2x8, 1x16`,
+`32x1, 16x2, 8x4, 4x8, 2x16`, and
+`64x1, 32x2, 16x4, 8x8, 4x16`:
+
+```bash
+mkdir -p slurm results/seagull
+bash experiments/07_mpi_openmp/submit_fixed_ownership_matrix.sh
+```
+
+The driver submits one exclusive job for each total core count. Each job uses
+seven rotating-order blocks, verifies physical-core placement, requires
+reproducible outputs within every layout, and compares all scientific outputs
+with its pure-MPI control before accepting the timing table.
+
 To diagnose the 16-core result phase by phase, run the separate instrumented
 campaign:
 

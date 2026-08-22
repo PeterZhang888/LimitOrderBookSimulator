@@ -1,0 +1,262 @@
+#!/usr/bin/env python3
+import csv
+import math
+import pathlib
+import statistics
+import sys
+
+import summarize_layout_pair as base
+
+
+def fail(message):
+    raise SystemExit(message)
+
+
+def layouts_for(total_cores):
+    return [
+        ("mpi_{}x{}".format(total_cores // threads, threads),
+         total_cores // threads, threads)
+        for threads in (1, 2, 4, 8, 16)
+    ]
+
+
+def validate_order(root, layouts):
+    with (root / "run_order.csv").open(
+        newline="", encoding="utf-8"
+    ) as handle:
+        rows = list(csv.DictReader(handle))
+    if len(rows) != 7 * len(layouts):
+        fail("run_order.csv does not contain the complete 7-by-5 matrix")
+    positions = {}
+    labels = [layout[0] for layout in layouts]
+    for block in base.BLOCKS:
+        block_rows = [row for row in rows if int(row["block"]) == block]
+        block_rows.sort(key=lambda row: int(row["position"]))
+        expected = [
+            labels[((block - 1) % len(labels) + position) % len(labels)]
+            for position in range(len(labels))
+        ]
+        if [row["variant"] for row in block_rows] != expected:
+            fail("invalid treatment order in block {}".format(block))
+        for row in block_rows:
+            label = row["variant"]
+            layout = next(item for item in layouts if item[0] == label)
+            if (int(row["ranks"]), int(row["threads"])) != layout[1:]:
+                fail("rank/thread metadata differs in block {}".format(block))
+            positions[(block, label)] = int(row["position"])
+    return positions
+
+
+def load_runs(root, layouts):
+    rows = {label: {} for label, _, _ in layouts}
+    common = dict(base.COMMON_FIELDS)
+    common.pop("openmp_schedule", None)
+    common.pop("persistent_fixed_book_ownership", None)
+    for label, ranks, threads in layouts:
+        expected = dict(common)
+        expected.update({
+            "ranks": str(ranks),
+            "assets": "1480",
+            "lobs": "1480",
+            "simulated_seconds": "23400",
+            "windows": "23400",
+            "worker_threads": str(threads),
+            "openmp_schedule": (
+                "dynamic1" if threads == 1 else "weighted-static"
+            ),
+            "persistent_fixed_book_ownership": (
+                "0" if threads == 1 else "1"
+            ),
+            "thread_ownership_output": "0",
+        })
+        for block in base.BLOCKS:
+            path = root / label / "block_{}".format(block) / "run_1.txt"
+            if not path.is_file():
+                fail("missing {}".format(path))
+            fields = base.read_run(path)
+            for name, value in expected.items():
+                if fields.get(name) != value:
+                    fail(
+                        "{} recorded {}={}, expected {}".format(
+                            path, name, fields.get(name), value
+                        )
+                    )
+            rows[label][block] = fields
+    return rows
+
+
+def validate_outputs_and_resources(root, layouts, rows):
+    control = layouts[0][0]
+    base.LAYOUT_OR_TIMING_FIELDS.update({
+        "openmp_schedule",
+        "persistent_fixed_book_ownership",
+        "predicted_thread_imbalance",
+    })
+    diagnostics = []
+    for treatment, _, _ in layouts[1:]:
+        diagnostic = base.require_equal_outputs(root, control, treatment)
+        diagnostic["treatment"] = treatment
+        source = root / "metric_equivalence.csv"
+        source.replace(root / "metric_equivalence_{}.csv".format(treatment))
+        diagnostics.append(diagnostic)
+        base.require_equal_scientific_fields(rows, control, treatment)
+        base.require_equal_resources(root, control, treatment)
+    return diagnostics
+
+
+def validate_timing(value, wall, label, block):
+    if (
+        not math.isfinite(value) or value <= 0.0
+        or not math.isfinite(wall) or wall <= 0.0
+        or value < wall
+    ):
+        fail("invalid timing for {} block {}".format(label, block))
+
+
+def main():
+    if len(sys.argv) != 3:
+        fail(
+            "usage: summarize_fixed_decomposition_matrix.py "
+            "RESULT_ROOT TOTAL_CORES"
+        )
+    root = pathlib.Path(sys.argv[1])
+    total_cores = int(sys.argv[2])
+    if total_cores not in (16, 32, 64):
+        fail("TOTAL_CORES must be 16, 32, or 64")
+    layouts = layouts_for(total_cores)
+    positions = validate_order(root, layouts)
+    rows = load_runs(root, layouts)
+    diagnostics = validate_outputs_and_resources(root, layouts, rows)
+
+    summaries = []
+    raw = []
+    timings = {}
+    stable_by_layout = {}
+    for label, ranks, threads in layouts:
+        values = []
+        walls = []
+        imbalances = []
+        for block in base.BLOCKS:
+            fields = rows[label][block]
+            value = float(fields["execution_seconds"])
+            wall = float(fields["wall_seconds"])
+            imbalance = float(fields["predicted_thread_imbalance"])
+            validate_timing(value, wall, label, block)
+            if not math.isfinite(imbalance) or imbalance < 1.0:
+                fail(
+                    "invalid predicted thread imbalance for {} block {}"
+                    .format(label, block)
+                )
+            values.append(value)
+            walls.append(wall)
+            imbalances.append(imbalance)
+            raw.append({
+                "total_cores": total_cores,
+                "block": block,
+                "position": positions[(block, label)],
+                "variant": label,
+                "ranks": ranks,
+                "threads": threads,
+                "execution_seconds": value,
+                "internal_wall_seconds": wall,
+                "predicted_max_thread_imbalance": imbalance,
+            })
+        ratio = max(values) / min(values)
+        stable = ratio <= 1.15
+        timings[label] = values
+        stable_by_layout[label] = stable
+        summaries.append({
+            "total_cores": total_cores,
+            "variant": label,
+            "ranks": ranks,
+            "threads": threads,
+            "repetitions": len(values),
+            "minimum_execution": min(values),
+            "median_execution": statistics.median(values),
+            "maximum_execution": max(values),
+            "max_min_ratio": ratio,
+            "stability": (
+                "performance_repetitions_stable"
+                if stable else "performance_repetitions_rejected"
+            ),
+            "median_internal_wall": statistics.median(walls),
+            "maximum_predicted_thread_imbalance": max(imbalances),
+        })
+
+    raw.sort(key=lambda row: (row["block"], row["position"]))
+    with (root / "raw_results.csv").open(
+        "w", newline="", encoding="utf-8"
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(raw[0].keys()))
+        writer.writeheader()
+        writer.writerows(raw)
+    with (root / "comparison.csv").open(
+        "w", newline="", encoding="utf-8"
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(summaries[0].keys()))
+        writer.writeheader()
+        writer.writerows(summaries)
+
+    control = layouts[0][0]
+    paired_rows = []
+    for treatment, ranks, threads in layouts[1:]:
+        ratios = [
+            timings[treatment][index] / timings[control][index]
+            for index in range(len(base.BLOCKS))
+        ]
+        accepted = stable_by_layout[control] and stable_by_layout[treatment]
+        paired_rows.append({
+            "total_cores": total_cores,
+            "treatment": treatment,
+            "ranks": ranks,
+            "threads": threads,
+            "control": control,
+            "performance_status": "accepted" if accepted else "timing_rejected",
+            "paired_geometric_change_pct": 100.0
+                * (base.geometric_mean(ratios) - 1.0),
+            "first_five_balanced_change_pct": 100.0
+                * (base.geometric_mean(ratios[:5]) - 1.0),
+            "minimum_paired_change_pct": 100.0 * (min(ratios) - 1.0),
+            "maximum_paired_change_pct": 100.0 * (max(ratios) - 1.0),
+        })
+    with (root / "paired_comparisons.csv").open(
+        "w", newline="", encoding="utf-8"
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(paired_rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(paired_rows)
+
+    print("configuration gate: PASS")
+    print("CPU placement gate: PASS")
+    print("scientific-equivalence gate: PASS")
+    for summary in summaries:
+        print(
+            "{} median={:.9f} min={:.9f} max={:.9f} {}"
+            .format(
+                summary["variant"],
+                summary["median_execution"],
+                summary["minimum_execution"],
+                summary["maximum_execution"],
+                summary["stability"],
+            )
+        )
+    for row in paired_rows:
+        if row["performance_status"] == "accepted":
+            print(
+                "{} vs {} paired change={:+.3f}%".format(
+                    row["treatment"], row["control"],
+                    row["paired_geometric_change_pct"],
+                )
+            )
+        else:
+            print("{} timing gate: REJECTED".format(row["treatment"]))
+    print("metric comparisons passed: {}".format(len(diagnostics)))
+    if not all(stable_by_layout.values()):
+        fail(
+            "timing gate rejected one or more layouts; complete results "
+            "were retained"
+        )
+
+
+if __name__ == "__main__":
+    main()

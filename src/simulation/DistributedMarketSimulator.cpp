@@ -296,6 +296,7 @@ struct RankResultWire {
     double boundary_wait_seconds = 0.0;
     double risk_overlap_work_seconds = 0.0;
     double risk_wait_after_overlap_seconds = 0.0;
+    double predicted_thread_imbalance = 1.0;
 };
 
 struct AssetWorkWire {
@@ -1182,10 +1183,9 @@ private:
                 "fixed book ownership is a separate OpenMP treatment");
         }
         if (config_.persistent_fixed_book_ownership
-            && (world_size_ != 1 || config_.worker_threads <= 1)) {
+            && config_.worker_threads <= 1) {
             throw std::invalid_argument(
-                "fixed book ownership requires one MPI-free process and "
-                "more than one OpenMP thread");
+                "fixed book ownership requires more than one OpenMP thread");
         }
         if (config_.persistent_fixed_book_ownership
             && config_.openmp_schedule != OpenMpSchedule::WeightedStatic) {
@@ -1198,6 +1198,10 @@ private:
             throw std::invalid_argument(
                 "thread ownership output requires persistent fixed book "
                 "ownership");
+        }
+        if (!config_.thread_ownership_csv.empty() && world_size_ != 1) {
+            throw std::invalid_argument(
+                "combined thread ownership CSV currently requires one rank");
         }
 #if !LOB_HAS_OPENMP
         if (config_.worker_threads != 1) {
@@ -1734,6 +1738,26 @@ private:
         }
         for (std::vector<std::size_t>& bucket : local_thread_buckets_) {
             std::sort(bucket.begin(), bucket.end());
+        }
+        if (config_.persistent_fixed_book_ownership) {
+            std::vector<bool> assigned(owned_assets.size(), false);
+            for (const std::vector<std::size_t>& bucket
+                    : local_thread_buckets_) {
+                for (const std::size_t local_index : bucket) {
+                    if (local_index >= assigned.size()
+                        || assigned[local_index]) {
+                        throw std::logic_error(
+                            "invalid permanent OpenMP book ownership");
+                    }
+                    assigned[local_index] = true;
+                }
+            }
+            if (std::any_of(
+                    assigned.begin(), assigned.end(),
+                    [](bool value) { return !value; })) {
+                throw std::logic_error(
+                    "incomplete permanent OpenMP book ownership");
+            }
         }
         const double mean_load = std::accumulate(
             thread_loads.begin(), thread_loads.end(), 0.0)
@@ -4495,6 +4519,7 @@ private:
         local.risk_overlap_work_seconds = risk_overlap_work_seconds_;
         local.risk_wait_after_overlap_seconds =
             risk_wait_after_overlap_seconds_;
+        local.predicted_thread_imbalance = predicted_thread_imbalance_;
 
         std::vector<RankResultWire> ranks(rank_ == 0
             ? static_cast<std::size_t>(world_size_) : 0U);
@@ -4511,6 +4536,7 @@ private:
         std::array<double, 10> global_times{};
         double min_compute = 0.0;
         double sum_compute = 0.0;
+        double maximum_thread_imbalance = 1.0;
         const double reduction_elapsed = MPI_Wtime() - reduction_start;
         communication_seconds_ += reduction_elapsed;
         terminal_collective_seconds_ += reduction_elapsed;
@@ -4545,6 +4571,9 @@ private:
                     global_times[9], wire.risk_wait_after_overlap_seconds);
                 min_compute = std::min(min_compute, wire.compute_seconds);
                 sum_compute += wire.compute_seconds;
+                maximum_thread_imbalance = std::max(
+                    maximum_thread_imbalance,
+                    wire.predicted_thread_imbalance);
                 order_balance[0] = std::min(
                     order_balance[0], wire.counts[0]);
                 order_balance[1] += wire.counts[0];
@@ -4606,7 +4635,7 @@ private:
             config_.fuse_metric_cluster_scans;
         result.predicted_partition_imbalance =
             predicted_partition_imbalance_;
-        result.predicted_thread_imbalance = predicted_thread_imbalance_;
+        result.predicted_thread_imbalance = maximum_thread_imbalance;
         result.shock_target_assets = shock_asset_count_;
         result.shock_assets = shock_asset_count_;
         result.withdrawal_windows = withdrawal_windows_;
