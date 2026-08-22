@@ -112,6 +112,7 @@ struct SimulationConfig {
         OpenMpSchedule::DynamicOne;
     // Each OpenMP change is independently switchable so an ablation can
     // compare it with the unmodified dynamic,1 reference path.
+    bool openmp_window_only = false;
     bool persistent_openmp_team = false;
     bool parallel_asset_initialization = false;
     bool parallel_boundary_reductions = false;
@@ -349,6 +350,7 @@ struct SimulationResult {
     bool realized_cost_partition = false;
     bool openmp_enabled = false;
     int worker_threads = 1;
+    bool openmp_window_only = false;
     bool persistent_openmp_team = false;
     bool parallel_asset_initialization = false;
     bool parallel_boundary_reductions = false;

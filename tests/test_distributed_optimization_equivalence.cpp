@@ -157,6 +157,11 @@ int main(int argc, char** argv) {
     persistent.persistent_openmp_team = true;
     verify("persistent", std::move(persistent));
 
+    dlob::SimulationConfig window_only = make_config(root, "window_only");
+    window_only.worker_threads = 4;
+    window_only.openmp_window_only = true;
+    verify("window_only", std::move(window_only));
+
     dlob::SimulationConfig initialization = make_config(root, "init");
     initialization.worker_threads = 4;
     initialization.parallel_asset_initialization = true;

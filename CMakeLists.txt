@@ -8,8 +8,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(LOB_REQUIRE_MPI "Require a real MPI implementation" ON)
 option(LOB_FORCE_MPI_STUB "Build the one-process OpenMP executable" OFF)
 option(LOB_ENABLE_OPENMP "Enable rank-local OpenMP worksharing" ON)
-option(LOB_OPENMP_WINDOW_ONLY
-    "Use OpenMP only for expensive event-window processing" OFF)
 option(LOB_BUILD_TESTS "Build correctness tests" ON)
 
 if(LOB_REQUIRE_MPI AND LOB_FORCE_MPI_STUB)
@@ -55,12 +53,6 @@ if(LOB_ENABLE_OPENMP)
 else()
     target_compile_definitions(lob_core PUBLIC LOB_HAS_OPENMP=0)
 endif()
-if(LOB_OPENMP_WINDOW_ONLY)
-    target_compile_definitions(lob_core PUBLIC LOB_OPENMP_WINDOW_ONLY=1)
-else()
-    target_compile_definitions(lob_core PUBLIC LOB_OPENMP_WINDOW_ONLY=0)
-endif()
-
 add_executable(lob_mpi src/main.cpp)
 target_link_libraries(lob_mpi PRIVATE lob_core)
 target_compile_options(lob_mpi PRIVATE

@@ -33,10 +33,6 @@
 #define LOB_HAS_OPENMP 0
 #endif
 
-#ifndef LOB_OPENMP_WINDOW_ONLY
-#define LOB_OPENMP_WINDOW_ONLY 0
-#endif
-
 #if LOB_HAS_OPENMP
 #include <omp.h>
 #endif
@@ -770,13 +766,13 @@ private:
 
     template <typename Function>
     void for_each_short_phase_asset(Function&& function) {
-#if LOB_OPENMP_WINDOW_ONLY
-        for (const std::unique_ptr<LocalAsset>& asset : local_assets_) {
-            function(*asset);
+        if (config_.openmp_window_only) {
+            for (const std::unique_ptr<LocalAsset>& asset : local_assets_) {
+                function(*asset);
+            }
+            return;
         }
-#else
         for_each_local_asset(std::forward<Function>(function));
-#endif
     }
 
     void validate_config() const {
@@ -865,6 +861,12 @@ private:
             throw std::invalid_argument(
                 "persistent OpenMP tasks currently require dynamic,1 mode; "
                 "compare guided and static as separate non-persistent ablations");
+        }
+        if (config_.persistent_openmp_team
+            && config_.openmp_window_only) {
+            throw std::invalid_argument(
+                "persistent OpenMP and window-only OpenMP are separate "
+                "treatments and cannot be enabled together");
         }
 #if !LOB_HAS_OPENMP
         if (config_.worker_threads != 1) {
@@ -4074,6 +4076,7 @@ private:
         result.openmp_enabled = false;
 #endif
         result.worker_threads = config_.worker_threads;
+        result.openmp_window_only = config_.openmp_window_only;
         result.persistent_openmp_team = config_.persistent_openmp_team;
         result.parallel_asset_initialization =
             config_.parallel_asset_initialization;

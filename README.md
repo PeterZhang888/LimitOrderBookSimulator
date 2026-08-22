@@ -119,6 +119,20 @@ costs from one full preparation run before starting the timed OpenMP
 comparisons; that preparation run is stored separately and is not included in
 the reported comparisons.
 
+The focused three-way OpenMP implementation comparison uses one executable,
+one exclusive four-node allocation and seven counterbalanced blocks. Every run
+uses 32 MPI ranks, two threads per rank, cyclic book ownership, synchronous
+observations and the same empirical inputs. Only the OpenMP execution method
+changes between all-phase worksharing, event-window-only worksharing and a
+persistent task-based team:
+
+```bash
+sbatch experiments/07_mpi_openmp/submit_three_way_comparison.sh
+```
+
+The job directly compares all boundary-metric and per-asset output files and
+stops if any scientific result differs.
+
 The shared Seagull runner also freezes the empirical-market controls used in
 the thesis: a 23,400-second activity-normalisation horizon, empirical relative
 quote and capacity sizing, three Shared Market Maker price levels, local

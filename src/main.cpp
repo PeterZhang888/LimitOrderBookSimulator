@@ -411,6 +411,7 @@ struct Options {
     std::string partition_cost_csv;
     int worker_threads = 1;
     std::string openmp_schedule = "dynamic1";
+    bool openmp_window_only = false;
     bool persistent_openmp_team = false;
     bool parallel_asset_initialization = false;
     bool parallel_boundary_reductions = false;
@@ -505,6 +506,7 @@ void print_usage(const char* program) {
         << "  --threads N               OpenMP worker threads per MPI rank "
            "(default 1; books remain rank-local)\n"
         << "  --openmp-schedule NAME    dynamic1, guided, static, or weighted-static\n"
+        << "  --openmp-window-only     parallelize event-window processing; run shorter per-book phases serially\n"
         << "  --persistent-openmp-team retain one OpenMP team for the session\n"
         << "  --parallel-asset-initialization initialize rank-local books concurrently\n"
         << "  --parallel-boundary-reductions parallelize exact local exposure construction\n"
@@ -621,6 +623,8 @@ Options parse_options(int argc, char** argv) {
         } else if (argument == "--openmp-schedule") {
             options.openmp_schedule = require_value(
                 index, argc, argv, argument.c_str());
+        } else if (argument == "--openmp-window-only") {
+            options.openmp_window_only = true;
         } else if (argument == "--persistent-openmp-team") {
             options.persistent_openmp_team = true;
         } else if (argument == "--parallel-asset-initialization") {
@@ -1042,6 +1046,7 @@ int main(int argc, char** argv) {
                 : (options.openmp_schedule == "weighted-static"
                     ? dlob::OpenMpSchedule::WeightedStatic
                     : dlob::OpenMpSchedule::DynamicOne));
+        config.openmp_window_only = options.openmp_window_only;
         config.persistent_openmp_team = options.persistent_openmp_team;
         config.parallel_asset_initialization =
             options.parallel_asset_initialization;
@@ -1096,8 +1101,28 @@ int main(int argc, char** argv) {
         config.return_panel_prefix = options.return_panel_prefix;
         config.shock_targets_csv = options.shock_targets_csv;
 
-        dlob::DistributedMarketSimulator simulator(MPI_COMM_WORLD, std::move(config));
+        dlob::DistributedMarketSimulator simulator(
+            MPI_COMM_WORLD, std::move(config));
+        if (MPI_Barrier(MPI_COMM_WORLD) != MPI_SUCCESS) {
+            throw std::runtime_error(
+                "MPI_Barrier failed before the outer execution timer");
+        }
+        const double execution_start_seconds = MPI_Wtime();
         const dlob::SimulationResult result = simulator.run();
+        const double local_execution_seconds =
+            MPI_Wtime() - execution_start_seconds;
+        double execution_seconds = 0.0;
+        if (MPI_Reduce(
+                &local_execution_seconds,
+                &execution_seconds,
+                1,
+                MPI_DOUBLE,
+                MPI_MAX,
+                0,
+                MPI_COMM_WORLD) != MPI_SUCCESS) {
+            throw std::runtime_error(
+                "MPI_Reduce failed for the outer execution timer");
+        }
         if (rank == 0) {
             std::cout << std::fixed << std::setprecision(9)
                 << "lob_mpi"
@@ -1132,6 +1157,8 @@ int main(int argc, char** argv) {
                     : (result.weighted_partition ? "weighted" : "cyclic"))
                 << " worker_threads=" << result.worker_threads
                 << " openmp_schedule=" << options.openmp_schedule
+                << " openmp_window_only="
+                << (result.openmp_window_only ? 1 : 0)
                 << " persistent_openmp_team="
                 << (result.persistent_openmp_team ? 1 : 0)
                 << " parallel_asset_initialization="
@@ -1158,6 +1185,7 @@ int main(int argc, char** argv) {
                 << " local_mm_refresh_boundaries="
                 << result.local_mm_refresh_boundaries
                 << " wall_seconds=" << result.wall_seconds
+                << " execution_seconds=" << execution_seconds
                 << " max_initialization_seconds="
                 << result.max_initialization_seconds
                 << " max_compute_seconds=" << result.max_compute_seconds

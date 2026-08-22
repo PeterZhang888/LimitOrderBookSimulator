@@ -93,6 +93,11 @@ if [[ ! -e "$ENVIRONMENT_FILE" ]]; then
     fi
     printf '\nmodules\n'
     module list
+    printf '\nopenmp_environment\n'
+    printf 'OMP_WAIT_POLICY=%s\n' "${OMP_WAIT_POLICY:-unset}"
+    printf 'OMP_MAX_ACTIVE_LEVELS=%s\n' \
+      "${OMP_MAX_ACTIVE_LEVELS:-unset}"
+    printf 'GOMP_SPINCOUNT=%s\n' "${GOMP_SPINCOUNT:-unset}"
   } > "$ENVIRONMENT_FILE" 2>&1
 fi
 
@@ -144,18 +149,15 @@ run_variant() {
     --bind-to core \
     bash -c '
       cpu_list=$(awk '\''/^Cpus_allowed_list:/ {print $2}'\'' /proc/self/status)
-      printf "%s,%s,%s\n" "$(hostname -s)" "$OMPI_COMM_WORLD_RANK" "$cpu_list"
-    ' | LC_ALL=C sort -t, -k1,1 -k2,2n > "$placement_file"
+      printf "%s|%s|%s\n" "$(hostname -s)" "$OMPI_COMM_WORLD_RANK" "$cpu_list"
+    ' | LC_ALL=C sort -t'|' -k1,1 -k2,2n > "$placement_file"
 
-  local observed_placements unique_placements
-  observed_placements=$(wc -l < "$placement_file")
-  unique_placements=$(cut -d, -f1,3 "$placement_file" | sort -u | wc -l)
-  if (( observed_placements != ranks || unique_placements != ranks )); then
-    printf 'ERROR: invalid CPU placement for %s: expected %d distinct rank masks, observed %d rows and %d distinct masks.\n' \
-      "$label" "$ranks" "$observed_placements" "$unique_placements" >&2
-    cat "$placement_file" >&2
-    return 1
-  fi
+  python3 "$PROJECT_DIR/scripts/validate_cpu_placement.py" \
+    "$placement_file" "$ranks" "$threads" "$tasks_per_node" || {
+      printf 'ERROR: invalid CPU placement for %s.\n' "$label" >&2
+      cat "$placement_file" >&2
+      return 1
+    }
 
   for ((rep=1; rep<=REPETITIONS; rep++)); do
     local metrics="$variant_dir/metrics_${rep}.csv"
