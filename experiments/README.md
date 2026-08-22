@@ -70,7 +70,12 @@ The first compares 64 MPI ranks with 32 MPI ranks times two OpenMP threads on
 the same four nodes. The second compares 16 MPI ranks with one MPI-free
 process times 16 OpenMP threads on the same node and physical cores. Each job
 uses seven alternating-order pairs, validates CPU placement, and directly
-compares the complete scientific CSV outputs before reporting timing.
+checks its scientific outputs before reporting timing. Per-asset files,
+counts, accounting values and all non-spread metric columns must agree
+exactly. The three derived mean-spread columns use the explicitly reported
+floating-point tolerance documented in the main README because different MPI
+rank layouts change only the association order of their double-precision
+sums.
 
 Experiment 09 writes the full rank-local simulated return panels used for the
 temporal diagnostics. The derived empirical comparison panel is not present

@@ -145,7 +145,12 @@ sbatch experiments/07_mpi_openmp/submit_16core_mpi_openmp_pair.sh
 The first pairs 64 MPI ranks with 32 ranks times two threads on the same four
 nodes. The second pairs 16 MPI ranks with one process times 16 threads on the
 same node. Both use seven alternating-order blocks, check that the two layouts
-receive the same physical cores, and require identical scientific outputs.
+receive the same physical cores, and require exact agreement in per-asset
+outputs, event counts and final accounting. Because MPI rank layouts combine
+floating-point spread sums in different orders, the three derived spread
+columns are compared with the narrow rule
+\( |a-b|\leq5\times10^{-9}+10^{-12}\max(|a|,|b|) \); every other metric
+column remains exact.
 
 The shared Seagull runner also freezes the empirical-market controls used in
 the thesis: a 23,400-second activity-normalisation horizon, empirical relative

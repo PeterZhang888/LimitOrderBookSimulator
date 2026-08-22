@@ -7,6 +7,17 @@ import sys
 
 
 BLOCKS = tuple(range(1, 8))
+METRIC_ABSOLUTE_TOLERANCE = 5.0e-9
+METRIC_RELATIVE_TOLERANCE = 1.0e-12
+TOLERANT_METRIC_COLUMNS = {
+    "mean_spread_bps",
+    "shocked_mean_spread_bps",
+    "unshocked_mean_spread_bps",
+}
+TOLERANT_RUN_FIELDS = {
+    "peak_mean_spread_bps",
+    "final_mean_spread_bps",
+}
 COMMON_FIELDS = {
     "partition": "cyclic",
     "openmp_schedule": "dynamic1",
@@ -142,13 +153,13 @@ def load_rows(root, layouts):
     return rows
 
 
-def require_equal_outputs(root, control, treatment):
-    reference = root / control / "block_1"
-    for stem in ("metrics", "assets"):
-        reference_file = reference / "{}_1.csv".format(stem)
-        reference_bytes = reference_file.read_bytes()
-        for variant in (control, treatment):
-            for block in BLOCKS:
+def require_reproducible_outputs_within_layout(root, control, treatment):
+    for variant in (control, treatment):
+        reference = root / variant / "block_1"
+        for stem in ("metrics", "assets"):
+            reference_file = reference / "{}_1.csv".format(stem)
+            reference_bytes = reference_file.read_bytes()
+            for block in BLOCKS[1:]:
                 candidate = (
                     root
                     / variant
@@ -157,10 +168,153 @@ def require_equal_outputs(root, control, treatment):
                 )
                 if candidate.read_bytes() != reference_bytes:
                     raise SystemExit(
-                        "scientific output differs: {} versus {}".format(
-                            reference_file, candidate
+                        "output is not reproducible within {}: {} versus {}".format(
+                            variant, reference_file, candidate
                         )
                     )
+
+
+def numeric_difference(left_text, right_text, context):
+    try:
+        left = float(left_text)
+        right = float(right_text)
+    except ValueError:
+        raise SystemExit("nonnumeric value in {}".format(context))
+    if not math.isfinite(left) or not math.isfinite(right):
+        raise SystemExit("nonfinite value in {}".format(context))
+    difference = abs(left - right)
+    limit = METRIC_ABSOLUTE_TOLERANCE + (
+        METRIC_RELATIVE_TOLERANCE * max(abs(left), abs(right))
+    )
+    return left, right, difference, limit
+
+
+def require_equivalent_outputs_across_layouts(root, control, treatment):
+    reference = root / control / "block_1"
+    candidate = root / treatment / "block_1"
+
+    reference_assets = reference / "assets_1.csv"
+    candidate_assets = candidate / "assets_1.csv"
+    if reference_assets.read_bytes() != candidate_assets.read_bytes():
+        raise SystemExit(
+            "per-asset scientific output differs: {} versus {}".format(
+                reference_assets, candidate_assets
+            )
+        )
+
+    reference_metrics = reference / "metrics_1.csv"
+    candidate_metrics = candidate / "metrics_1.csv"
+    with reference_metrics.open(newline="", encoding="utf-8") as handle:
+        reference_rows = list(csv.reader(handle))
+    with candidate_metrics.open(newline="", encoding="utf-8") as handle:
+        candidate_rows = list(csv.reader(handle))
+    if len(reference_rows) < 2 or len(candidate_rows) < 2:
+        raise SystemExit("metric output must contain a header and data rows")
+    if reference_rows[0] != candidate_rows[0]:
+        raise SystemExit("metric headers differ across layouts")
+    if len(reference_rows) != len(candidate_rows):
+        raise SystemExit("metric row counts differ across layouts")
+
+    header = reference_rows[0]
+    if not header or any(not name for name in header):
+        raise SystemExit("metric header contains an empty column name")
+    if len(set(header)) != len(header):
+        raise SystemExit("metric header contains duplicate column names")
+    missing_tolerant_columns = TOLERANT_METRIC_COLUMNS.difference(header)
+    if missing_tolerant_columns:
+        raise SystemExit(
+            "metric output is missing expected columns: {}".format(
+                ", ".join(sorted(missing_tolerant_columns))
+            )
+        )
+    differing_cells = 0
+    compared_cells = 0
+    above_tolerance = 0
+    maximum_absolute = 0.0
+    maximum_absolute_row = 0
+    maximum_absolute_column = "none"
+    maximum_absolute_left = ""
+    maximum_absolute_right = ""
+    maximum_scaled = 0.0
+    maximum_scaled_row = 0
+    maximum_scaled_column = "none"
+    maximum_scaled_left = ""
+    maximum_scaled_right = ""
+    for row_number, (left_row, right_row) in enumerate(
+        zip(reference_rows[1:], candidate_rows[1:]), start=2
+    ):
+        if len(left_row) != len(header) or len(right_row) != len(header):
+            raise SystemExit("metric column count differs at row {}".format(row_number))
+        for column_index, name in enumerate(header):
+            left_text = left_row[column_index]
+            right_text = right_row[column_index]
+            compared_cells += 1
+            left, right, difference, limit = numeric_difference(
+                left_text,
+                right_text,
+                "metric row {}, column {}".format(row_number, name),
+            )
+            if left_text == right_text:
+                continue
+            differing_cells += 1
+            if name not in TOLERANT_METRIC_COLUMNS:
+                raise SystemExit(
+                    "exact metric differs at row {}, column {}: {} versus {}".format(
+                        row_number, name, left_text, right_text
+                    )
+                )
+            scaled = difference / limit
+            if difference > limit:
+                above_tolerance += 1
+            if difference > maximum_absolute:
+                maximum_absolute = difference
+                maximum_absolute_row = row_number
+                maximum_absolute_column = name
+                maximum_absolute_left = left_text
+                maximum_absolute_right = right_text
+            if scaled > maximum_scaled:
+                maximum_scaled = scaled
+                maximum_scaled_row = row_number
+                maximum_scaled_column = name
+                maximum_scaled_left = left_text
+                maximum_scaled_right = right_text
+
+    diagnostic = {
+        "status": "pass" if above_tolerance == 0 else "fail",
+        "compared_cells": compared_cells,
+        "differing_cells": differing_cells,
+        "cells_above_tolerance": above_tolerance,
+        "absolute_tolerance": METRIC_ABSOLUTE_TOLERANCE,
+        "relative_tolerance": METRIC_RELATIVE_TOLERANCE,
+        "maximum_absolute_difference": maximum_absolute,
+        "maximum_absolute_row": maximum_absolute_row,
+        "maximum_absolute_column": maximum_absolute_column,
+        "maximum_absolute_reference_value": maximum_absolute_left,
+        "maximum_absolute_treatment_value": maximum_absolute_right,
+        "maximum_scaled_difference": maximum_scaled,
+        "maximum_scaled_row": maximum_scaled_row,
+        "maximum_scaled_column": maximum_scaled_column,
+        "maximum_scaled_reference_value": maximum_scaled_left,
+        "maximum_scaled_treatment_value": maximum_scaled_right,
+    }
+    with (root / "metric_equivalence.csv").open(
+        "w", newline="", encoding="utf-8"
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(diagnostic.keys()))
+        writer.writeheader()
+        writer.writerow(diagnostic)
+    if above_tolerance:
+        raise SystemExit(
+            "metric equivalence failed: {} cells exceed tolerance; see {}".format(
+                above_tolerance, root / "metric_equivalence.csv"
+            )
+        )
+    return diagnostic
+
+
+def require_equal_outputs(root, control, treatment):
+    require_reproducible_outputs_within_layout(root, control, treatment)
+    return require_equivalent_outputs_across_layouts(root, control, treatment)
 
 
 def require_equal_scientific_fields(rows, control, treatment):
@@ -184,6 +338,26 @@ def require_equal_scientific_fields(rows, control, treatment):
                     )
             for field, value in reference.items():
                 if field in LAYOUT_OR_TIMING_FIELDS:
+                    continue
+                if field in TOLERANT_RUN_FIELDS:
+                    _, _, difference, limit = numeric_difference(
+                        value,
+                        candidate[field],
+                        "run field {} for {} block {}".format(
+                            field, variant, block
+                        ),
+                    )
+                    if difference > limit:
+                        raise SystemExit(
+                            "run field {} differs beyond tolerance for {} block {}: "
+                            "{} versus {}".format(
+                                field,
+                                variant,
+                                block,
+                                candidate[field],
+                                value,
+                            )
+                        )
                     continue
                 if candidate[field] != value:
                     raise SystemExit(
@@ -259,7 +433,7 @@ def main():
 
     require_complete_order(root, control, treatment)
     rows = load_rows(root, layouts)
-    require_equal_outputs(root, control, treatment)
+    metric_diagnostic = require_equal_outputs(root, control, treatment)
     require_equal_scientific_fields(rows, control, treatment)
     require_equal_resources(root, control, treatment)
 
@@ -360,7 +534,17 @@ def main():
 
     print("configuration gate: PASS")
     print("CPU placement gate: PASS")
-    print("scientific outputs: identical across all 14 runs")
+    print("per-asset outputs: identical across all 14 runs")
+    print(
+        "derived metrics: numerically equivalent; differing_cells={}, "
+        "maximum_scaled_difference={:.6f}, row={}, column={}".format(
+            metric_diagnostic["differing_cells"],
+            metric_diagnostic["maximum_scaled_difference"],
+            metric_diagnostic["maximum_scaled_row"],
+            metric_diagnostic["maximum_scaled_column"],
+        )
+    )
+    print("metric diagnostic: {}".format(root / "metric_equivalence.csv"))
     for summary in summaries:
         print(
             "{} median={:.9f} min={:.9f} max={:.9f} max/min={:.6f} {}".format(

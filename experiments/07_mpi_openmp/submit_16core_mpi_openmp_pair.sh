@@ -40,6 +40,10 @@ export OMP_MAX_ACTIVE_LEVELS=1
 unset GOMP_SPINCOUNT || true
 
 source "$PROJECT_DIR/hpc/seagull/common.sh"
+command -v taskset >/dev/null || {
+  printf 'ERROR: taskset is required for the MPI-free OpenMP placement.\n' >&2
+  exit 1
+}
 
 common_arguments=(
   --partition cyclic
@@ -51,26 +55,35 @@ common_arguments=(
   --shared-quote-multiplier 2.00
 )
 
-record_openmp_placement() {
-  local variant_dir=$1
-  mkdir -p "$variant_dir"
-  cpu_list=$(awk '/^Cpus_allowed_list:/ {print $2}' /proc/self/status)
-  printf '%s|0|%s\n' "$(hostname -s)" "$cpu_list" \
-    > "$variant_dir/cpu_placement.txt"
-  python3 "$PROJECT_DIR/scripts/validate_cpu_placement.py" \
-    "$variant_dir/cpu_placement.txt" 1 16 1
-}
-
-run_openmp_direct() {
+run_openmp_checked() {
   local label=$1
   shift
   local variant_dir="$RESULT_ROOT/$label"
+  local mpi_placement="$RESULT_ROOT/mpi_16x1/block_1/cpu_placement.txt"
+  test -s "$mpi_placement" || {
+    printf 'ERROR: the block-1 MPI placement must be recorded first.\n' >&2
+    return 1
+  }
+  local cpu_list
+  cpu_list=$(awk -F'|' '{print $3}' "$mpi_placement" | paste -sd, -)
   mkdir -p "$variant_dir"
   OMP_NUM_THREADS=16 \
   OMP_DYNAMIC=FALSE \
   OMP_PLACES=cores \
   OMP_PROC_BIND=spread \
-  "$PROJECT_DIR/build-openmp/lob_openmp" \
+  taskset -c "$cpu_list" \
+  bash -c '
+    placement=$1
+    validator=$2
+    shift 2
+    allowed=$(awk '\''/^Cpus_allowed_list:/ {print $2}'\'' /proc/self/status)
+    printf "%s|0|%s\n" "$(hostname -s)" "$allowed" > "$placement"
+    python3 "$validator" "$placement" 1 16 1
+    exec "$@"
+  ' bash \
+    "$variant_dir/cpu_placement.txt" \
+    "$PROJECT_DIR/scripts/validate_cpu_placement.py" \
+    "$PROJECT_DIR/build-openmp/lob_openmp" \
     --duration-seconds "$DURATION_SECONDS" \
     --window-ms 1000 \
     "${INPUT_ARGS[@]}" \
@@ -106,9 +119,7 @@ for block in 1 2 3 4 5 6 7; do
           "${common_arguments[@]}"
         ;;
       openmp_1x16)
-        variant_dir="$RESULT_ROOT/$variant/block_$block"
-        record_openmp_placement "$variant_dir"
-        run_openmp_direct "$variant/block_$block" \
+        run_openmp_checked "$variant/block_$block" \
           "${common_arguments[@]}"
         ;;
       *)

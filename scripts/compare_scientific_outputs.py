@@ -20,11 +20,24 @@ def main():
     parser.add_argument("--relative-tolerance", type=float, default=0.0)
     args = parser.parse_args()
 
-    if args.absolute_tolerance < 0.0 or args.relative_tolerance < 0.0:
-        raise SystemExit("numeric tolerances must be non-negative")
+    if (
+        not math.isfinite(args.absolute_tolerance)
+        or not math.isfinite(args.relative_tolerance)
+        or args.absolute_tolerance < 0.0
+        or args.relative_tolerance < 0.0
+    ):
+        raise SystemExit("numeric tolerances must be finite and non-negative")
 
     reference = rows(args.reference)
     treatment = rows(args.treatment)
+    if len(reference) < 2 or len(treatment) < 2:
+        raise SystemExit("both CSV files must contain a header and data rows")
+    if reference[0] != treatment[0]:
+        raise SystemExit("CSV headers differ")
+    if not reference[0] or any(not name for name in reference[0]):
+        raise SystemExit("CSV header contains an empty column name")
+    if len(set(reference[0])) != len(reference[0]):
+        raise SystemExit("CSV header contains duplicate column names")
     if len(reference) != len(treatment):
         raise SystemExit(
             "row count differs: {} != {}".format(
@@ -34,7 +47,7 @@ def main():
     tolerated_cells = 0
     maximum_absolute_difference = 0.0
     for row_number, (left, right) in enumerate(
-        zip(reference, treatment), start=1
+        zip(reference[1:], treatment[1:]), start=2
     ):
         if len(left) != len(right):
             raise SystemExit(
@@ -45,34 +58,50 @@ def main():
         for column_number, (a, b) in enumerate(
             zip(left, right), start=1
         ):
-            if a == b:
-                continue
+            column_name = "unknown"
+            if reference and column_number <= len(reference[0]):
+                column_name = reference[0][column_number - 1]
+            if a != b and column_name == "time_seconds":
+                raise SystemExit(
+                    "time key differs at row {}: {!r} != {!r}".format(
+                        row_number, a, b
+                    )
+                )
             try:
                 left_number = float(a)
                 right_number = float(b)
             except ValueError:
                 left_number = None
                 right_number = None
-            if (
-                left_number is not None
-                and math.isfinite(left_number)
-                and math.isfinite(right_number)
-                and math.isclose(
-                    left_number,
-                    right_number,
-                    rel_tol=args.relative_tolerance,
-                    abs_tol=args.absolute_tolerance,
+            if a == b:
+                if left_number is not None and (
+                    not math.isfinite(left_number)
+                    or not math.isfinite(right_number)
+                ):
+                    raise SystemExit(
+                        "nonfinite value at row {}, column {} ({})".format(
+                            row_number, column_number, column_name
+                        )
+                    )
+                continue
+            if left_number is not None:
+                finite = math.isfinite(left_number) and math.isfinite(right_number)
+                difference = abs(left_number - right_number)
+                limit = args.absolute_tolerance + (
+                    args.relative_tolerance
+                    * max(abs(left_number), abs(right_number))
                 )
-            ):
+            else:
+                finite = False
+                difference = math.inf
+                limit = 0.0
+            if finite and difference <= limit:
                 tolerated_cells += 1
                 maximum_absolute_difference = max(
                     maximum_absolute_difference,
-                    abs(left_number - right_number),
+                    difference,
                 )
                 continue
-            column_name = "unknown"
-            if reference and column_number <= len(reference[0]):
-                column_name = reference[0][column_number - 1]
             raise SystemExit(
                 "difference at row {}, column {} ({}): {!r} != {!r}".format(
                     row_number, column_number, column_name, a, b
