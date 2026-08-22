@@ -20,7 +20,8 @@ DURATION_SECONDS=23400
 SEED=20200130
 CORES_PER_NODE=16
 BACKGROUND_MODEL=queue-reactive-v1
-BUILD_DIR="${BUILD_DIR:-$PROJECT_DIR/build-mpi}"
+BUILD_DIR="$PROJECT_DIR/build-mpi"
+OPENMP_BUILD_DIR="$PROJECT_DIR/build-openmp"
 BLOCK_COUNT=3
 
 # Load the compiler/MPI runtime before executing either binary during the
@@ -39,16 +40,16 @@ test -x "$BUILD_DIR/lob_mpi" || {
     "$BUILD_DIR/lob_mpi" >&2
   exit 1
 }
-test -x "$PROJECT_DIR/build-openmp/lob_openmp" || {
+test -x "$OPENMP_BUILD_DIR/lob_openmp" || {
   printf 'ERROR: missing MPI-free OpenMP executable: %s\nRun scripts/build_seagull.sh first.\n' \
-    "$PROJECT_DIR/build-openmp/lob_openmp" >&2
+    "$OPENMP_BUILD_DIR/lob_openmp" >&2
   exit 1
 }
 if [[ -n "$(git -C "$PROJECT_DIR" status --porcelain --untracked-files=no)" ]]; then
   printf 'ERROR: tracked source files have local modifications.\n' >&2
   exit 1
 fi
-for executable in "$BUILD_DIR/lob_mpi" "$PROJECT_DIR/build-openmp/lob_openmp"; do
+for executable in "$BUILD_DIR/lob_mpi" "$OPENMP_BUILD_DIR/lob_openmp"; do
   if ! help_output=$("$executable" --help 2>&1); then
     printf 'ERROR: cannot execute %s during preflight:\n%s\n' \
       "$executable" "$help_output" >&2
@@ -104,7 +105,7 @@ run_profiled_openmp() {
   ' bash \
     "$variant_dir/cpu_placement.txt" \
     "$PROJECT_DIR/scripts/validate_cpu_placement.py" \
-    "$PROJECT_DIR/build-openmp/lob_openmp" \
+    "$OPENMP_BUILD_DIR/lob_openmp" \
     --duration-seconds "$DURATION_SECONDS" \
     --window-ms 1000 \
     "${INPUT_ARGS[@]}" \

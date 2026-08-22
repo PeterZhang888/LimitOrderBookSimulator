@@ -156,6 +156,7 @@ To diagnose the 16-core result phase by phase, run the separate instrumented
 campaign:
 
 ```bash
+mkdir -p slurm results/seagull
 sbatch experiments/07_mpi_openmp/submit_16core_window_profile.sh
 ```
 
