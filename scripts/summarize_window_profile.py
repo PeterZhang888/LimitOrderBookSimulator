@@ -1127,6 +1127,11 @@ def main():
         "slowest-rank per-window decomposition is a diagnostic proxy, "
         "not an exact full-session critical path"
     )
+    print(
+        "collective elapsed time includes rank-arrival waiting and MPI "
+        "progress; OpenMP phase time includes scheduling and its implicit "
+        "end-of-loop barrier"
+    )
     ranked_excess = sorted(
         combined_ratios[1:], key=lambda row: row["excess_seconds"], reverse=True
     )

@@ -165,6 +165,10 @@ one-second simulated interval it records event processing, the local exposure
 scan, risk synchronization, asset-moment and global-metric scans, and each
 agent phase.  Rows are kept in memory and written only after the simulated
 session; no profiling collective or file write is inserted inside a window.
+An OpenMP phase includes its useful work, scheduling and implicit end-of-loop
+barrier; it is not a barrier-only measurement.  The reported MPI collective
+time likewise includes rank-arrival waiting and MPI progress, not just data
+movement.
 These diagnostic timings provide a profiled-window decomposition and do not
 replace the uninstrumented performance results.  The slowest rank observed in
 each window is a diagnostic proxy, not an exact reconstruction of the full
