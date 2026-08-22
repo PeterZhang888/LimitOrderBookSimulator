@@ -79,7 +79,9 @@ def summarize(path, expected_rank_count, expected_boundaries):
     if ranks != contiguous_ranks:
         fail("rank set is incomplete in {}".format(path))
     boundaries = sorted(set(key[0] for key in grouped))
-    if boundaries != list(range(boundaries[-1] + 1)):
+    # The simulator increments its boundary counter before recording the
+    # initial t=0 reduction, so a full session is numbered 1, ..., 23,401.
+    if boundaries != list(range(1, boundaries[-1] + 1)):
         fail("boundary indices are incomplete in {}".format(path))
     if len(ranks) != expected_rank_count:
         fail("{} contains {} ranks; expected {}".format(

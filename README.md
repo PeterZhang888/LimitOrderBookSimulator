@@ -229,6 +229,9 @@ the full per-window phase decomposition. The resulting
 `boundary_summary.csv` separates variation in rank-local arrival work from
 time experienced inside the collective. The diagnostic does not enable an
 extra boundary barrier and does not alter the financial model.
+If only the post-run analysis fails, preserve the captured result directory
+and submit `analyze_collective_stall.sbatch` with the original job number; the
+simulation is not repeated.
 
 The shared Seagull runner also freezes the empirical-market controls used in
 the thesis: a 23,400-second activity-normalisation horizon, empirical relative
