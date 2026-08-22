@@ -133,6 +133,20 @@ sbatch experiments/07_mpi_openmp/submit_three_way_comparison.sh
 The job directly compares all boundary-metric and per-asset output files and
 stops if any scientific result differs.
 
+Two smaller matched campaigns provide the pure-MPI reference at 64 physical
+cores and the pure-MPI versus MPI-free OpenMP comparison at 16 physical
+cores:
+
+```bash
+sbatch experiments/07_mpi_openmp/submit_64core_mpi_hybrid_pair.sh
+sbatch experiments/07_mpi_openmp/submit_16core_mpi_openmp_pair.sh
+```
+
+The first pairs 64 MPI ranks with 32 ranks times two threads on the same four
+nodes. The second pairs 16 MPI ranks with one process times 16 threads on the
+same node. Both use seven alternating-order blocks, check that the two layouts
+receive the same physical cores, and require identical scientific outputs.
+
 The shared Seagull runner also freezes the empirical-market controls used in
 the thesis: a 23,400-second activity-normalisation horizon, empirical relative
 quote and capacity sizing, three Shared Market Maker price levels, local
