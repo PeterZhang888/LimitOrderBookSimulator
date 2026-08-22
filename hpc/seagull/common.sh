@@ -20,10 +20,6 @@ if [[ "$BACKGROUND_MODEL" == queue-reactive-v1 ]]; then
   }
   MODEL_ARGS+=(--background-policy-csv "$BACKGROUND_POLICY_CSV")
 fi
-if [[ -s "$VALUE_POLICY_CSV" ]]; then
-  MODEL_ARGS+=(--value-agent-policy-csv "$VALUE_POLICY_CSV")
-fi
-
 if [[ -n "${BASE_CONFIG:-}" ]]; then
   : "${ASSET_COUNT:?set ASSET_COUNT when BASE_CONFIG is used}"
   INPUT_ARGS=(--base-config "$BASE_CONFIG" --assets "$ASSET_COUNT")
@@ -34,6 +30,12 @@ else
       "$UNIVERSE_CONFIG" >&2
     exit 1
   }
+  # The empirical Value Agent policy contains one row for each asset in the
+  # empirical universe.  Never attach it to a synthetic template expansion,
+  # whose asset count can differ (for example, the 10,000-book benchmark).
+  if [[ -s "$VALUE_POLICY_CSV" ]]; then
+    MODEL_ARGS+=(--value-agent-policy-csv "$VALUE_POLICY_CSV")
+  fi
   INPUT_ARGS=(--universe-config "$UNIVERSE_CONFIG")
   # Frozen empirical-market controls used by the thesis. Experiment files
   # change only their declared treatment; they do not silently inherit the
