@@ -17,10 +17,11 @@ ASSET_COUNT="${ASSET_COUNT:-10000}"
 BACKGROUND_MODEL=legacy
 REPETITIONS="${REPETITIONS:-1}"
 DURATION_SECONDS="${DURATION_SECONDS:-23400}"
+RANKS="${RANKS:-256}"
 
 source "$PROJECT_DIR/hpc/seagull/common.sh"
 
-run_variant full_10000 256 1 \
+run_variant full_10000 "$RANKS" 1 \
   --partition cyclic --synchronous-observations \
   --disable-persistent-risk-collective \
   --shared-inventory-policy gross_pooled

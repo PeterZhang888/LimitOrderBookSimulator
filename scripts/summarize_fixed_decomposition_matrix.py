@@ -8,7 +8,6 @@ import sys
 import summarize_layout_pair as base
 
 HEALTH_THRESHOLD_MS = 2.0
-POSTRUN_THRESHOLD_SECONDS = 120.0
 
 
 def fail(message):
@@ -23,16 +22,16 @@ def layouts_for(total_cores):
     ]
 
 
-def validate_order(root, layouts):
+def validate_order(root, layouts, blocks):
     with (root / "run_order.csv").open(
         newline="", encoding="utf-8"
     ) as handle:
         rows = list(csv.DictReader(handle))
-    if len(rows) != 7 * len(layouts):
-        fail("run_order.csv does not contain the complete 7-by-5 matrix")
+    if len(rows) != len(blocks) * len(layouts):
+        fail("run_order.csv does not contain the requested matrix")
     positions = {}
     labels = [layout[0] for layout in layouts]
-    for block in base.BLOCKS:
+    for block in blocks:
         block_rows = [row for row in rows if int(row["block"]) == block]
         block_rows.sort(key=lambda row: int(row["position"]))
         expected = [
@@ -50,7 +49,7 @@ def validate_order(root, layouts):
     return positions
 
 
-def load_runs(root, layouts):
+def load_runs(root, layouts, blocks):
     rows = {label: {} for label, _, _ in layouts}
     common = dict(base.COMMON_FIELDS)
     common.pop("openmp_schedule", None)
@@ -74,7 +73,7 @@ def load_runs(root, layouts):
             "mpi_health_check_iterations": "100",
             "mpi_health_check_threshold_ms": "2.000000000",
         })
-        for block in base.BLOCKS:
+        for block in blocks:
             path = root / label / "block_{}".format(block) / "run_1.txt"
             if not path.is_file():
                 fail("missing {}".format(path))
@@ -90,14 +89,13 @@ def load_runs(root, layouts):
             execution = float(fields["execution_seconds"])
             if not math.isfinite(health) or health > HEALTH_THRESHOLD_MS:
                 fail("{} failed the MPI health gate".format(path))
-            if (not math.isfinite(execution)
-                    or execution >= POSTRUN_THRESHOLD_SECONDS):
-                fail("{} failed the post-run timing gate".format(path))
+            if not math.isfinite(execution) or execution <= 0.0:
+                fail("{} recorded an invalid execution time".format(path))
             rows[label][block] = fields
     return rows
 
 
-def validate_attempts(root, layouts):
+def validate_attempts(root, layouts, blocks):
     path = root / "attempts.csv"
     if not path.is_file():
         fail("missing {}".format(path))
@@ -105,7 +103,7 @@ def validate_attempts(root, layouts):
         attempt_rows = list(csv.DictReader(handle))
     expected_slots = {"cost_preparation"}
     for label, _, _ in layouts:
-        for block in base.BLOCKS:
+        for block in blocks:
             expected_slots.add("{}/block_{}".format(label, block))
     observed_accepted = set()
     attempts_by_slot = {}
@@ -128,17 +126,20 @@ def validate_attempts(root, layouts):
             execution = float(row["execution_seconds"])
             if (health > HEALTH_THRESHOLD_MS
                     or not math.isfinite(execution)
-                    or execution >= POSTRUN_THRESHOLD_SECONDS):
+                    or execution <= 0.0):
                 fail("accepted attempt violates a safeguard for {}".format(slot))
             observed_accepted.add(slot)
         elif status == "preflight_rejected":
             if health <= HEALTH_THRESHOLD_MS or row["execution_seconds"]:
                 fail("invalid preflight rejection for {}".format(slot))
         elif status == "postrun_rejected":
+            # Backward compatibility for result directories produced before
+            # completed long runs were retained. New campaigns never write
+            # this status.
             execution = float(row["execution_seconds"])
             if (health > HEALTH_THRESHOLD_MS
                     or not math.isfinite(execution)
-                    or execution < POSTRUN_THRESHOLD_SECONDS):
+                    or execution <= 0.0):
                 fail("invalid post-run rejection for {}".format(slot))
         else:
             fail("unknown attempt status {}".format(status))
@@ -180,19 +181,24 @@ def validate_timing(value, wall, label, block):
 
 
 def main():
-    if len(sys.argv) != 3:
+    if len(sys.argv) not in (3, 4):
         fail(
             "usage: summarize_fixed_decomposition_matrix.py "
-            "RESULT_ROOT TOTAL_CORES"
+            "RESULT_ROOT TOTAL_CORES [BLOCK_COUNT]"
         )
     root = pathlib.Path(sys.argv[1])
     total_cores = int(sys.argv[2])
     if total_cores not in (16, 32, 64):
         fail("TOTAL_CORES must be 16, 32, or 64")
+    block_count = int(sys.argv[3]) if len(sys.argv) == 4 else 7
+    if block_count < 1 or block_count > 7:
+        fail("BLOCK_COUNT must be between 1 and 7")
+    blocks = tuple(range(1, block_count + 1))
+    base.BLOCKS = blocks
     layouts = layouts_for(total_cores)
-    positions = validate_order(root, layouts)
-    attempt_rows = validate_attempts(root, layouts)
-    rows = load_runs(root, layouts)
+    positions = validate_order(root, layouts, blocks)
+    attempt_rows = validate_attempts(root, layouts, blocks)
+    rows = load_runs(root, layouts, blocks)
     diagnostics = validate_outputs_and_resources(root, layouts, rows)
 
     summaries = []
@@ -203,7 +209,7 @@ def main():
         values = []
         walls = []
         imbalances = []
-        for block in base.BLOCKS:
+        for block in blocks:
             fields = rows[label][block]
             value = float(fields["execution_seconds"])
             wall = float(fields["wall_seconds"])
@@ -252,7 +258,7 @@ def main():
             "maximum_predicted_thread_imbalance": max(imbalances),
             "maximum_mpi_health_check_mean_ms": max(
                 float(rows[label][block]["mpi_health_check_max_mean_ms"])
-                for block in base.BLOCKS
+                for block in blocks
             ),
         })
 
@@ -275,7 +281,7 @@ def main():
     for treatment, ranks, threads in layouts[1:]:
         ratios = [
             timings[treatment][index] / timings[control][index]
-            for index in range(len(base.BLOCKS))
+            for index in range(len(blocks))
         ]
         stable_comparison = (
             stable_by_layout[control] and stable_by_layout[treatment]
@@ -293,7 +299,7 @@ def main():
             "paired_geometric_change_pct": 100.0
                 * (base.geometric_mean(ratios) - 1.0),
             "first_five_balanced_change_pct": 100.0
-                * (base.geometric_mean(ratios[:5]) - 1.0),
+                * (base.geometric_mean(ratios[:min(5, len(ratios))]) - 1.0),
             "minimum_paired_change_pct": 100.0 * (min(ratios) - 1.0),
             "maximum_paired_change_pct": 100.0 * (max(ratios) - 1.0),
         })
@@ -307,7 +313,7 @@ def main():
     print("configuration gate: PASS")
     print("CPU placement gate: PASS")
     print("scientific-equivalence gate: PASS")
-    print("MPI health and post-run gates: PASS ({} attempts)".format(
+    print("MPI health gate: PASS ({} attempts)".format(
         len(attempt_rows)
     ))
     for summary in summaries:

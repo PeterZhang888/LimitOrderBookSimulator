@@ -53,6 +53,28 @@ build-openmp/lob_openmp
 `lob_mpi` supports pure MPI and hybrid MPI--OpenMP. `lob_openmp` is the
 one-process MPI-free OpenMP executable.
 
+## Validate the release on Seagull
+
+After building a fresh clone, submit the full-session release checks with:
+
+```bash
+bash scripts/submit_seagull_validation.sh
+```
+
+The driver exercises every experiment directory with the final frozen inputs,
+the complete 23,400-second session and one completed run per configuration.
+Validation is limited to one or two nodes; it checks execution and scientific
+output production without repeating the seven-run performance measurements.
+Check all submitted jobs with:
+
+```bash
+bash scripts/check_seagull_validation.sh
+```
+
+The checker prints `IN PROGRESS` while jobs remain queued or running, `PASS`
+when every experiment completes and produces the expected simulator outputs,
+and `FAIL` if any experiment terminates unsuccessfully.
+
 ## Submit a complete synthetic session
 
 The artificial input under `examples/synthetic/` is included so the code can
@@ -113,11 +135,13 @@ sbatch experiments/09_stylised_facts/submit_seagull.sh
 sbatch experiments/10_inventory_policy/submit_seagull.sh
 ```
 
-These are formal full-session jobs. The performance experiments use seven
-repetitions by default. Experiment 07 creates its measured per-book scheduling
-costs from one full preparation run before starting the timed OpenMP
-comparisons; that preparation run is stored separately and is not included in
-the reported comparisons.
+These are formal full-session jobs. The main performance campaigns use seven
+repetitions unless their submission file states otherwise; weak scaling uses
+three, while the stylised-fact and inventory-policy simulations use their
+explicitly declared paths. Experiment 07 creates its measured per-book
+scheduling costs from one full preparation run before starting the timed
+OpenMP comparisons; that preparation run is stored separately and is not
+included in the reported comparisons.
 
 The thesis reports two OpenMP designs. In the phase-based control, every local
 phase dynamically redistributes complete books among the rank's threads. In
@@ -126,20 +150,17 @@ book to one thread before timing, and that ownership is retained for the
 complete session. The superseded event-window-only and task-per-book
 prototypes are not part of the formal experiment workflow.
 
-Two smaller matched campaigns provide the pure-MPI reference at 64 physical
-cores and the pure-MPI versus MPI-free OpenMP comparison at 16 physical
-cores:
+The following matched campaign provides the phase-based pure-MPI versus
+MPI-free OpenMP comparison at 16 physical cores:
 
 ```bash
-sbatch experiments/07_mpi_openmp/submit_64core_mpi_hybrid_pair.sh
 sbatch experiments/07_mpi_openmp/submit_16core_mpi_openmp_pair.sh
 ```
 
-The first pairs 64 MPI ranks with 32 ranks times two threads on the same four
-nodes. The second pairs 16 MPI ranks with one process times 16 threads on the
-same node. Both use seven alternating-order blocks, check that the two layouts
-receive the same physical cores, and require exact agreement in per-asset
-outputs, event counts and final accounting. Because MPI rank layouts combine
+It pairs 16 MPI ranks with one process times 16 threads on the same node. The
+job uses seven alternating-order blocks, checks that the two layouts receive
+the same physical cores, and requires exact agreement in per-asset outputs,
+event counts and final accounting. Because MPI rank layouts combine
 floating-point spread sums in different orders, the three derived spread
 columns are compared with the narrow rule
 \( |a-b|\leq5\times10^{-9}+10^{-12}\max(|a|,|b|) \); every other metric
@@ -171,13 +192,12 @@ of two complete execution configurations; it does not isolate the programming
 model from the ownership policy.
 
 The complete permanent-owner decomposition campaign applies the same design
-to every threaded layout at 16, 32 and 64 total physical cores. MPI ownership
+to every threaded layout at 16 and 32 total physical cores. MPI ownership
 remains cyclic. Within each rank, its local books are assigned once to threads
 using the common measured-cost file and retain those thread owners for the
 whole session. The campaign covers
 `16x1, 8x2, 4x4, 2x8, 1x16`,
-`32x1, 16x2, 8x4, 4x8, 2x16`, and
-`64x1, 32x2, 16x4, 8x8, 4x16`:
+and `32x1, 16x2, 8x4, 4x8, 2x16`:
 
 ```bash
 mkdir -p slurm results/seagull
@@ -190,16 +210,18 @@ reproducible outputs within every layout, and compares all scientific outputs
 with its pure-MPI control before accepting the timing table. Before each timed
 simulation, the same MPI communicator performs 100 pairs of small blocking
 reductions. A launch is rejected when the slowest-rank mean exceeds
-\(2\,\mathrm{ms}\) per collective. A completed simulation is rejected when
-its execution time is at least 120 seconds. Rejected attempts remain in the
-result directory and are listed in `attempts.csv`; the driver retries until
-each configuration has seven accepted repetitions, with a maximum of ten
-attempts for each required repetition. The preflight runs before the execution
-timer and does not alter the simulated market state. A layout whose
+\(2\,\mathrm{ms}\) per collective. A completed simulation is retained
+regardless of its execution time. Preflight rejections remain in the result
+directory and are listed in `attempts.csv`; the driver retries until each
+configuration has seven completed repetitions, with a maximum of ten
+preflight attempts for each required repetition. The preflight runs before
+the execution timer and does not alter the simulated market state. A layout whose
 maximum-to-minimum runtime ratio exceeds 1.15 is retained and labelled with a
 timing-variability warning; this warning does not cause an otherwise valid
 Slurm job to fail. Invalid placement, scientific disagreement, failed health
-checks and incomplete repetitions remain fatal errors.
+checks and incomplete repetitions remain fatal errors. The formal batch file
+requests a 48-hour allocation so an unusually slow but progressing repetition
+is not terminated by the former short timing limit.
 
 To diagnose the 16-core result phase by phase, run the separate instrumented
 campaign:

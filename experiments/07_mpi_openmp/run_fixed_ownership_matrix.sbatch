@@ -4,7 +4,7 @@
 #SBATCH --ntasks=16
 #SBATCH --ntasks-per-node=16
 #SBATCH --cpus-per-task=1
-#SBATCH --time=03:00:00
+#SBATCH --time=2-00:00:00
 #SBATCH --exclusive
 #SBATCH --hint=nomultithread
 #SBATCH --output=slurm/%x-%j.out
@@ -22,10 +22,10 @@ SEED=20200130
 CORES_PER_NODE=16
 BACKGROUND_MODEL=queue-reactive-v1
 BUILD_DIR="$PROJECT_DIR/build-mpi"
-STALL_THRESHOLD_SECONDS=120
 MPI_HEALTH_CHECK_ITERATIONS=100
 MPI_HEALTH_CHECK_MAX_MEAN_MS=2.0
 MAX_ATTEMPTS_PER_ACCEPTED_RUN=10
+BLOCK_COUNT="${BLOCK_COUNT:-7}"
 
 case "$TOTAL_CORES" in
   16|32|64) ;;
@@ -34,6 +34,10 @@ case "$TOTAL_CORES" in
     exit 1
     ;;
 esac
+if (( BLOCK_COUNT < 1 || BLOCK_COUNT > 7 )); then
+  printf 'ERROR: BLOCK_COUNT must be between 1 and 7.\n' >&2
+  exit 1
+fi
 EXPECTED_NODES=$((TOTAL_CORES / CORES_PER_NODE))
 if (( ${SLURM_NTASKS:-0} != TOTAL_CORES
       || ${SLURM_JOB_NUM_NODES:-0} != EXPECTED_NODES )); then
@@ -168,21 +172,6 @@ run_accepted_variant() {
       return 1
     }
 
-    if python3 - "$execution_seconds" "$STALL_THRESHOLD_SECONDS" <<'PY'
-import sys
-raise SystemExit(0 if float(sys.argv[1]) >= float(sys.argv[2]) else 1)
-PY
-    then
-      printf '%s,%d,%d,%d,%s,%s,%s,%s\n' \
-        "$slot" "$ranks" "$threads" "$attempt" \
-        postrun_rejected "$health_mean_ms" "$execution_seconds" \
-        "$attempt_dir" >> "$ATTEMPT_LOG"
-      printf '%s\n' \
-        "RETRY: $slot attempt $attempt took $execution_seconds seconds" \
-        "(post-run limit $STALL_THRESHOLD_SECONDS seconds)."
-      continue
-    fi
-
     mkdir -p "$(dirname "$canonical_dir")"
     mv "$attempt_dir" "$canonical_dir"
     printf '%s,%d,%d,%d,%s,%s,%s,%s\n' \
@@ -222,7 +211,7 @@ for index in 0 1 2 3 4; do
 done
 
 printf 'block,position,variant,ranks,threads\n' > "$RESULT_ROOT/run_order.csv"
-for block in 1 2 3 4 5 6 7; do
+for ((block=1; block<=BLOCK_COUNT; block++)); do
   rotation=$(((block - 1) % 5))
   for position_index in 0 1 2 3 4; do
     index=$(((rotation + position_index) % 5))
@@ -248,7 +237,7 @@ for block in 1 2 3 4 5 6 7; do
 done
 
 python3 "$PROJECT_DIR/scripts/summarize_fixed_decomposition_matrix.py" \
-  "$RESULT_ROOT" "$TOTAL_CORES"
+  "$RESULT_ROOT" "$TOTAL_CORES" "$BLOCK_COUNT"
 
 printf 'PERMANENT OWNERSHIP %s-CORE MATRIX: COMPLETE\n' "$TOTAL_CORES"
 printf 'RESULT_ROOT=%s\n' "$RESULT_ROOT"

@@ -15,9 +15,18 @@ BASE_CONFIG="${BASE_CONFIG:-$PROJECT_DIR/examples/synthetic/templates.csv}"
 BACKGROUND_MODEL=legacy
 ASSET_COUNT=1
 REPETITIONS="${REPETITIONS:-3}"
+read -r -a BOOKS_PER_RANK_VALUES <<< \
+  "${BOOKS_PER_RANK_OVERRIDE:-16 40}"
+read -r -a RANK_VALUES <<< \
+  "${RANK_COUNTS_OVERRIDE:-1 2 4 8 16 32 64 128 256}"
 source "$PROJECT_DIR/hpc/seagull/common.sh"
-for books_per_rank in 16 40; do
-  for ranks in 1 2 4 8 16 32 64 128 256; do
+for books_per_rank in "${BOOKS_PER_RANK_VALUES[@]}"; do
+  for ranks in "${RANK_VALUES[@]}"; do
+    [[ "$books_per_rank" =~ ^[1-9][0-9]*$ \
+       && "$ranks" =~ ^[1-9][0-9]*$ ]] || {
+      printf 'ERROR: weak-scaling overrides must be positive integers.\n' >&2
+      exit 1
+    }
     ASSET_COUNT=$((books_per_rank * ranks))
     INPUT_ARGS=(--base-config "$BASE_CONFIG" --assets "$ASSET_COUNT")
     run_variant "bpr${books_per_rank}_r${ranks}" "$ranks" 1 \

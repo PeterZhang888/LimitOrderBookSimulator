@@ -2,8 +2,10 @@
 set -Eeuo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
-RANK_COUNTS=(1 2 4 8 16 32 64 128 256)
-ASSET_COUNTS=(201 1000 2000 5000 10000)
+read -r -a RANK_COUNTS <<< \
+  "${RANK_COUNTS_OVERRIDE:-1 2 4 8 16 32 64 128 256}"
+read -r -a ASSET_COUNTS <<< \
+  "${ASSET_COUNTS_OVERRIDE:-201 1000 2000 5000 10000}"
 
 # This file is both the login-node submission driver and the worker executed
 # by each Slurm job. Run it with `bash`, not `sbatch`: the driver gives each
@@ -22,6 +24,12 @@ if [[ -z "${SLURM_JOB_ID:-}" ]]; then
     printf 'ERROR: CORES_PER_NODE must be positive.\n' >&2
     exit 1
   fi
+  for value in "${RANK_COUNTS[@]}" "${ASSET_COUNTS[@]}"; do
+    [[ "$value" =~ ^[1-9][0-9]*$ ]] || {
+      printf 'ERROR: rank and asset overrides must contain positive integers.\n' >&2
+      exit 1
+    }
+  done
   if [[ ! -x "$PROJECT_DIR/build-mpi/lob_mpi" ]]; then
     printf 'ERROR: build-mpi/lob_mpi is missing; run scripts/build_seagull.sh first.\n' >&2
     exit 1

@@ -11,8 +11,14 @@
 #SBATCH --error=slurm/%x-%j.err
 set -Eeuo pipefail
 PROJECT_DIR="${PROJECT_DIR:-$SLURM_SUBMIT_DIR}"
+read -r -a RANK_VALUES <<< \
+  "${RANK_COUNTS_OVERRIDE:-1 2 4 8 16 32 64 128 256}"
 source "$PROJECT_DIR/hpc/seagull/common.sh"
-for ranks in 1 2 4 8 16 32 64 128 256; do
+for ranks in "${RANK_VALUES[@]}"; do
+  [[ "$ranks" =~ ^[1-9][0-9]*$ ]] || {
+    printf 'ERROR: rank overrides must be positive integers.\n' >&2
+    exit 1
+  }
   run_variant "r${ranks}" "$ranks" 1 \
     --partition cyclic --synchronous-observations \
     --disable-persistent-risk-collective \
