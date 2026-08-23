@@ -96,12 +96,12 @@ def main():
         validate_csv(metrics, "time_seconds", duration + 1, float(duration))
         validate_csv(asset_csv, "asset_id", assets)
 
-    if experiment.startswith("07_mpi_openmp"):
+    if experiment.startswith("06_mpi_openmp"):
         for name in ("comparison.csv", "paired_comparisons.csv"):
             path = root / name
             if not path.is_file() or path.stat().st_size == 0:
                 fail("missing OpenMP validation summary: {}".format(path))
-    if experiment == "09_stylised_facts":
+    if experiment == "08_stylised_facts":
         panels = sorted(root.rglob("simulated_twice_midpoint.rank*.csv"))
         if len(panels) != 16:
             fail("stylised-fact validation produced {} rank panels; expected 16".format(

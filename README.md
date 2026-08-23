@@ -42,7 +42,7 @@ bash scripts/submit_seagull_validation.sh
 
 These two scripts provide the complete standard workflow: the first builds
 and tests both executables, and the second submits representative full-session
-configurations from every retained experiment. The submitted jobs use their
+configurations from every experiment. The submitted jobs use their
 ordinary experiment names in Slurm.
 
 The build command first checks that all frozen runtime inputs are present. It
@@ -79,7 +79,7 @@ bash scripts/submit_seagull_validation.sh
 ```
 
 The driver submits representative full-session configurations from every
-retained experiment directory. It uses the frozen inputs and complete
+experiment directory. It uses the frozen inputs and complete
 23,400-second session, but does not repeat the complete rank sweeps, parameter
 grids or seven-repetition performance campaigns. Validation is limited to one
 or two nodes.
@@ -159,15 +159,11 @@ formal parameter grids or performance repetitions.
 03_empirical_scaling
 04_rank_ownership
 05_observation_buffering
-07_mpi_openmp
-08_risk_collectives
-09_stylised_facts
-10_inventory_policy
+06_mpi_openmp
+07_risk_collectives
+08_stylised_facts
+09_inventory_policy
 ```
-
-Experiment number 06 was retired during finalisation. The remaining numerical
-identifiers are retained so that they continue to match the archived campaign
-references.
 
 The strong-scaling and MPI--OpenMP submit files are submission drivers because
 their configurations need different numbers of nodes. From the repository
@@ -188,16 +184,16 @@ bash experiments/02_weak_scaling/submit.sh
 bash experiments/03_empirical_scaling/submit.sh
 bash experiments/04_rank_ownership/submit.sh
 bash experiments/05_observation_buffering/submit.sh
-bash experiments/07_mpi_openmp/submit.sh
-bash experiments/08_risk_collectives/submit.sh
-bash experiments/09_stylised_facts/submit.sh
-bash experiments/10_inventory_policy/submit.sh
+bash experiments/06_mpi_openmp/submit.sh
+bash experiments/07_risk_collectives/submit.sh
+bash experiments/08_stylised_facts/submit.sh
+bash experiments/09_inventory_policy/submit.sh
 ```
 
 These are formal full-session jobs. The main performance campaigns use seven
 repetitions unless their submission file states otherwise; weak scaling uses
 three, while the stylised-fact and inventory-policy simulations use their
-explicitly declared paths. Experiment 07 creates its measured per-book
+explicitly declared paths. Experiment 06 creates its measured per-book
 scheduling costs from one full preparation run before starting the timed
 OpenMP comparisons; that preparation run is stored separately and is not
 included in the reported comparisons.
@@ -214,7 +210,7 @@ MPI-free OpenMP comparison at 16 physical cores:
 
 ```bash
 mkdir -p slurm
-sbatch experiments/07_mpi_openmp/submit_16core_mpi_openmp_pair.sh
+sbatch experiments/06_mpi_openmp/submit_16core_mpi_openmp_pair.sh
 ```
 
 It pairs 16 MPI ranks with one process times 16 threads on the same node. The
@@ -239,7 +235,7 @@ remains alive for the session; this mode uses neither repeated
 
 ```bash
 mkdir -p slurm
-sbatch experiments/07_mpi_openmp/submit_16core_fixed_ownership_pair.sh
+sbatch experiments/06_mpi_openmp/submit_16core_fixed_ownership_pair.sh
 ```
 
 The job compares the fixed-owner one-process/16-thread configuration with the
@@ -260,7 +256,7 @@ whole session. The campaign covers
 and `32x1, 16x2, 8x4, 4x8, 2x16`:
 
 ```bash
-bash experiments/07_mpi_openmp/submit_fixed_ownership_matrix.sh
+bash experiments/06_mpi_openmp/submit_fixed_ownership_matrix.sh
 ```
 
 The driver submits one exclusive job for each total core count. Each job uses
@@ -287,7 +283,7 @@ campaign:
 
 ```bash
 mkdir -p slurm
-sbatch experiments/07_mpi_openmp/submit_16core_window_profile.sh
+sbatch experiments/06_mpi_openmp/submit_16core_window_profile.sh
 ```
 
 It compares 16 one-thread MPI ranks with one 16-thread MPI-free OpenMP process
@@ -310,7 +306,7 @@ small collectives, use the focused 32-rank diagnostic instead of repeating the
 complete decomposition matrix:
 
 ```bash
-bash experiments/07_mpi_openmp/submit_collective_stall_diagnostic.sh
+bash experiments/06_mpi_openmp/submit_collective_stall_diagnostic.sh
 ```
 
 It repeats only the 32-rank/one-thread layout and stops after capturing both a
@@ -330,7 +326,7 @@ the thesis: a 23,400-second activity-normalisation horizon, empirical relative
 quote and capacity sizing, three Shared Market Maker price levels, local
 inventory scale 800, portfolio capacity 50 per asset, activation threshold
 0.5 and minimum quote scale 0.05. The ordinary empirical experiments use the
-selected quote multiplier 2.00; experiment 10 deliberately replaces that one
+selected quote multiplier 2.00; experiment 09 deliberately replaces that one
 value across its declared participation sweep.
 
 Every performance treatment writes separate boundary-metric, per-asset and

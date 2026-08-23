@@ -8,7 +8,7 @@ cd "$PROJECT_DIR"
 mkdir -p slurm results/runs
 job=$(
   sbatch --parsable \
-    experiments/07_mpi_openmp/run_collective_stall_diagnostic.sbatch
+    experiments/06_mpi_openmp/run_collective_stall_diagnostic.sbatch
 )
 job="${job%%;*}"
 [[ "$job" =~ ^[0-9]+$ ]] || {

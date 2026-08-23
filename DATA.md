@@ -37,6 +37,6 @@ that every file referenced by the frozen universe and policies is present.
 
 The two downloaded runtime-data archives did not contain the derived
 one-second empirical return panel used as the comparison series in the
-temporal stylised-fact figure. Experiment 09 therefore regenerates and checks
+temporal stylised-fact figure. Experiment 08 therefore regenerates and checks
 the complete simulated panel, but this repository cannot regenerate the final
 empirical-versus-simulated figure until that derived empirical panel is added.

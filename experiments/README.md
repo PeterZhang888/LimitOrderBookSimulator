@@ -48,9 +48,9 @@ from exceeding the time limit of one allocation. The submitted job numbers
 and result directories are written to
 `results/runs/strong_scaling_<date>/submitted_jobs.csv`.
 
-The control in experiments 01, 03--05, 07, 09 and 10 is cyclic ownership,
+The control in experiments 01, 03--06, 08 and 09 is cyclic ownership,
 synchronous observations, blocking `MPI_Allreduce`, one thread per rank and no
-other optimisation. Experiment 08 uses a cyclic, buffered blocking control
+other optimisation. Experiment 07 uses a cyclic, buffered blocking control
 because bounded lookahead requires buffered observational output. It contains
 the four factorial cells: blocking, nonblocking, lookahead, and nonblocking
 plus lookahead. The current certificate skips at most the next risk reduction;
@@ -70,7 +70,7 @@ all permanent-owner cells. The preparation output is kept under
 32-core decomposition matrices with:
 
 ```bash
-bash experiments/07_mpi_openmp/submit.sh
+bash experiments/06_mpi_openmp/submit.sh
 ```
 
 MPI ownership remains cyclic. In every threaded layout, measured book costs
@@ -90,10 +90,10 @@ columns use the explicitly reported floating-point tolerance documented in
 the main README because different MPI rank layouts change only the association
 order of their double-precision sums.
 
-The additional pair and window-profile files in `07_mpi_openmp/` are focused
+The additional pair and window-profile files in `06_mpi_openmp/` are focused
 diagnostics retained to explain the phase-based control and the origin of its
 overhead. They are not required to reproduce the final decomposition matrix.
 
-Experiment 09 writes the full rank-local simulated return panels used for the
+Experiment 08 writes the full rank-local simulated return panels used for the
 temporal diagnostics. The derived empirical comparison panel is not present
 in the supplied runtime-data archives; see `DATA.md`.

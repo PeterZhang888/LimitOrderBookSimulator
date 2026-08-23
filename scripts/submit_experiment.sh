@@ -32,7 +32,7 @@ mkdir -p "$PROJECT_DIR/slurm" "$PROJECT_DIR/results/runs"
 cd "$PROJECT_DIR"
 
 case "$EXPERIMENT_NAME" in
-  01_strong_scaling|07_mpi_openmp)
+  01_strong_scaling|06_mpi_openmp)
     exec bash "$SUBMISSION_FILE"
     ;;
   *)

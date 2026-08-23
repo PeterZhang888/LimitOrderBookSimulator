@@ -97,23 +97,23 @@ submit_case 04_rank_ownership 2 32 2 \
 submit_case 05_observation_buffering 1 16 2 \
   experiments/05_observation_buffering/submit_seagull.sh
 
-submit_case 07_mpi_openmp_16 1 16 6 \
-  experiments/07_mpi_openmp/run_fixed_ownership_matrix.sbatch \
+submit_case 06_mpi_openmp_16 1 16 6 \
+  experiments/06_mpi_openmp/run_fixed_ownership_matrix.sbatch \
   TOTAL_CORES=16 BLOCK_COUNT=1
 
-submit_case 07_mpi_openmp_32 2 32 6 \
-  experiments/07_mpi_openmp/run_fixed_ownership_matrix.sbatch \
+submit_case 06_mpi_openmp_32 2 32 6 \
+  experiments/06_mpi_openmp/run_fixed_ownership_matrix.sbatch \
   TOTAL_CORES=32 BLOCK_COUNT=1
 
-submit_case 08_risk_collectives 2 32 4 \
-  experiments/08_risk_collectives/submit_seagull.sh \
+submit_case 07_risk_collectives 2 32 4 \
+  experiments/07_risk_collectives/submit_seagull.sh \
   RANKS=32
 
-submit_case 09_stylised_facts 1 16 1 \
-  experiments/09_stylised_facts/submit_seagull.sh
+submit_case 08_stylised_facts 1 16 1 \
+  experiments/08_stylised_facts/submit_seagull.sh
 
-submit_case 10_inventory_policy 2 32 2 \
-  experiments/10_inventory_policy/submit_seagull.sh \
+submit_case 09_inventory_policy 2 32 2 \
+  experiments/09_inventory_policy/submit_seagull.sh \
   RANKS=32 FULL_SEEDS_OVERRIDE=20200130 ETA_VALUES_OVERRIDE=2.00 \
   RUN_OPENING_PREFIX=0
 

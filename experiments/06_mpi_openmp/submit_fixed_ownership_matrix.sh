@@ -27,7 +27,7 @@ for total_cores in "${TOTAL_CORE_VALUES[@]}"; do
       --ntasks="$total_cores" \
       --ntasks-per-node=16 \
       --export="ALL,TOTAL_CORES=$total_cores" \
-      experiments/07_mpi_openmp/run_fixed_ownership_matrix.sbatch
+      experiments/06_mpi_openmp/run_fixed_ownership_matrix.sbatch
   )
   job="${job%%;*}"
   [[ "$job" =~ ^[0-9]+$ ]] || {
