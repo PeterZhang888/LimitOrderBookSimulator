@@ -14,39 +14,19 @@ set -Eeuo pipefail
 PROJECT_DIR="${PROJECT_DIR:-$SLURM_SUBMIT_DIR}"
 source "$PROJECT_DIR/hpc/seagull/common.sh"
 
-RESULT_ROOT="${RESULT_ROOT:-$PROJECT_DIR/results/seagull/$SLURM_JOB_ID}"
-OUTPUT_DIR="$RESULT_ROOT/stylised_facts"
+BASE_RESULT_ROOT="${RESULT_ROOT:-$PROJECT_DIR/results/seagull/$SLURM_JOB_ID}"
+OUTPUT_DIR="$BASE_RESULT_ROOT/stylised_facts"
+RESULT_ROOT="$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR"
 
-OMP_NUM_THREADS=1 \
-OMP_DYNAMIC=FALSE \
-OPENBLAS_NUM_THREADS=1 \
-MKL_NUM_THREADS=1 \
-srun --nodes=1 --ntasks=16 --ntasks-per-node=16 \
-  --cpus-per-task=1 --cpu-bind=cores \
-  "$BUILD_DIR/lob_mpi" \
-  --duration-seconds 23400 \
-  --window-ms 1000 \
-  --metrics-interval-ms 1000 \
-  "${INPUT_ARGS[@]}" \
-  "${MODEL_ARGS[@]}" \
-  --seed 20200130 \
+run_variant simulation 16 1 \
   --partition cyclic \
   --synchronous-observations \
   --disable-persistent-risk-collective \
   --disable-shared-mm \
-  --local-mm-interval-ms 1000 \
-  --local-mm-quantity-multiplier 1.0 \
-  --local-mm-improvement-probability 0.25 \
-  --local-mm-spread-elasticity 0.0 \
-  --local-mm-max-improvement-probability 1.0 \
-  --stochastic-baseline-normalization-seconds 23400 \
-  --metrics-csv "$OUTPUT_DIR/marketwide_metrics.csv" \
-  --asset-summary-csv "$OUTPUT_DIR/assets.csv" \
-  --asset-summary-interval-ms 1000 \
+  --metrics-interval-ms 1000 \
   --return-panel-prefix "$OUTPUT_DIR/simulated_twice_midpoint" \
-  --return-panel-interval-ms 1000 \
-  | tee "$OUTPUT_DIR/simulation_result.txt"
+  --return-panel-interval-ms 1000
 
 python3 - "$OUTPUT_DIR" <<'PY'
 import csv
