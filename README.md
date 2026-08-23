@@ -36,7 +36,10 @@ bash scripts/build_seagull.sh
 The build command first checks that all frozen runtime inputs are present. It
 then requires OpenMP support, builds both executables and runs the compiled
 correctness tests against both builds. No raw Nasdaq message files or
-calibration run are required.
+calibration run are required. A successful build prints only a short progress
+summary; complete compiler and test output is retained in
+`build-logs/seagull-build.log`. If a build fails, the relevant final section
+of that log is printed automatically.
 
 The Seagull scripts load
 `openmpi/5.0.9-gcc-15.2.0-2irqibq`, the module used for the final release

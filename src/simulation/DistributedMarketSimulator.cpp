@@ -107,17 +107,24 @@ bool order_less(const OrderMessage& left, const OrderMessage& right) {
     return left.tie_breaker < right.tie_breaker;
 }
 
-std::int64_t checked_int64(__int128 value, const char* label) {
-    if (value < static_cast<__int128>(std::numeric_limits<std::int64_t>::min())
-        || value > static_cast<__int128>(
+// GCC and Clang provide a 128-bit integer extension. Declaring the extension
+// once keeps the overflow-safe accounting code readable without suppressing
+// pedantic diagnostics for the rest of this translation unit.
+__extension__ typedef __int128 WideSignedInteger;
+__extension__ typedef unsigned __int128 WideUnsignedInteger;
+
+std::int64_t checked_int64(WideSignedInteger value, const char* label) {
+    if (value < static_cast<WideSignedInteger>(
+            std::numeric_limits<std::int64_t>::min())
+        || value > static_cast<WideSignedInteger>(
             std::numeric_limits<std::int64_t>::max())) {
         throw std::overflow_error(std::string(label) + " overflow");
     }
     return static_cast<std::int64_t>(value);
 }
 
-std::uint64_t checked_uint64(unsigned __int128 value, const char* label) {
-    if (value > static_cast<unsigned __int128>(
+std::uint64_t checked_uint64(WideUnsignedInteger value, const char* label) {
+    if (value > static_cast<WideUnsignedInteger>(
             std::numeric_limits<std::uint64_t>::max())) {
         throw std::overflow_error(std::string(label) + " overflow");
     }
@@ -1862,38 +1869,43 @@ private:
                 throw std::logic_error(
                     "Shared Market Maker cannot trade with itself");
             }
-            const __int128 notional = static_cast<__int128>(trade.price_ticks)
-                * static_cast<__int128>(trade.quantity);
+            const WideSignedInteger notional =
+                static_cast<WideSignedInteger>(trade.price_ticks)
+                * static_cast<WideSignedInteger>(trade.quantity);
             if (trade.buyer_owner_id == shared_market_maker_owner) {
                 asset.shared_inventory = checked_int64(
-                    static_cast<__int128>(asset.shared_inventory)
-                        + static_cast<__int128>(trade.quantity),
+                    static_cast<WideSignedInteger>(asset.shared_inventory)
+                        + static_cast<WideSignedInteger>(trade.quantity),
                     "shared inventory");
                 asset.shared_cash_ticks = checked_int64(
-                    static_cast<__int128>(asset.shared_cash_ticks) - notional,
+                    static_cast<WideSignedInteger>(asset.shared_cash_ticks)
+                        - notional,
                     "shared cash");
                 asset.shared_buy_quantity = checked_uint64(
-                    static_cast<unsigned __int128>(asset.shared_buy_quantity)
-                        + static_cast<unsigned __int128>(trade.quantity),
+                    static_cast<WideUnsignedInteger>(asset.shared_buy_quantity)
+                        + static_cast<WideUnsignedInteger>(trade.quantity),
                     "shared buy quantity");
                 asset.shared_fill_count = checked_uint64(
-                    static_cast<unsigned __int128>(asset.shared_fill_count) + 1,
+                    static_cast<WideUnsignedInteger>(asset.shared_fill_count)
+                        + 1,
                     "shared fill count");
             }
             if (trade.seller_owner_id == shared_market_maker_owner) {
                 asset.shared_inventory = checked_int64(
-                    static_cast<__int128>(asset.shared_inventory)
-                        - static_cast<__int128>(trade.quantity),
+                    static_cast<WideSignedInteger>(asset.shared_inventory)
+                        - static_cast<WideSignedInteger>(trade.quantity),
                     "shared inventory");
                 asset.shared_cash_ticks = checked_int64(
-                    static_cast<__int128>(asset.shared_cash_ticks) + notional,
+                    static_cast<WideSignedInteger>(asset.shared_cash_ticks)
+                        + notional,
                     "shared cash");
                 asset.shared_sell_quantity = checked_uint64(
-                    static_cast<unsigned __int128>(asset.shared_sell_quantity)
-                        + static_cast<unsigned __int128>(trade.quantity),
+                    static_cast<WideUnsignedInteger>(asset.shared_sell_quantity)
+                        + static_cast<WideUnsignedInteger>(trade.quantity),
                     "shared sell quantity");
                 asset.shared_fill_count = checked_uint64(
-                    static_cast<unsigned __int128>(asset.shared_fill_count) + 1,
+                    static_cast<WideUnsignedInteger>(asset.shared_fill_count)
+                        + 1,
                     "shared fill count");
             }
             const bool shock_seller =
@@ -4448,11 +4460,11 @@ private:
 
         long double mark_to_mid_ticks = 0.0L;
         long double liquidation_ticks = 0.0L;
-        unsigned __int128 terminal_absolute_inventory = 0;
-        unsigned __int128 unliquidated_quantity = 0;
-        unsigned __int128 buy_quantity = 0;
-        unsigned __int128 sell_quantity = 0;
-        unsigned __int128 fill_count = 0;
+        WideUnsignedInteger terminal_absolute_inventory = 0;
+        WideUnsignedInteger unliquidated_quantity = 0;
+        WideUnsignedInteger buy_quantity = 0;
+        WideUnsignedInteger sell_quantity = 0;
+        WideUnsignedInteger fill_count = 0;
         for (std::size_t index = 0; index < assets.size(); ++index) {
             if (books[index].state.book_id != assets[index].asset_id) {
                 throw std::logic_error("book/asset mismatch in final result");
@@ -4464,17 +4476,17 @@ private:
             liquidation_ticks += static_cast<long double>(asset.shared_cash_ticks)
                 + static_cast<long double>(
                     asset.shared_liquidation_cash_change_ticks);
-            const __int128 inventory = static_cast<__int128>(
+            const WideSignedInteger inventory = static_cast<WideSignedInteger>(
                 asset.shared_inventory);
-            terminal_absolute_inventory += static_cast<unsigned __int128>(
+            terminal_absolute_inventory += static_cast<WideUnsignedInteger>(
                 inventory >= 0 ? inventory : -inventory);
-            unliquidated_quantity += static_cast<unsigned __int128>(
+            unliquidated_quantity += static_cast<WideUnsignedInteger>(
                 asset.shared_liquidation_unliquidated_quantity);
-            buy_quantity += static_cast<unsigned __int128>(
+            buy_quantity += static_cast<WideUnsignedInteger>(
                 asset.shared_buy_quantity);
-            sell_quantity += static_cast<unsigned __int128>(
+            sell_quantity += static_cast<WideUnsignedInteger>(
                 asset.shared_sell_quantity);
-            fill_count += static_cast<unsigned __int128>(
+            fill_count += static_cast<WideUnsignedInteger>(
                 asset.shared_fill_count);
         }
 

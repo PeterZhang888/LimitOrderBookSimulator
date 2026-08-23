@@ -3,7 +3,31 @@ set -Eeuo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 BUILD_JOBS="${BUILD_JOBS:-16}"
+BUILD_LOG_DIR="$PROJECT_DIR/build-logs"
+BUILD_LOG="$BUILD_LOG_DIR/seagull-build.log"
 
+mkdir -p "$BUILD_LOG_DIR"
+: > "$BUILD_LOG"
+exec 3>&1
+
+report() {
+  printf '%s\n' "$*" >&3
+}
+
+build_failed() {
+  local status=$?
+  trap - ERR
+  report "Build and tests: FAIL"
+  report "Relevant output:"
+  tail -n 120 "$BUILD_LOG" >&3
+  report "Complete log: $BUILD_LOG"
+  exit "$status"
+}
+
+trap build_failed ERR
+exec > "$BUILD_LOG" 2>&1
+
+report "Validating frozen runtime inputs..."
 bash "$PROJECT_DIR/scripts/validate_empirical_data.sh"
 source "$PROJECT_DIR/hpc/seagull/load_environment.sh"
 
@@ -23,11 +47,7 @@ for BUILD_DIR in "$MPI_BUILD_DIR" "$OPENMP_BUILD_DIR"; do
   fi
 done
 
-printf 'CMake generator: %s\n' "$CMAKE_GENERATOR_NAME"
-printf 'MPI C++ compiler: %s\n' "$LOB_MPI_CXX_COMPILER"
-printf 'MPI-free C++ compiler: %s\n' "$LOB_OPENMP_CXX_COMPILER"
-printf 'MPI runtime libraries: %s\n' "$LOB_MPI_LIBRARY_PATH"
-
+report "Building and testing the MPI executable..."
 cmake -S "$PROJECT_DIR" -B "$MPI_BUILD_DIR" -G "$CMAKE_GENERATOR_NAME" \
   -DCMAKE_CXX_COMPILER="$LOB_MPI_CXX_COMPILER" \
   -DMPI_CXX_COMPILER="$LOB_MPI_CXX_COMPILER" \
@@ -39,6 +59,7 @@ cmake -S "$PROJECT_DIR" -B "$MPI_BUILD_DIR" -G "$CMAKE_GENERATOR_NAME" \
 cmake --build "$MPI_BUILD_DIR" --parallel "$BUILD_JOBS"
 ctest --test-dir "$MPI_BUILD_DIR" --output-on-failure
 
+report "Building and testing the MPI-free OpenMP executable..."
 cmake -S "$PROJECT_DIR" -B "$OPENMP_BUILD_DIR" -G "$CMAKE_GENERATOR_NAME" \
   -DCMAKE_CXX_COMPILER="$LOB_OPENMP_CXX_COMPILER" \
   -DCMAKE_BUILD_TYPE=Release \
@@ -49,6 +70,8 @@ cmake -S "$PROJECT_DIR" -B "$OPENMP_BUILD_DIR" -G "$CMAKE_GENERATOR_NAME" \
 cmake --build "$OPENMP_BUILD_DIR" --parallel "$BUILD_JOBS"
 ctest --test-dir "$OPENMP_BUILD_DIR" --output-on-failure
 
-printf 'Built:\n  %s\n  %s\n' \
-  "$PROJECT_DIR/build-mpi/lob_mpi" \
-  "$PROJECT_DIR/build-openmp/lob_openmp"
+trap - ERR
+report "Build and tests: PASS"
+report "MPI executable: $PROJECT_DIR/build-mpi/lob_mpi"
+report "MPI-free OpenMP executable: $PROJECT_DIR/build-openmp/lob_openmp"
+report "Complete log: $BUILD_LOG"
