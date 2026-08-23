@@ -26,7 +26,7 @@ do
   }
 done
 
-mkdir -p "$PROJECT_DIR/slurm" "$PROJECT_DIR/results/seagull"
+mkdir -p "$PROJECT_DIR/slurm" "$PROJECT_DIR/results/runs"
 cd "$PROJECT_DIR"
 
 case "$EXPERIMENT_NAME" in

@@ -5,8 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 cd "$PROJECT_DIR"
 
-mkdir -p slurm results/seagull
-STATE_FILE="$PROJECT_DIR/results/seagull/LATEST_FIXED_OWNERSHIP_MATRIX.env"
+mkdir -p slurm results/runs
+STATE_FILE="$PROJECT_DIR/results/runs/LATEST_FIXED_OWNERSHIP_MATRIX.env"
 : > "$STATE_FILE"
 read -r -a TOTAL_CORE_VALUES <<< "${TOTAL_CORES_OVERRIDE:-16 32}"
 

@@ -14,7 +14,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}}"
 JOB_TAG="${SLURM_JOB_ID:-manual}"
-RESULT_ROOT="${RESULT_ROOT:-$PROJECT_DIR/results/seagull/${JOB_TAG}_collective_stall_diagnostic}"
+RESULT_ROOT="${RESULT_ROOT:-$PROJECT_DIR/results/runs/${JOB_TAG}_collective_stall_diagnostic}"
 BUILD_DIR="$PROJECT_DIR/build-mpi"
 BACKGROUND_MODEL=queue-reactive-v1
 DURATION_SECONDS=23400

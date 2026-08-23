@@ -18,12 +18,12 @@ if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
 fi
 
 bash scripts/validate_empirical_data.sh
-mkdir -p slurm results/seagull
+mkdir -p slurm results/runs
 
 campaign="release_validation_$(date -u +%Y%m%dT%H%M%SZ)"
-campaign_root="$PROJECT_DIR/results/seagull/$campaign"
+campaign_root="$PROJECT_DIR/results/runs/$campaign"
 manifest="$campaign_root/submitted_jobs.csv"
-state_file="$PROJECT_DIR/results/seagull/LATEST_RELEASE_VALIDATION.env"
+state_file="$PROJECT_DIR/results/runs/LATEST_RELEASE_VALIDATION.env"
 mkdir -p "$campaign_root"
 printf 'experiment,job_id,nodes,tasks,expected_runs,result_directory\n' > "$manifest"
 

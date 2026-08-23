@@ -29,7 +29,6 @@ On a Seagull login node:
 git clone https://github.com/PeterZhang888/LimitOrderBookSimulator.git
 cd LimitOrderBookSimulator
 
-mkdir -p slurm results/seagull
 bash scripts/build_seagull.sh
 bash scripts/submit_seagull_validation.sh
 ```
@@ -95,7 +94,7 @@ bash experiments/00_full_synthetic/submit.sh
 ```
 
 The job uses 16 nodes, 256 MPI ranks, one thread per rank and one complete
-session. Results are written below `results/seagull/<job-id>/full_10000/`.
+session. Results are written below `results/runs/<job-id>/full_10000/`.
 Do not run a full session on a login node.
 
 ## Thesis experiments
@@ -142,7 +141,6 @@ included under `data/empirical/`, so no cluster-specific input paths need to
 be exported. A complete submission sequence is:
 
 ```bash
-mkdir -p slurm results/seagull
 bash experiments/01_strong_scaling/submit.sh
 bash experiments/02_weak_scaling/submit.sh
 bash experiments/03_empirical_scaling/submit.sh
@@ -173,6 +171,7 @@ The following matched campaign provides the phase-based pure-MPI versus
 MPI-free OpenMP comparison at 16 physical cores:
 
 ```bash
+mkdir -p slurm
 sbatch experiments/07_mpi_openmp/submit_16core_mpi_openmp_pair.sh
 ```
 
@@ -197,7 +196,7 @@ remains alive for the session; this mode uses neither repeated
 `schedule(dynamic,1)` assignment nor one OpenMP task per book.
 
 ```bash
-mkdir -p slurm results/seagull
+mkdir -p slurm
 sbatch experiments/07_mpi_openmp/submit_16core_fixed_ownership_pair.sh
 ```
 
@@ -219,7 +218,6 @@ whole session. The campaign covers
 and `32x1, 16x2, 8x4, 4x8, 2x16`:
 
 ```bash
-mkdir -p slurm results/seagull
 bash experiments/07_mpi_openmp/submit_fixed_ownership_matrix.sh
 ```
 
@@ -246,7 +244,7 @@ To diagnose the 16-core result phase by phase, run the separate instrumented
 campaign:
 
 ```bash
-mkdir -p slurm results/seagull
+mkdir -p slurm
 sbatch experiments/07_mpi_openmp/submit_16core_window_profile.sh
 ```
 
@@ -270,7 +268,6 @@ small collectives, use the focused 32-rank diagnostic instead of repeating the
 complete decomposition matrix:
 
 ```bash
-mkdir -p slurm results/seagull
 bash experiments/07_mpi_openmp/submit_collective_stall_diagnostic.sh
 ```
 
@@ -307,7 +304,7 @@ After a campaign finishes, collect every completed simulator row and generate
 the raw and median/minimum/maximum timing tables with:
 
 ```bash
-python3 scripts/summarize_results.py results/seagull/<job-or-campaign-directory>
+python3 scripts/summarize_results.py results/runs/<job-or-campaign-directory>
 ```
 
 The command writes `raw_results.csv` and `performance_summary.csv` below the

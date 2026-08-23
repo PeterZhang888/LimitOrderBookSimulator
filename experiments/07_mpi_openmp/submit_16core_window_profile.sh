@@ -14,7 +14,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}}"
 JOB_TAG="${SLURM_JOB_ID:-manual}"
-RESULT_ROOT="${RESULT_ROOT:-$PROJECT_DIR/results/seagull/${JOB_TAG}_16core_window_profile}"
+RESULT_ROOT="${RESULT_ROOT:-$PROJECT_DIR/results/runs/${JOB_TAG}_16core_window_profile}"
 REPETITIONS=1
 DURATION_SECONDS=23400
 SEED=20200130

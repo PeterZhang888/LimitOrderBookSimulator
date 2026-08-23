@@ -32,7 +32,6 @@ The included artificial input needs no external data. Submit one complete
 10,000-book session with:
 
 ```bash
-mkdir -p slurm results/seagull
 bash experiments/00_full_synthetic/submit.sh
 ```
 
@@ -47,7 +46,7 @@ job for each rank count from 1 to 256. This avoids reserving 16 nodes while a
 small-rank case is running and prevents the complete seven-repetition sweep
 from exceeding the time limit of one allocation. The submitted job numbers
 and result directories are written to
-`results/seagull/strong_scaling_<date>/submitted_jobs.csv`.
+`results/runs/strong_scaling_<date>/submitted_jobs.csv`.
 
 The control in experiments 01, 03--05, 07, 09 and 10 is cyclic ownership,
 synchronous observations, blocking `MPI_Allreduce`, one thread per rank and no
@@ -57,11 +56,9 @@ the four factorial cells: blocking, nonblocking, lookahead, and nonblocking
 plus lookahead. The current certificate skips at most the next risk reduction;
 the following boundary synchronises normally.
 
-Create `slurm/` before submission because Slurm opens the output file before
-the script starts:
+Submit the rank-ownership experiment with:
 
 ```bash
-mkdir -p slurm results/seagull
 bash experiments/04_rank_ownership/submit.sh
 ```
 
@@ -73,7 +70,6 @@ all permanent-owner cells. The preparation output is kept under
 32-core decomposition matrices with:
 
 ```bash
-mkdir -p slurm results/seagull
 bash experiments/07_mpi_openmp/submit.sh
 ```
 

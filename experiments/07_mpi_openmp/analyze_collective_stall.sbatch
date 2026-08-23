@@ -12,7 +12,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}}"
 CAPTURE_JOB="${1:?pass the completed diagnostic job number}"
-RESULT_ROOT="$PROJECT_DIR/results/seagull/${CAPTURE_JOB}_collective_stall_diagnostic"
+RESULT_ROOT="$PROJECT_DIR/results/runs/${CAPTURE_JOB}_collective_stall_diagnostic"
 
 cd "$PROJECT_DIR"
 test -s "$RESULT_ROOT/repetitions.csv" || {

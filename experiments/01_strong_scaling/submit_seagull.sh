@@ -12,7 +12,7 @@ read -r -a ASSET_COUNTS <<< \
 # rank count only the number of nodes it needs and records every submitted job.
 if [[ -z "${SLURM_JOB_ID:-}" ]]; then
   cd "$PROJECT_DIR"
-  mkdir -p slurm results/seagull
+  mkdir -p slurm results/runs
 
   BASE_CONFIG="${BASE_CONFIG:-$PROJECT_DIR/examples/synthetic/templates.csv}"
   BACKGROUND_MODEL="${BACKGROUND_MODEL:-legacy}"
@@ -43,7 +43,7 @@ if [[ -z "${SLURM_JOB_ID:-}" ]]; then
   export REPETITIONS DURATION_SECONDS CORES_PER_NODE
 
   campaign="strong_scaling_$(date -u +%Y%m%dT%H%M%SZ)"
-  campaign_root="$PROJECT_DIR/results/seagull/$campaign"
+  campaign_root="$PROJECT_DIR/results/runs/$campaign"
   manifest="$campaign_root/submitted_jobs.csv"
   mkdir -p "$campaign_root"
   printf 'assets,mpi_ranks,nodes,job_id,result_directory\n' > "$manifest"

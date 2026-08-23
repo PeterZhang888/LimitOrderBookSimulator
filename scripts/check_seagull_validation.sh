@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-state_file="$PROJECT_DIR/results/seagull/LATEST_RELEASE_VALIDATION.env"
+state_file="$PROJECT_DIR/results/runs/LATEST_RELEASE_VALIDATION.env"
 test -s "$state_file" || {
   printf 'ERROR: no release-validation state file was found.\n' >&2
   exit 1
