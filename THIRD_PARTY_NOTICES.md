@@ -16,9 +16,6 @@ The reference implementation is dedicated to the public domain and expressly
 permits use, copying, modification, and distribution. Local adaptations use
 C++ integer types and project-specific state, naming, and domain separation.
 
-No other third-party source code was identified in this repository by the
-available provenance audit.
-
 The project builds against software supplied by the user's system:
 
 - a C++20 standard library and compiler;

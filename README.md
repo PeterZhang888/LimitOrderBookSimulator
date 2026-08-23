@@ -64,7 +64,7 @@ compile command is not needed. All experiments use the same executables.
 | `05_observation_buffering` | Synchronous and buffered observations |
 | `06_mpi_openmp` | Permanent-ownership MPI--OpenMP decomposition |
 | `07_risk_collectives` | Blocking, non-blocking and lookahead collectives |
-| `08_stylised_facts` | Simulated return panels and stylised facts |
+| `08_stylised_facts` | Simulated return panels for stylised-fact analysis |
 | `09_inventory_policy` | Shared Market Maker inventory policies |
 
 Formal campaigns use the allocations and repetitions declared by their
@@ -74,13 +74,13 @@ individual configurations.
 ## Results
 
 Simulation output is written under `results/runs/`, and scheduler logs are
-written under `slurm/`. Each run records its console summary, boundary
-metrics, per-asset results and execution environment.
+written under `slurm/`. Each job records its execution environment. Every
+repetition writes a console summary, boundary metrics and per-asset results.
 
 Summarise a completed campaign with:
 
 ```bash
-python3 scripts/summarize_results.py results/runs/<campaign-directory>
+python3 scripts/summarize_results.py results/runs/CAMPAIGN_DIRECTORY
 ```
 
 Compare two scientific CSV files with:

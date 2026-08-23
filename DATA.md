@@ -3,8 +3,8 @@
 > **Original data source.** The raw order-message files used to prepare these
 > inputs are available from the
 > [official Nasdaq TotalView--ITCH archive](https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/).
-> They are not redistributed here; access and use remain subject to Nasdaq's
-> applicable terms.
+> Raw messages are not redistributed here. Use or redistribution of the
+> derived inputs may also be subject to Nasdaq's applicable terms.
 
 The simulator accepts either a repeated artificial template through
 `--base-config` or a complete empirical universe through `--universe-config`.
@@ -35,8 +35,6 @@ Raw Nasdaq ITCH messages are not included and are not needed for the reported
 simulation campaigns. Run `bash scripts/validate_empirical_data.sh` to check
 that every file referenced by the frozen universe and policies is present.
 
-The two downloaded runtime-data archives did not contain the derived
-one-second empirical return panel used as the comparison series in the
-temporal stylised-fact figure. Experiment 08 therefore regenerates and checks
-the complete simulated panel, but this repository cannot regenerate the final
-empirical-versus-simulated figure until that derived empirical panel is added.
+The repository does not contain the one-second empirical return panel required
+for the final empirical-versus-simulated temporal comparison. Experiment 08
+regenerates and validates only the simulated return panels.

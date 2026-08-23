@@ -1,98 +1,87 @@
 # Experiment submission
 
-Each experiment directory provides the same two-file interface:
+Every experiment directory provides the same interface:
 
 ```bash
 bash experiments/NN_experiment/compile.sh
 bash experiments/NN_experiment/submit.sh
 ```
 
-`compile.sh` calls the central verified build; it does not create a separate
-copy of the simulator. `submit.sh` launches that experiment's existing formal
-Seagull submission. The empirical submission files automatically use:
+`compile.sh` builds the shared simulator executables. One successful build is
+enough for every experiment. `submit.sh` launches the selected formal Seagull
+campaign.
+
+Empirical runs use the repository inputs:
 
 ```text
 data/empirical/universe.csv
 data/empirical/background_policy.csv
 data/empirical/value_policy.csv
-data/empirical/clusters.csv
 ```
 
-No external input paths are required. The main formal performance jobs use
-seven full-session repetitions unless their submission file states otherwise;
-weak scaling uses three. The stylised-fact job and the standalone 10,000-book
-run use one complete session by design.
+`data/empirical/clusters.csv` is available when optional cluster-level output
+is requested. No external input paths are required.
 
-For a fresh-clone validation using no more than two nodes and one completed
-run per configuration, use `bash scripts/submit_seagull_validation.sh` from
-the repository root. This validation keeps the full simulated session but is
-not a replacement for the repeated performance campaigns.
+For a shorter full-session check covering all experiments on no more than two
+nodes per job, use:
 
-The included artificial input needs no external data. Submit one complete
-10,000-book session with:
+```bash
+bash scripts/submit_seagull_validation.sh
+```
+
+## Synthetic campaigns
+
+Submit one complete 10,000-book session with:
 
 ```bash
 bash experiments/00_full_synthetic/submit.sh
 ```
 
-For synthetic strong scaling, use:
+The strong-scaling driver submits five workloads crossed with nine rank counts
+from 1 to 256, giving 45 independently sized jobs:
 
 ```bash
 bash experiments/01_strong_scaling/submit.sh
 ```
 
-The strong-scaling submission file dispatches one independently sized Slurm
-job for each rank count from 1 to 256. This avoids reserving 16 nodes while a
-small-rank case is running and prevents the complete seven-repetition sweep
-from exceeding the time limit of one allocation. The submitted job numbers
-and result directories are written to
-`results/runs/strong_scaling_<date>/submitted_jobs.csv`.
+Job numbers and result paths are recorded in
+`results/runs/strong_scaling_<timestamp>/submitted_jobs.csv`.
 
-The control in experiments 01, 03--06, 08 and 09 is cyclic ownership,
-synchronous observations, blocking `MPI_Allreduce`, one thread per rank and no
-other optimisation. Experiment 07 uses a cyclic, buffered blocking control
-because bounded lookahead requires buffered observational output. It contains
-the four factorial cells: blocking, nonblocking, lookahead, and nonblocking
-plus lookahead. The current certificate skips at most the next risk reduction;
-the following boundary synchronises normally.
+## Empirical campaigns
 
-Submit the rank-ownership experiment with:
+Unless a treatment changes it, empirical runs use cyclic MPI ownership,
+synchronous observations, blocking risk reduction and one thread per rank.
 
-```bash
-bash experiments/04_rank_ownership/submit.sh
+Experiment 06 compares five MPI--OpenMP layouts at each total core count:
+
+```text
+16 cores: 16x1, 8x2, 4x4, 2x8, 1x16
+32 cores: 32x1, 16x2, 8x4, 4x8, 2x16
 ```
 
-The formal OpenMP experiment first performs one full cyclic preparation run
-at each total core count to measure the work associated with every complete
-book. It converts that output into the common scheduling-cost input used by
-all permanent-owner cells. The preparation output is kept under
-`cost_preparation/` and is not a timed treatment. Submit the complete 16- and
-32-core decomposition matrices with:
+A preparation run estimates the work associated with each book. Threaded
+layouts then assign every book permanently to one thread. The preparation run
+is not included in the timing comparison.
 
 ```bash
 bash experiments/06_mpi_openmp/submit.sh
 ```
 
-MPI ownership remains cyclic. In every threaded layout, measured book costs
-are used to assign each rank's books to threads once, and the assignment is
-retained for the complete session. Each total-core job uses seven rotating
-blocks, validates CPU placement and directly checks scientific outputs before
-reporting timing. Each timed launch first has to pass the declared small-
-`MPI_Allreduce` latency gate. Every successfully completed repetition is
-retained regardless of its execution time. Preflight rejections and completed
-runs are recorded in `attempts.csv`; seven completed repetitions are required
-for every layout.
-Runtime ratios above 1.15 are reported as variability warnings without
-discarding repetitions or failing an otherwise valid job. Per-asset files,
-counts, accounting values and all non-spread metric columns must agree exactly.
-The three derived mean-spread columns use
-`|a-b| <= 5e-9 + 1e-12 max(|a|,|b|)` because different MPI rank layouts change
-the association order of their double-precision sums.
+Each layout is repeated seven times in rotating order. CPU placement and
+scientific outputs are checked before timings are summarised. A launch must
+also pass the declared small-collective latency check; rejected preflights are
+logged, while every completed repetition is retained. The additional pair,
+profiler and collective-stall jobs are diagnostics rather than formal matrix
+cells.
 
-The additional pair and window-profile files in `06_mpi_openmp/` are focused
-diagnostics retained to explain the phase-based control and the origin of its
-overhead. They are not required to reproduce the final decomposition matrix.
+Experiment 07 crosses blocking and non-blocking risk reductions with bounded
+lookahead disabled or enabled. All four cells use buffered observations. A
+lookahead certificate may skip only the next risk boundary.
 
-Experiment 08 writes the full rank-local simulated return panels used for the
-temporal diagnostics. The derived empirical comparison panel is not present
-in the supplied runtime-data archives; see `DATA.md`.
+Experiment 08 writes the full simulated return panels used for temporal
+stylised-fact analysis. The empirical comparison panel is not included; see
+[`DATA.md`](../DATA.md).
+
+The main performance campaigns use seven full-session repetitions unless a
+submission file states otherwise. Weak scaling uses three repetitions. The
+standalone synthetic and stylised-fact runs use one complete session.
