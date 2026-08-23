@@ -1,7 +1,15 @@
 # Experiment submission
 
-Run `scripts/build_seagull.sh` once, then submit an experiment from the
-repository root. The empirical submission files automatically use:
+Each experiment directory provides the same two-file interface:
+
+```bash
+bash experiments/NN_experiment/compile.sh
+bash experiments/NN_experiment/submit.sh
+```
+
+`compile.sh` calls the central verified build; it does not create a separate
+copy of the simulator. `submit.sh` launches that experiment's existing formal
+Seagull submission. The empirical submission files automatically use:
 
 ```text
 data/empirical/universe.csv
@@ -25,13 +33,13 @@ The included artificial input needs no external data. Submit one complete
 
 ```bash
 mkdir -p slurm results/seagull
-sbatch experiments/00_full_synthetic/submit_seagull.sh
+bash experiments/00_full_synthetic/submit.sh
 ```
 
 For synthetic strong scaling, use:
 
 ```bash
-bash experiments/01_strong_scaling/submit_seagull.sh
+bash experiments/01_strong_scaling/submit.sh
 ```
 
 The strong-scaling submission file dispatches one independently sized Slurm
@@ -54,7 +62,7 @@ the script starts:
 
 ```bash
 mkdir -p slurm results/seagull
-sbatch experiments/04_rank_ownership/submit_seagull.sh
+bash experiments/04_rank_ownership/submit.sh
 ```
 
 The formal OpenMP experiment first performs one full cyclic preparation run
@@ -66,7 +74,7 @@ all permanent-owner cells. The preparation output is kept under
 
 ```bash
 mkdir -p slurm results/seagull
-bash experiments/07_mpi_openmp/submit_seagull.sh
+bash experiments/07_mpi_openmp/submit.sh
 ```
 
 MPI ownership remains cyclic. In every threaded layout, measured book costs

@@ -91,7 +91,7 @@ run without Nasdaq data. Submit the full 10,000-book, 23,400-second session
 from the repository root:
 
 ```bash
-sbatch experiments/00_full_synthetic/submit_seagull.sh
+bash experiments/00_full_synthetic/submit.sh
 ```
 
 The job uses 16 nodes, 256 MPI ranks, one thread per rank and one complete
@@ -100,8 +100,20 @@ Do not run a full session on a login node.
 
 ## Thesis experiments
 
-The `experiments/` directory contains one full submission file per experiment.
-All use the same executables; only the declared treatment flags differ.
+Every directory under `experiments/` contains its own professor-facing
+`compile.sh` and `submit.sh` files. All experiments compile the same final
+simulator source tree; their submission files change only the declared
+workload and treatment settings. For example:
+
+```bash
+bash experiments/03_empirical_scaling/compile.sh
+bash experiments/03_empirical_scaling/submit.sh
+```
+
+The compile file calls the central verified build, while the submit file
+launches that experiment's complete formal campaign. The central release
+validation remains separate: `bash scripts/submit_seagull_validation.sh`
+submits one complete 23,400-second run for every experiment configuration.
 
 ```text
 00_full_synthetic
@@ -117,31 +129,31 @@ All use the same executables; only the declared treatment flags differ.
 10_inventory_policy
 ```
 
-The strong-scaling and MPI--OpenMP files are submission drivers because their
-configurations need different numbers of nodes. From the repository root,
-submit the complete 1--256-rank strong-scaling campaign with:
+The strong-scaling and MPI--OpenMP submit files are submission drivers because
+their configurations need different numbers of nodes. From the repository
+root, submit the complete 1--256-rank strong-scaling campaign with:
 
 ```bash
-bash experiments/01_strong_scaling/submit_seagull.sh
+bash experiments/01_strong_scaling/submit.sh
 ```
 
-Experiments 01 and 07 are invoked with `bash`; the remaining experiment files
-are passed directly to `sbatch`. The frozen empirical universe and policies
-are included under `data/empirical/`, so no cluster-specific input paths need
-to be exported. A complete submission sequence is:
+Every professor-facing `submit.sh` file is invoked with `bash`; it selects the
+correct Slurm submission method internally. The frozen empirical universe and
+policies are included under `data/empirical/`, so no cluster-specific input
+paths need to be exported. A complete submission sequence is:
 
 ```bash
 mkdir -p slurm results/seagull
-bash experiments/01_strong_scaling/submit_seagull.sh
-sbatch experiments/02_weak_scaling/submit_seagull.sh
-sbatch experiments/03_empirical_scaling/submit_seagull.sh
-sbatch experiments/04_rank_ownership/submit_seagull.sh
-sbatch experiments/05_observation_buffering/submit_seagull.sh
-sbatch experiments/06_fused_metric_scans/submit_seagull.sh
-bash experiments/07_mpi_openmp/submit_seagull.sh
-sbatch experiments/08_risk_collectives/submit_seagull.sh
-sbatch experiments/09_stylised_facts/submit_seagull.sh
-sbatch experiments/10_inventory_policy/submit_seagull.sh
+bash experiments/01_strong_scaling/submit.sh
+bash experiments/02_weak_scaling/submit.sh
+bash experiments/03_empirical_scaling/submit.sh
+bash experiments/04_rank_ownership/submit.sh
+bash experiments/05_observation_buffering/submit.sh
+bash experiments/06_fused_metric_scans/submit.sh
+bash experiments/07_mpi_openmp/submit.sh
+bash experiments/08_risk_collectives/submit.sh
+bash experiments/09_stylised_facts/submit.sh
+bash experiments/10_inventory_policy/submit.sh
 ```
 
 These are formal full-session jobs. The main performance campaigns use seven
