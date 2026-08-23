@@ -28,8 +28,8 @@ experiments:
 The pooled inputs were estimated from the five 2019 training sessions used in
 the thesis. The universe and agent controls are those used for the 30 January
 2020 development-validation market. They are already in the format consumed
-by the executable; the professor does not need to repeat ITCH extraction or
-calibration.
+by the executable; reproducing the supplied experiments does not require
+repeating ITCH extraction or calibration.
 
 Raw Nasdaq ITCH messages are not included and are not needed for the reported
 simulation campaigns. Run `bash scripts/validate_empirical_data.sh` to check

@@ -34,9 +34,9 @@ bash scripts/build_seagull.sh
 bash scripts/submit_seagull_validation.sh
 ```
 
-These two scripts provide the complete professor-facing workflow: the first
-builds and tests both executables, and the second submits one full-session run
-for every experiment configuration. The submitted jobs use their ordinary
+These two scripts provide the complete standard workflow: the first builds
+and tests both executables, and the second submits one full-session run for
+every experiment configuration. The submitted jobs use their ordinary
 experiment names in Slurm.
 
 The build command first checks that all frozen runtime inputs are present. It
@@ -100,10 +100,10 @@ Do not run a full session on a login node.
 
 ## Thesis experiments
 
-Every directory under `experiments/` contains its own professor-facing
-`compile.sh` and `submit.sh` files. All experiments compile the same final
-simulator source tree; their submission files change only the declared
-workload and treatment settings. For example:
+Every directory under `experiments/` contains standard `compile.sh` and
+`submit.sh` entry points. All experiments compile the same final simulator
+source tree; their submission files change only the declared workload and
+treatment settings. For example:
 
 ```bash
 bash experiments/03_empirical_scaling/compile.sh
@@ -136,10 +136,10 @@ root, submit the complete 1--256-rank strong-scaling campaign with:
 bash experiments/01_strong_scaling/submit.sh
 ```
 
-Every professor-facing `submit.sh` file is invoked with `bash`; it selects the
-correct Slurm submission method internally. The frozen empirical universe and
-policies are included under `data/empirical/`, so no cluster-specific input
-paths need to be exported. A complete submission sequence is:
+Every `submit.sh` file is invoked with `bash`; it selects the correct Slurm
+submission method internally. The frozen empirical universe and policies are
+included under `data/empirical/`, so no cluster-specific input paths need to
+be exported. A complete submission sequence is:
 
 ```bash
 mkdir -p slurm results/seagull
