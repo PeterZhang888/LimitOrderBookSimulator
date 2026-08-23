@@ -47,7 +47,7 @@ submit_case() {
       "$@" \
       sbatch --parsable \
         --chdir="$PROJECT_DIR" \
-        --job-name="lob-check-${experiment}" \
+        --job-name="lob-${experiment//_/-}" \
         --nodes="$nodes" \
         --ntasks="$tasks" \
         --ntasks-per-node=16 \

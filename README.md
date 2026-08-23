@@ -31,7 +31,13 @@ cd LimitOrderBookSimulator
 
 mkdir -p slurm results/seagull
 bash scripts/build_seagull.sh
+bash scripts/submit_seagull_validation.sh
 ```
+
+These two scripts provide the complete professor-facing workflow: the first
+builds and tests both executables, and the second submits one full-session run
+for every experiment configuration. The submitted jobs use their ordinary
+experiment names in Slurm.
 
 The build command first checks that all frozen runtime inputs are present. It
 then requires OpenMP support, builds both executables and runs the compiled
