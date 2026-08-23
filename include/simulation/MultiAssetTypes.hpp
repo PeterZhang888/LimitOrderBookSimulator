@@ -84,6 +84,9 @@ struct MultiAssetBookConfig {
         + (value << 6U) + (value >> 2U);
     value ^= static_cast<std::uint64_t>(child_index)
         * 0xd1b54a32d192ed03ULL;
+    // Final mixing stage adapted from Sebastiano Vigna's public-domain
+    // SplitMix64 reference implementation:
+    // https://prng.di.unimi.it/splitmix64.c
     value = (value ^ (value >> 30U)) * 0xbf58476d1ce4e5b9ULL;
     value = (value ^ (value >> 27U)) * 0x94d049bb133111ebULL;
     return value ^ (value >> 31U);

@@ -10,6 +10,9 @@
 
 namespace dlob {
 
+// SplitMix64 transition and mixing steps adapted from Sebastiano Vigna's
+// public-domain reference implementation:
+// https://prng.di.unimi.it/splitmix64.c
 class FastRng {
 public:
     explicit FastRng(std::uint64_t seed = 1) : state_(seed == 0 ? 1 : seed) {}
@@ -125,6 +128,8 @@ public:
     }
 
 private:
+    // SplitMix64 mixing steps adapted from the same public-domain reference:
+    // https://prng.di.unimi.it/splitmix64.c
     static std::uint64_t mix64(std::uint64_t value) {
         value += 0x9e3779b97f4a7c15ULL;
         value = (value ^ (value >> 30U)) * 0xbf58476d1ce4e5b9ULL;

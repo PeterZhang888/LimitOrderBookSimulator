@@ -19,6 +19,9 @@ constexpr double minimum_intensity = 1.0e-12;
 constexpr std::uint64_t stochastic_baseline_domain =
     0x510e'527f'ade6'82d1ULL;
 
+// SplitMix64 transition and mixing steps adapted from Sebastiano Vigna's
+// public-domain reference implementation:
+// https://prng.di.unimi.it/splitmix64.c
 [[nodiscard]] std::uint64_t splitmix64(std::uint64_t value) noexcept {
     value += 0x9e37'79b9'7f4a'7c15ULL;
     value = (value ^ (value >> 30U)) * 0xbf58'476d'1ce4'e5b9ULL;
