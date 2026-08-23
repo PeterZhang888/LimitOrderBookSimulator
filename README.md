@@ -122,7 +122,6 @@ submits one complete 23,400-second run for every experiment configuration.
 03_empirical_scaling
 04_rank_ownership
 05_observation_buffering
-06_fused_metric_scans
 07_mpi_openmp
 08_risk_collectives
 09_stylised_facts
@@ -149,7 +148,6 @@ bash experiments/02_weak_scaling/submit.sh
 bash experiments/03_empirical_scaling/submit.sh
 bash experiments/04_rank_ownership/submit.sh
 bash experiments/05_observation_buffering/submit.sh
-bash experiments/06_fused_metric_scans/submit.sh
 bash experiments/07_mpi_openmp/submit.sh
 bash experiments/08_risk_collectives/submit.sh
 bash experiments/09_stylised_facts/submit.sh

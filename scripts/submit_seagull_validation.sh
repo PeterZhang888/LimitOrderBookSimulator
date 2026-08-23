@@ -100,10 +100,6 @@ submit_case 04_rank_ownership 2 32 2 \
 submit_case 05_observation_buffering 1 16 2 \
   experiments/05_observation_buffering/submit_seagull.sh
 
-submit_case 06_fused_metric_scans 2 32 2 \
-  experiments/06_fused_metric_scans/submit_seagull.sh \
-  RANKS=32
-
 submit_case 07_mpi_openmp_16 1 16 6 \
   experiments/07_mpi_openmp/run_fixed_ownership_matrix.sbatch \
   TOTAL_CORES=16 BLOCK_COUNT=1

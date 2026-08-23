@@ -49,7 +49,7 @@ from exceeding the time limit of one allocation. The submitted job numbers
 and result directories are written to
 `results/seagull/strong_scaling_<date>/submitted_jobs.csv`.
 
-The control in experiments 01, 03--07, 09 and 10 is cyclic ownership,
+The control in experiments 01, 03--05, 07, 09 and 10 is cyclic ownership,
 synchronous observations, blocking `MPI_Allreduce`, one thread per rank and no
 other optimisation. Experiment 08 uses a cyclic, buffered blocking control
 because bounded lookahead requires buffered observational output. It contains
