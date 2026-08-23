@@ -132,7 +132,6 @@ bash experiments/00_full_synthetic/submit.sh
 
 The job uses 16 nodes, 256 MPI ranks, one thread per rank and one complete
 session. Results are written below `results/runs/<job-id>/full_10000/`.
-Do not run a full session on a login node.
 
 ## Thesis experiments
 
@@ -296,8 +295,7 @@ An OpenMP phase includes its useful work, scheduling and implicit end-of-loop
 barrier; it is not a barrier-only measurement.  The reported MPI collective
 time likewise includes rank-arrival waiting and MPI progress, not just data
 movement.
-These diagnostic timings provide a profiled-window decomposition and do not
-replace the uninstrumented performance results.  The slowest rank observed in
+These diagnostic timings provide a profiled-window decomposition.  The slowest rank observed in
 each window is a diagnostic proxy, not an exact reconstruction of the full
 session critical path.
 
