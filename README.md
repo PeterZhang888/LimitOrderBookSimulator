@@ -261,21 +261,7 @@ bash experiments/06_mpi_openmp/submit_fixed_ownership_matrix.sh
 The driver submits one exclusive job for each total core count. Each job uses
 seven rotating-order blocks, verifies physical-core placement, requires
 reproducible outputs within every layout, and compares all scientific outputs
-with its pure-MPI control before accepting the timing table. Before each timed
-simulation, the same MPI communicator performs 100 pairs of small blocking
-reductions. A launch is rejected when the slowest-rank mean exceeds
-\(2\,\mathrm{ms}\) per collective. A completed simulation is retained
-regardless of its execution time. Preflight rejections remain in the result
-directory and are listed in `attempts.csv`; the driver retries until each
-configuration has seven completed repetitions, with a maximum of ten
-preflight attempts for each required repetition. The preflight runs before
-the execution timer and does not alter the simulated market state. A layout whose
-maximum-to-minimum runtime ratio exceeds 1.15 is retained and labelled with a
-timing-variability warning; this warning does not cause an otherwise valid
-Slurm job to fail. Invalid placement, scientific disagreement, failed health
-checks and incomplete repetitions remain fatal errors. The formal batch file
-requests a 48-hour allocation so an unusually slow but progressing repetition
-is not terminated by the former short timing limit.
+with its pure-MPI control before accepting the timing table. 
 
 To diagnose the 16-core result phase by phase, run the separate instrumented
 campaign:
@@ -290,8 +276,7 @@ in three alternating blocks on the same 16 physical cores.  For every
 one-second simulated interval it records event processing, the local exposure
 scan, risk synchronization, asset-moment and global-metric scans, and each
 agent phase.  Rows are kept in memory and written only after the simulated
-session; no profiling collective or file write is inserted inside a window.
-An OpenMP phase includes its useful work, scheduling and implicit end-of-loop
+session. An OpenMP phase includes its useful work, scheduling and implicit end-of-loop
 barrier; it is not a barrier-only measurement.  The reported MPI collective
 time likewise includes rank-arrival waiting and MPI progress, not just data
 movement.
@@ -353,21 +338,6 @@ python3 scripts/summarize_results.py results/runs/<job-or-campaign-directory>
 
 The command writes `raw_results.csv` and `performance_summary.csv` below the
 selected result directory. It does not discard slow repetitions.
-
-## Default comparison rule
-
-Unless an experiment documents a necessary prerequisite, the unoptimised
-control uses cyclic ownership (`asset_id mod MPI ranks`), synchronous
-observations, blocking `MPI_Allreduce`, one thread per rank, and no scan,
-lookahead or persistent-team optimisation. The lookahead experiment is the
-one exception: all four cells use buffered observations because the exact
-lookahead implementation requires them.
-
-The executable's convenience defaults are not the thesis baseline. Formal
-experiment scripts explicitly select cyclic ownership, synchronous
-observations, blocking risk reduction and one thread per MPI rank. Reproduce
-reported controls through the experiment scripts, not through an unqualified
-direct invocation of `lob_mpi`.
 
 ## Data
 
