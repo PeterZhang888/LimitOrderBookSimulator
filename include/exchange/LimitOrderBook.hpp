@@ -38,6 +38,8 @@ struct TerminalLiquidationPreview {
     std::int64_t displayed_filled_quantity = 0;
     std::int64_t unliquidated_quantity = 0;
     int fallback_price_ticks = 0;
+    bool fallback_from_external_quote = false;
+    bool fallback_from_reference_value = false;
     long double signed_cash_change_ticks = 0.0L;
 };
 
@@ -81,7 +83,8 @@ public:
     TerminalLiquidationPreview preview_terminal_liquidation(
         std::int64_t signed_inventory,
         std::int32_t excluded_owner_id,
-        int fallback_distance_ticks) const;
+        int fallback_distance_ticks,
+        double reference_value_ticks) const;
     double mid_price() const;
 
 private:

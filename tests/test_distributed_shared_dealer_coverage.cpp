@@ -162,6 +162,12 @@ int main(int argc, char** argv) {
     assert(result.shared_sell_quantity == 0U);
     assert(result.shared_fill_count == 148U);
     assert(result.shared_terminal_absolute_inventory == 29'600U);
+    assert(result.terminal_fallback_asset_count <= 1'480U);
+    assert(result.terminal_fallback_quantity
+           == result.shared_unliquidated_terminal_quantity);
+    assert(result.terminal_fallback_from_external_quote
+               + result.terminal_fallback_from_reference_value
+           == result.terminal_fallback_quantity);
     assert(std::isfinite(result.shared_signed_mark_to_mid_pnl_usd));
     assert(std::isfinite(result.shared_signed_liquidation_pnl_usd));
     assert(result.shared_terminal_liquidation_cost_usd >= 0.0);

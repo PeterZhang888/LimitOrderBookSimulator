@@ -25,6 +25,8 @@ do
     exit 1
   }
 done
+bash "$PROJECT_DIR/scripts/verify_build_source.sh" \
+  "$PROJECT_DIR/build-mpi" "$PROJECT_DIR/build-openmp"
 
 mkdir -p "$PROJECT_DIR/slurm" "$PROJECT_DIR/results/runs"
 cd "$PROJECT_DIR"

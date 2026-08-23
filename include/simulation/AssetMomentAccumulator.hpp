@@ -43,8 +43,8 @@ struct AssetMomentAccumulator {
         }
         const double mid = state.mid_price_ticks > 0.0
             ? state.mid_price_ticks
-            : 0.5 * static_cast<double>(
-                state.best_bid_ticks + state.best_ask_ticks);
+            : 0.5 * (static_cast<double>(state.best_bid_ticks)
+                     + static_cast<double>(state.best_ask_ticks));
         if (!(mid > 0.0) || !std::isfinite(mid)) {
             ++invalid_snapshots;
             previous_mid = 0.0;

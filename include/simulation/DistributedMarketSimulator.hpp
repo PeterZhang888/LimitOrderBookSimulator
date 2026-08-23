@@ -377,6 +377,10 @@ struct SimulationResult {
     double shared_signed_liquidation_pnl_usd = 0.0;
     double shared_terminal_liquidation_cost_usd = 0.0;
     std::uint64_t shared_unliquidated_terminal_quantity = 0;
+    std::uint64_t terminal_fallback_asset_count = 0;
+    std::uint64_t terminal_fallback_quantity = 0;
+    std::uint64_t terminal_fallback_from_external_quote = 0;
+    std::uint64_t terminal_fallback_from_reference_value = 0;
     std::uint64_t shared_terminal_absolute_inventory = 0;
     std::uint64_t shared_buy_quantity = 0;
     std::uint64_t shared_sell_quantity = 0;

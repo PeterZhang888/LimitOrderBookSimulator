@@ -12,10 +12,7 @@ test -x build-openmp/lob_openmp || {
   printf 'ERROR: build-openmp/lob_openmp is missing; run scripts/build_seagull.sh first.\n' >&2
   exit 1
 }
-if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
-  printf 'ERROR: tracked files have local modifications.\n' >&2
-  exit 1
-fi
+bash scripts/verify_build_source.sh build-mpi build-openmp
 
 bash scripts/validate_empirical_data.sh
 mkdir -p slurm results/runs
@@ -115,10 +112,10 @@ submit_case 08_risk_collectives 2 32 4 \
 submit_case 09_stylised_facts 1 16 1 \
   experiments/09_stylised_facts/submit_seagull.sh
 
-submit_case 10_inventory_policy 2 32 4 \
+submit_case 10_inventory_policy 2 32 2 \
   experiments/10_inventory_policy/submit_seagull.sh \
-  RANKS=32 OPENING_SEEDS_OVERRIDE=30300130 \
-  FULL_SEEDS_OVERRIDE=20200130 ETA_VALUES_OVERRIDE=2.00
+  RANKS=32 FULL_SEEDS_OVERRIDE=20200130 ETA_VALUES_OVERRIDE=2.00 \
+  RUN_OPENING_PREFIX=0
 
 job_list=$(IFS=,; printf '%s' "${job_ids[*]}")
 {

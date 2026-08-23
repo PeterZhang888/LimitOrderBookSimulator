@@ -10,6 +10,17 @@
 
 namespace dlob {
 
+namespace {
+
+int checked_depth(std::int64_t total, const char* description) {
+    if (total < 0 || total > std::numeric_limits<int>::max()) {
+        throw std::overflow_error(description);
+    }
+    return static_cast<int>(total);
+}
+
+} // namespace
+
 LimitOrderBook::LimitOrderBook(int tick_size, BookId book_id)
     : tick_size_(std::max(1, tick_size)), book_id_(book_id) {}
 
@@ -60,8 +71,10 @@ void LimitOrderBook::seed_calibrated_book(
                   == static_cast<std::size_t>(reduced_background_depth_levels));
     std::uint64_t id = 1;
     for (std::size_t level = 0; level < std::size(depth_shape); ++level) {
-        const int price = best_bid_ticks - static_cast<int>(level) * tick_size_;
-        if (price <= 0) break;
+        const std::int64_t raw_price = static_cast<std::int64_t>(best_bid_ticks)
+            - static_cast<std::int64_t>(level) * tick_size_;
+        if (raw_price <= 0) break;
+        const int price = static_cast<int>(raw_price);
         const int quantity = std::max(1, static_cast<int>(std::llround(
             depth_scale * static_cast<double>(best_bid_depth) * depth_shape[level])));
         bids_[price].push_back(RestingOrder{id++, 0, Side::Buy, quantity, price, 0});
@@ -70,7 +83,10 @@ void LimitOrderBook::seed_calibrated_book(
         background_bid_quantity_ += quantity;
     }
     for (std::size_t level = 0; level < std::size(depth_shape); ++level) {
-        const int price = best_ask_ticks + static_cast<int>(level) * tick_size_;
+        const std::int64_t raw_price = static_cast<std::int64_t>(best_ask_ticks)
+            + static_cast<std::int64_t>(level) * tick_size_;
+        if (raw_price > std::numeric_limits<int>::max()) break;
+        const int price = static_cast<int>(raw_price);
         if (price <= best_bid_ticks) break;
         const int quantity = std::max(1, static_cast<int>(std::llround(
             depth_scale * static_cast<double>(best_ask_depth) * depth_shape[level])));
@@ -87,21 +103,36 @@ int LimitOrderBook::best_bid() const { return has_bid() ? bids_.begin()->first :
 int LimitOrderBook::best_ask() const { return has_ask() ? asks_.begin()->first : 0; }
 
 double LimitOrderBook::mid_price() const {
-    return has_bid() && has_ask() ? 0.5 * static_cast<double>(best_bid() + best_ask()) : 0.0;
+    return has_bid() && has_ask()
+        ? 0.5 * (static_cast<double>(best_bid())
+                 + static_cast<double>(best_ask()))
+        : 0.0;
 }
 
 int LimitOrderBook::best_bid_depth() const {
     if (!has_bid()) return 0;
-    int total = 0;
-    for (const RestingOrder& order : bids_.begin()->second) total += std::max(0, order.quantity);
-    return total;
+    std::int64_t total = 0;
+    for (const RestingOrder& order : bids_.begin()->second) {
+        const int quantity = std::max(0, order.quantity);
+        if (total > std::numeric_limits<std::int64_t>::max() - quantity) {
+            throw std::overflow_error("best bid depth exceeds int64 range");
+        }
+        total += quantity;
+    }
+    return checked_depth(total, "best bid depth exceeds int32 range");
 }
 
 int LimitOrderBook::best_ask_depth() const {
     if (!has_ask()) return 0;
-    int total = 0;
-    for (const RestingOrder& order : asks_.begin()->second) total += std::max(0, order.quantity);
-    return total;
+    std::int64_t total = 0;
+    for (const RestingOrder& order : asks_.begin()->second) {
+        const int quantity = std::max(0, order.quantity);
+        if (total > std::numeric_limits<std::int64_t>::max() - quantity) {
+            throw std::overflow_error("best ask depth exceeds int64 range");
+        }
+        total += quantity;
+    }
+    return checked_depth(total, "best ask depth exceeds int32 range");
 }
 
 int LimitOrderBook::background_best_bid_depth() const {
@@ -116,11 +147,17 @@ int LimitOrderBook::background_best_bid_depth() const {
         if (level == bids_.end()) continue;
         std::int64_t total = 0;
         for (const RestingOrder& order : level->second) {
-            if (order.owner_id == 0) total += std::max(0, order.quantity);
+            if (order.owner_id != 0) continue;
+            const int quantity = std::max(0, order.quantity);
+            if (total > std::numeric_limits<std::int64_t>::max() - quantity) {
+                throw std::overflow_error(
+                    "background best bid depth exceeds int64 range");
+            }
+            total += quantity;
         }
         if (total > 0) {
-            return static_cast<int>(std::min<std::int64_t>(
-                total, std::numeric_limits<int>::max()));
+            return checked_depth(
+                total, "background best bid depth exceeds int32 range");
         }
     }
     return 0;
@@ -134,11 +171,17 @@ int LimitOrderBook::background_best_ask_depth() const {
         if (level == asks_.end()) continue;
         std::int64_t total = 0;
         for (const RestingOrder& order : level->second) {
-            if (order.owner_id == 0) total += std::max(0, order.quantity);
+            if (order.owner_id != 0) continue;
+            const int quantity = std::max(0, order.quantity);
+            if (total > std::numeric_limits<std::int64_t>::max() - quantity) {
+                throw std::overflow_error(
+                    "background best ask depth exceeds int64 range");
+            }
+            total += quantity;
         }
         if (total > 0) {
-            return static_cast<int>(std::min<std::int64_t>(
-                total, std::numeric_limits<int>::max()));
+            return checked_depth(
+                total, "background best ask depth exceeds int32 range");
         }
     }
     return 0;
@@ -644,6 +687,27 @@ ApplyResult LimitOrderBook::submit_market(const OrderMessage& message) {
 
 int LimitOrderBook::cancel_owner(std::int32_t owner_id) {
     if (owner_id <= 0) return 0;
+    std::int64_t owner_quantity = 0;
+    const auto count_side = [&](const auto& side, const auto& owner_prices) {
+        const auto indexed = owner_prices.find(owner_id);
+        if (indexed == owner_prices.end()) return;
+        for (const int price : indexed->second) {
+            const auto level = side.find(price);
+            if (level == side.end()) continue;
+            for (const RestingOrder& order : level->second) {
+                if (order.owner_id != owner_id || order.quantity <= 0) continue;
+                if (owner_quantity
+                    > std::numeric_limits<int>::max() - order.quantity) {
+                    throw std::overflow_error(
+                        "cancelled owner quantity exceeds int32 range");
+                }
+                owner_quantity += order.quantity;
+            }
+        }
+    };
+    count_side(bids_, owner_bid_prices_);
+    count_side(asks_, owner_ask_prices_);
+
     int cancelled_quantity = 0;
     auto cancel_side = [&](auto& side, auto& owner_prices,
                            std::int64_t& side_total) {
@@ -656,7 +720,8 @@ int LimitOrderBook::cancel_owner(std::int32_t owner_id) {
             auto& queue = level->second;
             for (auto order = queue.begin(); order != queue.end();) {
                 if (order->owner_id == owner_id) {
-                    cancelled_quantity += std::max(0, order->quantity);
+                    const int quantity = std::max(0, order->quantity);
+                    cancelled_quantity += quantity;
                     side_total -= std::max(0, order->quantity);
                     order = queue.erase(order);
                 } else {
@@ -669,6 +734,9 @@ int LimitOrderBook::cancel_owner(std::int32_t owner_id) {
     };
     cancel_side(bids_, owner_bid_prices_, total_bid_quantity_);
     cancel_side(asks_, owner_ask_prices_, total_ask_quantity_);
+    if (cancelled_quantity != owner_quantity) {
+        throw std::logic_error("owner cancellation index is inconsistent");
+    }
     return cancelled_quantity;
 }
 
@@ -965,12 +1033,17 @@ MarketState LimitOrderBook::state_excluding_owner(
                 if (order.owner_id == excluded_owner_id || order.quantity <= 0) {
                     continue;
                 }
+                if (depth > std::numeric_limits<std::int64_t>::max()
+                        - order.quantity) {
+                    throw std::overflow_error(
+                        "external best-level depth overflow");
+                }
                 depth += order.quantity;
             }
             if (depth > 0) {
                 best.first = price;
-                best.second = static_cast<int>(std::min<std::int64_t>(
-                    depth, std::numeric_limits<int>::max()));
+                best.second = checked_depth(
+                    depth, "external best-level depth exceeds int32 range");
                 break;
             }
         }
@@ -983,7 +1056,9 @@ MarketState LimitOrderBook::state_excluding_owner(
     result.best_ask_ticks = ask.first;
     result.best_ask_depth = ask.second;
     result.mid_price_ticks = bid.first > 0 && ask.first > bid.first
-        ? 0.5 * static_cast<double>(bid.first + ask.first) : 0.0;
+        ? 0.5 * (static_cast<double>(bid.first)
+                 + static_cast<double>(ask.first))
+        : 0.0;
     return result;
 }
 
@@ -997,7 +1072,8 @@ TerminalLiquidationPreview
 LimitOrderBook::preview_terminal_liquidation(
     std::int64_t signed_inventory,
     std::int32_t excluded_owner_id,
-    int fallback_distance_ticks) const {
+    int fallback_distance_ticks,
+    double reference_value_ticks) const {
     if (fallback_distance_ticks < 0) {
         throw std::invalid_argument(
             "terminal liquidation fallback distance must be non-negative");
@@ -1052,15 +1128,46 @@ LimitOrderBook::preview_terminal_liquidation(
     if (remaining == 0) return preview;
 
     std::int64_t reference = last_external_price;
-    if (reference <= 0) {
-        if (sell_long) {
-            reference = has_bid() ? best_bid()
-                : (has_ask() ? static_cast<std::int64_t>(best_ask())
-                    - tick_size_ : tick_size_);
+    if (reference > 0) {
+        preview.fallback_from_external_quote = true;
+    } else {
+        // No external depth exists on the liquidation side. Use the external
+        // quote on the opposite side when available; never use a quote owned
+        // by the dealer whose inventory is being valued.
+        const auto external_best_price = [excluded_owner_id](const auto& levels) {
+            for (const auto& [price, queue] : levels) {
+                const bool has_external = std::any_of(
+                    queue.begin(), queue.end(),
+                    [excluded_owner_id](const RestingOrder& order) {
+                        return order.owner_id != excluded_owner_id
+                            && order.quantity > 0;
+                    });
+                if (has_external) return price;
+            }
+            return 0;
+        };
+        const int opposite_external = sell_long
+            ? external_best_price(asks_) : external_best_price(bids_);
+        if (opposite_external > 0) {
+            reference = sell_long
+                ? std::max<std::int64_t>(
+                    tick_size_,
+                    static_cast<std::int64_t>(opposite_external) - tick_size_)
+                : std::min<std::int64_t>(
+                    std::numeric_limits<int>::max(),
+                    static_cast<std::int64_t>(opposite_external) + tick_size_);
+            preview.fallback_from_external_quote = true;
         } else {
-            reference = has_ask() ? best_ask()
-                : (has_bid() ? static_cast<std::int64_t>(best_bid())
-                    + tick_size_ : tick_size_);
+            if (!std::isfinite(reference_value_ticks)
+                || reference_value_ticks <= 0.0) {
+                throw std::invalid_argument(
+                    "terminal liquidation requires a positive reference value");
+            }
+            reference = static_cast<std::int64_t>(std::llround(std::clamp(
+                reference_value_ticks,
+                static_cast<double>(tick_size_),
+                static_cast<double>(std::numeric_limits<int>::max()))));
+            preview.fallback_from_reference_value = true;
         }
     }
     const std::int64_t distance =

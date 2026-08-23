@@ -43,7 +43,10 @@ while IFS=, read -r experiment job nodes tasks expected_runs result_dir; do
 
   case "$state" in
     COMPLETED)
-      if (( completed_runs < expected_runs )); then
+      if (( completed_runs != expected_runs )); then
+        failed=1
+      elif ! python3 "$PROJECT_DIR/scripts/validate_release_result.py" \
+          "$result_dir" "$expected_runs" "$experiment" >/dev/null; then
         failed=1
       fi
       ;;

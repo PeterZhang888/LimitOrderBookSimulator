@@ -50,6 +50,9 @@ def write_raw(path: Path, records: list[dict[str, str]]) -> None:
         "risk_lookahead_skipped_boundaries", "shared_inventory_policy",
         "shared_quote_multiplier", "final_shared_gross_exposure",
         "maximum_shared_gross_exposure", "shared_terminal_absolute_inventory",
+        "terminal_fallback_asset_count", "terminal_fallback_quantity",
+        "terminal_fallback_from_external_quote",
+        "terminal_fallback_from_reference_value",
         "shared_signed_liquidation_pnl_usd", "shared_buy_quantity",
         "shared_sell_quantity",
     ]

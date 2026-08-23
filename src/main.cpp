@@ -1454,6 +1454,14 @@ int main(int argc, char** argv) {
                 << result.shared_terminal_absolute_inventory
                 << " shared_unliquidated_terminal_quantity="
                 << result.shared_unliquidated_terminal_quantity
+                << " terminal_fallback_asset_count="
+                << result.terminal_fallback_asset_count
+                << " terminal_fallback_quantity="
+                << result.terminal_fallback_quantity
+                << " terminal_fallback_from_external_quote="
+                << result.terminal_fallback_from_external_quote
+                << " terminal_fallback_from_reference_value="
+                << result.terminal_fallback_from_reference_value
                 << " shared_buy_quantity=" << result.shared_buy_quantity
                 << " shared_sell_quantity=" << result.shared_sell_quantity
                 << " shared_fill_count=" << result.shared_fill_count

@@ -6,6 +6,12 @@ BUILD_JOBS="${BUILD_JOBS:-16}"
 BUILD_LOG_DIR="$PROJECT_DIR/build-logs"
 BUILD_LOG="$BUILD_LOG_DIR/seagull-build.log"
 
+if [[ -n "$(git -C "$PROJECT_DIR" status --porcelain --untracked-files=no)" ]]; then
+  printf 'ERROR: tracked source files have local modifications.\n' >&2
+  exit 1
+fi
+SOURCE_COMMIT=$(git -C "$PROJECT_DIR" rev-parse HEAD)
+
 mkdir -p "$BUILD_LOG_DIR"
 : > "$BUILD_LOG"
 exec 3>&1
@@ -69,6 +75,14 @@ cmake -S "$PROJECT_DIR" -B "$OPENMP_BUILD_DIR" -G "$CMAKE_GENERATOR_NAME" \
   -DLOB_BUILD_TESTS=ON
 cmake --build "$OPENMP_BUILD_DIR" --parallel "$BUILD_JOBS"
 ctest --test-dir "$OPENMP_BUILD_DIR" --output-on-failure
+
+if [[ "$SOURCE_COMMIT" != "$(git -C "$PROJECT_DIR" rev-parse HEAD)"
+      || -n "$(git -C "$PROJECT_DIR" status --porcelain --untracked-files=no)" ]]; then
+  printf 'ERROR: tracked source changed while the executables were being built.\n' >&2
+  exit 1
+fi
+printf '%s\n' "$SOURCE_COMMIT" > "$MPI_BUILD_DIR/source_commit.txt"
+printf '%s\n' "$SOURCE_COMMIT" > "$OPENMP_BUILD_DIR/source_commit.txt"
 
 trap - ERR
 report "Build and tests: PASS"

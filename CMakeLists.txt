@@ -93,5 +93,23 @@ if(LOB_BUILD_TESTS)
         endif()
         add_lob_test(test_distributed_shared_dealer_coverage
             tests/test_distributed_shared_dealer_coverage.cpp)
+
+        add_executable(test_mpi_rank_execution
+            tests/test_mpi_rank_execution.cpp)
+        target_link_libraries(test_mpi_rank_execution PRIVATE lob_core)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+            target_compile_options(test_mpi_rank_execution PRIVATE -UNDEBUG)
+        endif()
+        if(MPI_CXX_FOUND)
+            add_test(
+                NAME test_mpi_rank_equivalence
+                COMMAND ${CMAKE_COMMAND}
+                    -DMPIEXEC_EXECUTABLE=${MPIEXEC_EXECUTABLE}
+                    -DMPIEXEC_NUMPROC_FLAG=${MPIEXEC_NUMPROC_FLAG}
+                    -DTEST_EXECUTABLE=$<TARGET_FILE:test_mpi_rank_execution>
+                    -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/mpi_rank_equivalence
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_mpi_rank_equivalence.cmake)
+            set_tests_properties(test_mpi_rank_equivalence PROPERTIES TIMEOUT 180)
+        endif()
     endif()
 endif()

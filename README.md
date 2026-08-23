@@ -6,10 +6,17 @@
 > Raw ITCH files are not redistributed in this repository; access and use of
 > Nasdaq data remain subject to Nasdaq's applicable terms.
 
-This repository contains the final simulator used by the thesis. Each asset
-has one complete order-level limit order book. MPI assigns complete books to
-ranks; OpenMP can process different books owned by the same rank. A book is
-never divided between ranks or threads.
+This repository contains the final simulator used by the thesis. Each logical
+asset is represented by one complete simulated LOB object owned by one MPI
+rank. Strategic and market-maker orders retain individual price--time
+priority. Anonymous background flow is represented on a moving ten-level
+price band, and adjacent background quantity at the same price may be
+aggregated.
+
+OpenMP processes complete books already owned by an MPI rank. In the final
+permanent-ownership mode, each book is assigned to one thread for the complete
+session. In the phase-based diagnostic, a book may be processed by different
+threads in successive phases, but never concurrently.
 
 ## Source layout
 
@@ -34,9 +41,9 @@ bash scripts/submit_seagull_validation.sh
 ```
 
 These two scripts provide the complete standard workflow: the first builds
-and tests both executables, and the second submits one full-session run for
-every experiment configuration. The submitted jobs use their ordinary
-experiment names in Slurm.
+and tests both executables, and the second submits representative full-session
+configurations from every retained experiment. The submitted jobs use their
+ordinary experiment names in Slurm.
 
 The build command first checks that all frozen runtime inputs are present. It
 then requires OpenMP support, builds both executables and runs the compiled
@@ -44,7 +51,9 @@ correctness tests against both builds. No raw Nasdaq message files or
 calibration run are required. A successful build prints only a short progress
 summary; complete compiler and test output is retained in
 `build-logs/seagull-build.log`. If a build fails, the relevant final section
-of that log is printed automatically.
+of that log is printed automatically. Each build also records the source
+commit from which it was produced. Submission stops and requests a rebuild if
+the source commit has changed or tracked source files have been modified.
 
 The Seagull scripts load
 `openmpi/5.0.9-gcc-15.2.0-2irqibq`, the module used for the final release
@@ -69,19 +78,47 @@ After building a fresh clone, submit the full-session release checks with:
 bash scripts/submit_seagull_validation.sh
 ```
 
-The driver exercises every experiment directory with the final frozen inputs,
-the complete 23,400-second session and one completed run per configuration.
-Validation is limited to one or two nodes; it checks execution and scientific
-output production without repeating the seven-run performance measurements.
+The driver submits representative full-session configurations from every
+retained experiment directory. It uses the frozen inputs and complete
+23,400-second session, but does not repeat the complete rank sweeps, parameter
+grids or seven-repetition performance campaigns. Validation is limited to one
+or two nodes.
 Check all submitted jobs with:
 
 ```bash
 bash scripts/check_seagull_validation.sh
 ```
 
-The checker prints `IN PROGRESS` while jobs remain queued or running, `PASS`
-when every experiment completes and produces the expected simulator outputs,
-and `FAIL` if any experiment terminates unsuccessfully.
+The checker prints `IN PROGRESS` while jobs remain queued or running. It prints
+`PASS` only when every submitted job completes, the exact expected number of
+simulator summaries is present, and each run has a complete boundary-metric
+CSV and per-asset CSV. The OpenMP checks also require their comparison files,
+and the stylised-fact check requires all 16 rank-local return panels. It prints
+`FAIL` if any of these conditions is not met.
+
+> **Scope of validation.** The release workflow reproduces simulator execution
+> and simulated outputs. The derived empirical one-second return panel used in
+> the final stylised-fact comparison is not included, so the complete
+> empirical-versus-simulated figure cannot be regenerated from this repository
+> alone. See `DATA.md`.
+
+## Portable build
+
+On another system with CMake, a C++20 compiler, MPI and OpenMP:
+
+```bash
+cmake -S . -B build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DLOB_REQUIRE_MPI=ON \
+  -DLOB_ENABLE_OPENMP=ON \
+  -DLOB_BUILD_TESTS=ON
+
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+```
+
+The reported performance results use the documented Seagull environment and
+should be reproduced with the Seagull scripts above.
 
 ## Submit a complete synthetic session
 
@@ -112,7 +149,8 @@ bash experiments/03_empirical_scaling/submit.sh
 The compile file calls the central verified build, while the submit file
 launches that experiment's complete formal campaign. The central release
 validation remains separate: `bash scripts/submit_seagull_validation.sh`
-submits one complete 23,400-second run for every experiment configuration.
+submits representative complete-session configurations without repeating the
+formal parameter grids or performance repetitions.
 
 ```text
 00_full_synthetic
@@ -126,6 +164,10 @@ submits one complete 23,400-second run for every experiment configuration.
 09_stylised_facts
 10_inventory_policy
 ```
+
+Experiment number 06 was retired during finalisation. The remaining numerical
+identifiers are retained so that they continue to match the archived campaign
+references.
 
 The strong-scaling and MPI--OpenMP submit files are submission drivers because
 their configurations need different numbers of nodes. From the repository
@@ -294,6 +336,14 @@ value across its declared participation sweep.
 Every performance treatment writes separate boundary-metric, per-asset and
 console-output files. Each job also writes `environment.txt`, containing its
 compiler, MPI version, CPU description, allocation and loaded modules.
+
+Terminal Shared Market Maker valuation excludes that dealer's own resting
+orders. Remaining inventory is valued from the last external price reached on
+the liquidation side; if none exists, the external opposite-side quote is
+used, and the latent reference is used only when no external quote remains.
+The summary reports the number of affected assets and quantities attributed to
+each fallback source.
+
 Scientific CSVs can be compared directly with:
 
 ```bash
@@ -318,6 +368,12 @@ observations, blocking `MPI_Allreduce`, one thread per rank, and no scan,
 lookahead or persistent-team optimisation. The lookahead experiment is the
 one exception: all four cells use buffered observations because the exact
 lookahead implementation requires them.
+
+The executable's convenience defaults are not the thesis baseline. Formal
+experiment scripts explicitly select cyclic ownership, synchronous
+observations, blocking risk reduction and one thread per MPI rank. Reproduce
+reported controls through the experiment scripts, not through an unqualified
+direct invocation of `lob_mpi`.
 
 ## Data
 

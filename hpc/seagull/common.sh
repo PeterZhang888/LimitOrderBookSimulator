@@ -78,6 +78,8 @@ DURATION_SECONDS="${DURATION_SECONDS:-23400}"
 SEED="${SEED:-20200130}"
 CORES_PER_NODE="${CORES_PER_NODE:-16}"
 
+bash "$PROJECT_DIR/scripts/verify_build_source.sh" "$BUILD_DIR"
+
 mkdir -p "$RESULT_ROOT"
 
 ENVIRONMENT_FILE="$RESULT_ROOT/environment.txt"
@@ -85,6 +87,8 @@ if [[ ! -e "$ENVIRONMENT_FILE" ]]; then
   {
     printf 'recorded_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     printf 'project_dir=%s\n' "$PROJECT_DIR"
+    printf 'source_commit=%s\n' "$(git -C "$PROJECT_DIR" rev-parse HEAD)"
+    printf 'source_status=clean\n'
     printf 'slurm_job_id=%s\n' "${SLURM_JOB_ID:-not-in-slurm}"
     printf 'slurm_node_list=%s\n' "${SLURM_JOB_NODELIST:-not-in-slurm}"
     printf 'openmpi_module=%s\n' "$OPENMPI_MODULE"
@@ -226,6 +230,8 @@ run_openmp_variant() {
   local threads=$2
   shift 2
   local variant_dir="$RESULT_ROOT/$label"
+  bash "$PROJECT_DIR/scripts/verify_build_source.sh" \
+    "$PROJECT_DIR/build-openmp"
   mkdir -p "$variant_dir"
 
   for ((rep=1; rep<=REPETITIONS; rep++)); do

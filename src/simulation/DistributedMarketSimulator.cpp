@@ -248,6 +248,8 @@ struct AssetResultWire {
     double shared_mark_mid_ticks = 0.0;
     double shared_liquidation_cash_change_ticks = 0.0;
     std::uint64_t shared_liquidation_unliquidated_quantity = 0;
+    std::uint64_t shared_terminal_fallback_quantity = 0;
+    std::int32_t shared_terminal_fallback_source = 0;
     std::int64_t value_inventory = 0;
     std::uint64_t shock_requested_quantity = 0;
     std::int32_t shock_side_code = 0;
@@ -4042,20 +4044,33 @@ private:
             const MarketState external_state = asset->book.lob.state_excluding_owner(
                 end_time_ns_, asset->fundamental_value_ticks,
                 shared_market_maker_owner);
-            wire.shared_mark_mid_ticks = external_state.mid_price_ticks > 0.0
-                ? external_state.mid_price_ticks
-                : asset->book.lob.mid_price();
+            if (external_state.mid_price_ticks > 0.0) {
+                wire.shared_mark_mid_ticks = external_state.mid_price_ticks;
+            } else if (external_state.best_bid_ticks > 0) {
+                wire.shared_mark_mid_ticks = external_state.best_bid_ticks;
+            } else if (external_state.best_ask_ticks > 0) {
+                wire.shared_mark_mid_ticks = external_state.best_ask_ticks;
+            } else {
+                wire.shared_mark_mid_ticks = asset->fundamental_value_ticks;
+            }
             if (config_.enable_shared_financial_diagnostics) {
                 const TerminalLiquidationPreview liquidation =
                     asset->book.lob.preview_terminal_liquidation(
                         asset->shared_inventory,
                         shared_market_maker_owner,
-                        config_.shared_terminal_fallback_distance_ticks);
+                        config_.shared_terminal_fallback_distance_ticks,
+                        asset->fundamental_value_ticks);
                 wire.shared_liquidation_cash_change_ticks =
                     static_cast<double>(liquidation.signed_cash_change_ticks);
                 wire.shared_liquidation_unliquidated_quantity =
                     static_cast<std::uint64_t>(
                         liquidation.unliquidated_quantity);
+                wire.shared_terminal_fallback_quantity =
+                    static_cast<std::uint64_t>(
+                        liquidation.unliquidated_quantity);
+                wire.shared_terminal_fallback_source =
+                    liquidation.fallback_from_external_quote ? 1
+                    : (liquidation.fallback_from_reference_value ? 2 : 0);
             }
             wire.value_inventory = asset->value_inventory;
             wire.shock_requested_quantity = asset->shock_requested_quantity;
@@ -4462,6 +4477,10 @@ private:
         long double liquidation_ticks = 0.0L;
         WideUnsignedInteger terminal_absolute_inventory = 0;
         WideUnsignedInteger unliquidated_quantity = 0;
+        WideUnsignedInteger terminal_fallback_asset_count = 0;
+        WideUnsignedInteger terminal_fallback_quantity = 0;
+        WideUnsignedInteger terminal_fallback_from_external_quote = 0;
+        WideUnsignedInteger terminal_fallback_from_reference_value = 0;
         WideUnsignedInteger buy_quantity = 0;
         WideUnsignedInteger sell_quantity = 0;
         WideUnsignedInteger fill_count = 0;
@@ -4482,6 +4501,24 @@ private:
                 inventory >= 0 ? inventory : -inventory);
             unliquidated_quantity += static_cast<WideUnsignedInteger>(
                 asset.shared_liquidation_unliquidated_quantity);
+            const WideUnsignedInteger fallback_quantity =
+                static_cast<WideUnsignedInteger>(
+                    asset.shared_terminal_fallback_quantity);
+            terminal_fallback_quantity += fallback_quantity;
+            if (fallback_quantity > 0) {
+                ++terminal_fallback_asset_count;
+                if (asset.shared_terminal_fallback_source == 1) {
+                    terminal_fallback_from_external_quote += fallback_quantity;
+                } else if (asset.shared_terminal_fallback_source == 2) {
+                    terminal_fallback_from_reference_value += fallback_quantity;
+                } else {
+                    throw std::logic_error(
+                        "terminal fallback quantity has no declared source");
+                }
+            } else if (asset.shared_terminal_fallback_source != 0) {
+                throw std::logic_error(
+                    "terminal fallback source has zero fallback quantity");
+            }
             buy_quantity += static_cast<WideUnsignedInteger>(
                 asset.shared_buy_quantity);
             sell_quantity += static_cast<WideUnsignedInteger>(
@@ -4504,6 +4541,16 @@ private:
             terminal_absolute_inventory, "terminal absolute inventory");
         shared_unliquidated_terminal_quantity_ = checked_uint64(
             unliquidated_quantity, "unliquidated terminal quantity");
+        shared_terminal_fallback_asset_count_ = checked_uint64(
+            terminal_fallback_asset_count, "terminal fallback asset count");
+        shared_terminal_fallback_quantity_ = checked_uint64(
+            terminal_fallback_quantity, "terminal fallback quantity");
+        shared_terminal_fallback_from_external_quote_ = checked_uint64(
+            terminal_fallback_from_external_quote,
+            "terminal fallback quantity from external quote");
+        shared_terminal_fallback_from_reference_value_ = checked_uint64(
+            terminal_fallback_from_reference_value,
+            "terminal fallback quantity from reference value");
         shared_buy_quantity_ = checked_uint64(
             buy_quantity, "shared buy quantity");
         shared_sell_quantity_ = checked_uint64(
@@ -4669,6 +4716,14 @@ private:
             shared_terminal_liquidation_cost_usd_;
         result.shared_unliquidated_terminal_quantity =
             shared_unliquidated_terminal_quantity_;
+        result.terminal_fallback_asset_count =
+            shared_terminal_fallback_asset_count_;
+        result.terminal_fallback_quantity =
+            shared_terminal_fallback_quantity_;
+        result.terminal_fallback_from_external_quote =
+            shared_terminal_fallback_from_external_quote_;
+        result.terminal_fallback_from_reference_value =
+            shared_terminal_fallback_from_reference_value_;
         result.shared_terminal_absolute_inventory =
             shared_terminal_absolute_inventory_;
         result.shared_buy_quantity = shared_buy_quantity_;
@@ -4812,6 +4867,10 @@ private:
     double shared_signed_liquidation_pnl_usd_ = 0.0;
     double shared_terminal_liquidation_cost_usd_ = 0.0;
     std::uint64_t shared_unliquidated_terminal_quantity_ = 0;
+    std::uint64_t shared_terminal_fallback_asset_count_ = 0;
+    std::uint64_t shared_terminal_fallback_quantity_ = 0;
+    std::uint64_t shared_terminal_fallback_from_external_quote_ = 0;
+    std::uint64_t shared_terminal_fallback_from_reference_value_ = 0;
     std::uint64_t shared_terminal_absolute_inventory_ = 0;
     std::uint64_t shared_buy_quantity_ = 0;
     std::uint64_t shared_sell_quantity_ = 0;

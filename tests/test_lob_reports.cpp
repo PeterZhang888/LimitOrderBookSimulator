@@ -4,6 +4,7 @@
 #include <cassert>
 #include <iostream>
 #include <limits>
+#include <stdexcept>
 
 int main() {
     using namespace dlob;
@@ -542,6 +543,106 @@ int main() {
                .cancelled_quantity == 50);
     assert(shared_cancel_boundary_book.total_bid_depth() == 0);
     assert(shared_cancel_boundary_book.background_best_bid_depth() == 0);
+
+    // Terminal fallback prices must never be taken from the liquidated
+    // dealer's own quote. With no external quote, the exogenous reference is
+    // used; with an external one-sided quote, that external quote is used.
+    constexpr std::int32_t terminal_owner = 77;
+    LimitOrderBook reference_fallback_book(10);
+    OrderMessage dealer_bid;
+    dealer_bid.sequence = 5000;
+    dealer_bid.owner_id = terminal_owner;
+    dealer_bid.agent_kind = AgentKind::MarketMaker;
+    dealer_bid.action = OrderAction::Limit;
+    dealer_bid.side = Side::Buy;
+    dealer_bid.quantity = 10;
+    dealer_bid.price_ticks = 2'000;
+    reference_fallback_book.apply(dealer_bid);
+    OrderMessage dealer_ask = dealer_bid;
+    dealer_ask.sequence += 1;
+    dealer_ask.side = Side::Sell;
+    dealer_ask.price_ticks = 2'020;
+    reference_fallback_book.apply(dealer_ask);
+    const TerminalLiquidationPreview reference_fallback =
+        reference_fallback_book.preview_terminal_liquidation(
+            5, terminal_owner, 2, 1'000.0);
+    assert(reference_fallback.displayed_filled_quantity == 0);
+    assert(reference_fallback.unliquidated_quantity == 5);
+    assert(reference_fallback.fallback_price_ticks == 980);
+    assert(!reference_fallback.fallback_from_external_quote);
+    assert(reference_fallback.fallback_from_reference_value);
+
+    OrderMessage external_ask = dealer_ask;
+    external_ask.sequence += 1;
+    external_ask.owner_id = 0;
+    external_ask.agent_kind = AgentKind::Background;
+    external_ask.price_ticks = 2'100;
+    reference_fallback_book.apply(external_ask);
+    const TerminalLiquidationPreview external_fallback =
+        reference_fallback_book.preview_terminal_liquidation(
+            5, terminal_owner, 2, 1'000.0);
+    assert(external_fallback.fallback_price_ticks == 2'070);
+    assert(external_fallback.fallback_from_external_quote);
+    assert(!external_fallback.fallback_from_reference_value);
+
+    // Midpoint addition converts each operand before summing. Top depth uses
+    // checked 64-bit accumulation and refuses an unrepresentable int result.
+    LimitOrderBook large_price_book(1);
+    OrderMessage large_bid = dealer_bid;
+    large_bid.sequence = 5100;
+    large_bid.quantity = 1;
+    large_bid.price_ticks = std::numeric_limits<int>::max() - 2;
+    large_price_book.apply(large_bid);
+    OrderMessage large_ask = large_bid;
+    large_ask.sequence += 1;
+    large_ask.side = Side::Sell;
+    large_ask.price_ticks = std::numeric_limits<int>::max();
+    large_price_book.apply(large_ask);
+    assert(large_price_book.mid_price()
+           == static_cast<double>(std::numeric_limits<int>::max()) - 1.0);
+
+    LimitOrderBook overflowing_depth_book(1);
+    OrderMessage maximum_bid = dealer_bid;
+    maximum_bid.sequence = 5200;
+    maximum_bid.quantity = std::numeric_limits<int>::max();
+    maximum_bid.price_ticks = 100;
+    overflowing_depth_book.apply(maximum_bid);
+    maximum_bid.sequence += 1;
+    maximum_bid.owner_id += 1;
+    overflowing_depth_book.apply(maximum_bid);
+    bool depth_overflow_reported = false;
+    try {
+        (void)overflowing_depth_book.best_bid_depth();
+    } catch (const std::overflow_error&) {
+        depth_overflow_reported = true;
+    }
+    assert(depth_overflow_reported);
+
+    LimitOrderBook overflowing_cancel_book(1);
+    OrderMessage maximum_owner_bid = maximum_bid;
+    maximum_owner_bid.sequence = 5300;
+    maximum_owner_bid.owner_id = terminal_owner;
+    overflowing_cancel_book.apply(maximum_owner_bid);
+    OrderMessage maximum_owner_ask = maximum_owner_bid;
+    maximum_owner_ask.sequence += 1;
+    maximum_owner_ask.side = Side::Sell;
+    maximum_owner_ask.price_ticks = 200;
+    overflowing_cancel_book.apply(maximum_owner_ask);
+    OrderMessage cancel_large_owner = maximum_owner_bid;
+    cancel_large_owner.sequence += 2;
+    cancel_large_owner.action = OrderAction::CancelOwner;
+    cancel_large_owner.quantity = 0;
+    bool cancellation_overflow_reported = false;
+    try {
+        (void)overflowing_cancel_book.apply(cancel_large_owner);
+    } catch (const std::overflow_error&) {
+        cancellation_overflow_reported = true;
+    }
+    assert(cancellation_overflow_reported);
+    assert(overflowing_cancel_book.total_bid_depth()
+           == std::numeric_limits<int>::max());
+    assert(overflowing_cancel_book.total_ask_depth()
+           == std::numeric_limits<int>::max());
 
     std::cout << "LOB and report tests passed\n";
     return 0;
