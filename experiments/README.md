@@ -84,11 +84,10 @@ runs are recorded in `attempts.csv`; seven completed repetitions are required
 for every layout.
 Runtime ratios above 1.15 are reported as variability warnings without
 discarding repetitions or failing an otherwise valid job. Per-asset files,
-counts, accounting values and all
-non-spread metric columns must agree exactly. The three derived mean-spread
-columns use the explicitly reported floating-point tolerance documented in
-the main README because different MPI rank layouts change only the association
-order of their double-precision sums.
+counts, accounting values and all non-spread metric columns must agree exactly.
+The three derived mean-spread columns use
+`|a-b| <= 5e-9 + 1e-12 max(|a|,|b|)` because different MPI rank layouts change
+the association order of their double-precision sums.
 
 The additional pair and window-profile files in `06_mpi_openmp/` are focused
 diagnostics retained to explain the phase-based control and the origin of its
